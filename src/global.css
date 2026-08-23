@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * DiceFrame 主题令牌 —— 与 Web 端 frontend-v2/src/styles/tokens.css 同源：
+ * 默认 = midnight 皮肤（Web 的默认体验，暗色），light = 灰绿变体；跟随系统切换。
+ * 值为完整颜色（hex/rgba），tailwind.config.js 以 var(--x) 直引。
+ */
+:root {
+  --background: #070b11;
+  --foreground: #eef2ec;
+  --card: #0e1720;
+  --card-foreground: #eef2ec;
+  --popover: #121f2b;
+  --popover-foreground: #eef2ec;
+  --primary: #55b9bd;
+  --primary-foreground: #f7fcfc;
+  --secondary: #182936;
+  --secondary-foreground: #eef2ec;
+  --muted: #182936;
+  --muted-foreground: #8f9d98;
+  --accent: #1d303e;
+  --accent-foreground: #eef2ec;
+  --destructive: #a94f4d;
+  --destructive-foreground: #ffffff;
+  --success: #4d9169;
+  --success-foreground: #f0f7f2;
+  --warning: #d39a4c;
+  --warning-foreground: #1f1503;
+  --info: #548fad;
+  --info-foreground: #f2f8fb;
+  --gold: #caa65f;
+  --gold-strong: #f0d38b;
+  --gold-foreground: #14110b;
+  --border: rgba(203, 169, 94, 0.27);
+  --input: rgba(203, 169, 94, 0.25);
+  --ring: #55b9bd;
+
+  --font-display: Georgia, 'Palatino Linotype', 'Book Antiqua', 'Noto Serif SC', 'Songti SC', serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --background: #e2e5e0;
+    --foreground: #201c16;
+    --card: #fafbf7;
+    --card-foreground: #201c16;
+    --popover: #e9ede7;
+    --popover-foreground: #201c16;
+    --primary: #277f84;
+    --primary-foreground: #ffffff;
+    --secondary: #dbe1da;
+    --secondary-foreground: #201c16;
+    --muted: #dbe1da;
+    --muted-foreground: #68736f;
+    --accent: #ffffff;
+    --accent-foreground: #201c16;
+    --destructive: #9c413e;
+    --destructive-foreground: #ffffff;
+    --success: #397750;
+    --success-foreground: #f0f6f1;
+    --warning: #9b651f;
+    --warning-foreground: #fdf7ec;
+    --info: #3e7089;
+    --info-foreground: #eef5f9;
+    --gold: #5f7377;
+    --gold-strong: #314a50;
+    --gold-foreground: #fffaf0;
+    --border: rgba(64, 82, 70, 0.23);
+    --input: rgba(64, 82, 70, 0.3);
+    --ring: #277f84;
+  }
+}
