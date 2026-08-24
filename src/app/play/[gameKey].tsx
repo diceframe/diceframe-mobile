@@ -1,7 +1,8 @@
 import * as React from 'react'
-import { Pressable, View } from 'react-native'
+import { AppState, Pressable, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft, Menu, User } from 'lucide-react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Screen } from '@/components/screen'
 import { Badge, BadgeText } from '@/components/ui/badge'
@@ -15,6 +16,8 @@ import { GameTimeline } from '@/features/play/GameTimeline'
 import { GmSheet } from '@/features/play/GmSheet'
 import { useSpeaker } from '@/features/play/useSpeaker'
 import { useVoiceInput } from '@/features/play/useVoiceInput'
+import { appendActionText } from '@/lib/action-text'
+import { gameStateLabel } from '@/lib/game-state'
 import { strings } from '@/lib/strings'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import { selectGmThinking, useGameStore } from '@/stores/game'
@@ -47,10 +50,11 @@ export default function PlayScreen() {
   const [luckBusyId, setLuckBusyId] = React.useState('')
 
   const voice = useVoiceInput(gameKey, (text) => {
-    setDraft((current) => (current ? `${current}${text}` : text))
+    setDraft((current) => appendActionText(current, text))
   })
   const speaker = useSpeaker(gameKey)
   const keyboardHeight = useKeyboardHeight()
+  const insets = useSafeAreaInsets()
 
   const pendingLuck = detail?.pending_luck_decisions ?? []
   const submittedActions = detail?.multiplayer?.submitted_actions ?? []
@@ -60,6 +64,19 @@ export default function PlayScreen() {
     if (gameKey) useGameStore.getState().enter(gameKey)
     return () => useGameStore.getState().leave()
   }, [gameKey])
+
+  React.useEffect(() => {
+    let previousState = AppState.currentState
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (previousState === 'active' && nextState !== 'active') {
+        useGameStore.getState().pause()
+      } else if (previousState !== 'active' && nextState === 'active') {
+        useGameStore.getState().resume()
+      }
+      previousState = nextState
+    })
+    return () => subscription.remove()
+  }, [])
 
   // 玩家身份失效（被踢/存档重置）时清掉本地身份、回加入页重新加入
   // （对齐 Web isStoredPlayerMember 检查；multiplayer 缺省的独占局不校验）
@@ -79,14 +96,20 @@ export default function PlayScreen() {
   async function send() {
     const text = draft.trim()
     if (!text) return
-    setDraft('')
-    await useGameStore.getState().submit(text)
+    try {
+      await useGameStore.getState().submit(text)
+      setDraft('')
+    } catch {
+      // 弱网失败时保留草稿，错误由 game store 显示在顶部横幅。
+    }
   }
 
   async function decideLuck(checkId: string, spend: boolean) {
     setLuckBusyId(checkId)
     try {
       await useGameStore.getState().decideLuck(checkId, spend)
+    } catch {
+      // 错误由 game store 显示在顶部横幅。
     } finally {
       setLuckBusyId('')
     }
@@ -99,6 +122,18 @@ export default function PlayScreen() {
       useGameStore.setState({ error: errorMessage(e) })
     }
   }
+
+  const stateLabel = pendingLuck.length
+    ? strings.play.luckDecisionPending
+    : gmThinking
+      ? strings.play.gmThinking
+      : gameStateLabel(detail?.state)
+  const composerDisabled = pendingLuck.length > 0 || detail?.state === 'ended'
+  const composerDisabledReason = pendingLuck.length
+    ? strings.play.resolveLuckFirst
+    : detail?.state === 'ended'
+      ? strings.play.gameEnded
+      : undefined
 
   const statusBadge =
     streamStatus === 'live' ? (
@@ -118,7 +153,7 @@ export default function PlayScreen() {
   return (
     <Screen className="gap-0">
       {/* 键盘避让：底部垫高键盘实际高度，输入区始终可见（见 use-keyboard-height 注释） */}
-      <View className="flex-1" style={{ paddingBottom: keyboardHeight }}>
+      <View className="flex-1" style={{ paddingBottom: keyboardHeight + insets.bottom }}>
         {/* 顶栏 */}
         <View className="flex-row items-center gap-2 border-b border-border px-3 py-2">
           <IconButton
@@ -134,7 +169,7 @@ export default function PlayScreen() {
               {detail?.world_name || gameKey}
             </Text>
             <Text variant="small" numberOfLines={1}>
-              第 {detail?.round_number ?? '?'} 回合 · {detail?.state ?? '…'}
+              第 {detail?.round_number ?? '?'} 回合 · {stateLabel}
             </Text>
           </View>
           {statusBadge}
@@ -199,12 +234,19 @@ export default function PlayScreen() {
           onChangeText={setDraft}
           onSend={() => void send()}
           busy={actionBusy}
+          disabled={composerDisabled}
+          disabledReason={composerDisabledReason}
           quickActions={detail?.quick_actions ?? []}
           voice={voice}
         />
       </View>
 
-      <Sheet open={characterOpen} onClose={() => setCharacterOpen(false)} className="h-[80%]">
+      <Sheet
+        open={characterOpen}
+        onClose={() => setCharacterOpen(false)}
+        className="h-[80%]"
+        scrollable={false}
+      >
         <View className="flex-1 gap-4 pt-1">
           <CharacterPanel
             gameKey={gameKey}
