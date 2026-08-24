@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Image, View } from 'react-native'
+import * as AvatarPrimitive from '@rn-primitives/avatar'
 
 import { Text } from '@/components/ui/text'
 import { cn } from '@/lib/utils'
@@ -13,27 +13,30 @@ type AvatarProps = {
   square?: boolean
 }
 
-export function Avatar({ source, name, className, square = false }: AvatarProps) {
-  const shape = square ? 'rounded-md' : 'rounded-full'
+function Avatar({ source, name, className, square = false }: AvatarProps) {
   const initial = (name ?? '?').trim().charAt(0).toUpperCase()
   return (
-    <View
+    <AvatarPrimitive.Root
+      alt={name ?? 'avatar'}
       className={cn(
         'h-10 w-10 items-center justify-center overflow-hidden bg-muted',
-        shape,
+        square ? 'rounded-md' : 'rounded-full',
         className,
       )}
     >
       {source ? (
-        <Image
+        <AvatarPrimitive.Image
           source={{ uri: source }}
           className="h-full w-full"
           resizeMode="cover"
           accessibilityLabel={name ?? undefined}
         />
-      ) : (
+      ) : null}
+      <AvatarPrimitive.Fallback>
         <Text className="text-base font-semibold text-muted-foreground">{initial}</Text>
-      )}
-    </View>
+      </AvatarPrimitive.Fallback>
+    </AvatarPrimitive.Root>
   )
 }
+
+export { Avatar }

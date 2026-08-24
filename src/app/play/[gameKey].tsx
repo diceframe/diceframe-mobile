@@ -1,19 +1,22 @@
 import * as React from 'react'
 import { AppState, Pressable, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft, Menu, User } from 'lucide-react-native'
+import { ChevronLeft, Menu, Route, User } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Screen } from '@/components/screen'
 import { Badge, BadgeText } from '@/components/ui/badge'
 import { IconButton } from '@/components/ui/icon-button'
 import { Sheet } from '@/components/ui/sheet'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
 import { errorMessage } from '@/api/client'
 import { ActionComposer } from '@/features/play/ActionComposer'
 import { CharacterPanel } from '@/features/play/CharacterPanel'
 import { GameTimeline } from '@/features/play/GameTimeline'
 import { GmSheet } from '@/features/play/GmSheet'
+import { MiniMap } from '@/features/play/MiniMap'
+import { PlotTracker } from '@/features/play/PlotTracker'
 import { useSpeaker } from '@/features/play/useSpeaker'
 import { useVoiceInput } from '@/features/play/useVoiceInput'
 import { appendActionText } from '@/lib/action-text'
@@ -40,6 +43,8 @@ export default function PlayScreen() {
   const userId = useGameStore((s) => s.userId)
   const ruleAttrs = useGameStore((s) => s.ruleAttrs)
   const ruleMeta = useGameStore((s) => s.ruleMeta)
+  const map = useGameStore((s) => s.map)
+  const plotTracker = useGameStore((s) => s.detail?.plot_tracker)
   const actionBusy = useGameStore((s) => s.actionBusy)
   const ttsEnabled = useGameStore((s) => s.ttsEnabled)
   const gmThinking = useGameStore(selectGmThinking)
@@ -47,6 +52,8 @@ export default function PlayScreen() {
   const [draft, setDraft] = React.useState('')
   const [characterOpen, setCharacterOpen] = React.useState(false)
   const [menuOpen, setMenuOpen] = React.useState(false)
+  const [sidebarOpen, setSidebarOpen] = React.useState(false)
+  const [sidebarTab, setSidebarTab] = React.useState<'plot' | 'map'>('plot')
   const [luckBusyId, setLuckBusyId] = React.useState('')
 
   const voice = useVoiceInput(gameKey, (text) => {
@@ -180,6 +187,13 @@ export default function PlayScreen() {
           >
             <User size={20} className="text-foreground" />
           </IconButton>
+          <IconButton
+            className="h-9 w-9"
+            onPress={() => setSidebarOpen(true)}
+            accessibilityLabel="剧情与地图"
+          >
+            <Route size={20} className="text-foreground" />
+          </IconButton>
           {isGm && (
             <IconButton
               className="h-9 w-9"
@@ -265,6 +279,28 @@ export default function PlayScreen() {
           onRollback={() => void runGm(() => useGameStore.getState().rollback())}
           onCommand={(text) => void runGm(() => useGameStore.getState().command(text))}
         />
+      </Sheet>
+
+      <Sheet open={sidebarOpen} onClose={() => setSidebarOpen(false)} className="h-[80%]" scrollable={false}>
+        <View className="flex-1 gap-3 pt-1">
+          <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as 'plot' | 'map')}>
+            <TabsList>
+              <TabsTrigger value="plot">
+                <Text variant="small">剧情</Text>
+              </TabsTrigger>
+              <TabsTrigger value="map">
+                <Text variant="small">地图</Text>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <View className="flex-1">
+            {sidebarTab === 'plot' ? (
+              <PlotTracker data={plotTracker} />
+            ) : (
+              <MiniMap data={map} />
+            )}
+          </View>
+        </View>
       </Sheet>
     </Screen>
   )

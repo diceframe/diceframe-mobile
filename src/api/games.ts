@@ -15,9 +15,11 @@ import type {
   PlayerCreateResponse,
   PlayerContextResponse,
   PrivateLogResponse,
+  RulesResponse,
+  WorldTemplatesResponse,
 } from './types'
 
-import { api } from './client'
+import { api, apiBlob } from './client'
 
 function gamePath(gameKey: string, suffix = ''): string {
   return `/games/${encodeURIComponent(gameKey)}${suffix}`
@@ -131,4 +133,64 @@ export async function requestSseTicket(gameKey: string): Promise<string> {
   })
   if (!result.ticket) throw new Error('未能获取实时流票据')
   return result.ticket
+}
+
+// ---------- 世界观 / 规则（创建对局选择器） ----------
+
+export function fetchWorldTemplates(): Promise<WorldTemplatesResponse> {
+  return api<WorldTemplatesResponse>('/world-templates')
+}
+
+export function fetchRules(): Promise<RulesResponse> {
+  return api<RulesResponse>('/rules')
+}
+
+// ---------- 对局生命周期（创建/删除/导出/导入/批量） ----------
+
+export async function createGame(payload: JsonObject): Promise<GameObject> {
+  const result = await api<{ ok?: boolean; game_key?: string; error?: string }>('/games/create', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  if (!result.ok) throw new Error(result.error ?? '创建对局失败')
+  return { ok: true, game_key: result.game_key }
+}
+
+export async function deleteGame(gameKey: string): Promise<void> {
+  const result = await api<{ ok?: boolean; error?: string }>(gamePath(gameKey), {
+    method: 'DELETE',
+  })
+  if (!result.ok) throw new Error(result.error ?? '删除失败')
+}
+
+export async function batchDeleteGames(gameKeys: string[]): Promise<{ deleted: string[]; failed: { key: string; error: string }[] }> {
+  const result = await api<{ ok?: boolean; deleted?: string[]; failed?: { key: string; error: string }[] }>(
+    '/games/batch-delete',
+    { method: 'POST', body: JSON.stringify({ game_keys: gameKeys }) },
+  )
+  return { deleted: result.deleted ?? [], failed: result.failed ?? [] }
+}
+
+/** 导出存档 zip（返回 blob 字节） */
+export async function exportGame(gameKey: string): Promise<Blob> {
+  const response = await apiBlob(gamePath(gameKey, '/export'))
+  return response.blob()
+}
+
+/** 导入存档 zip（multipart/form-data） */
+export async function importGame(fileUri: string, fileName: string): Promise<string> {
+  const form = new FormData()
+  // RN 的 FormData 接受 { uri, name, type } 作为 append 的 value（Blob 兼容）
+  form.append('file', { uri: fileUri, name: fileName, type: 'application/zip' } as unknown as Blob)
+  const result = await api<{ ok?: boolean; game_key?: string; error?: string }>('/games/import', {
+    method: 'POST',
+    body: form,
+  })
+  if (!result.ok) throw new Error(result.error ?? '导入失败')
+  return result.game_key ?? ''
+}
+
+export interface GameObject {
+  ok: boolean
+  game_key?: string
 }

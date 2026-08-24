@@ -1,23 +1,26 @@
 import * as React from 'react'
-import { View } from 'react-native'
+import * as ProgressPrimitive from '@rn-primitives/progress'
 
 import { cn } from '@/lib/utils'
 
-type ProgressProps = {
-  /** 0-100 */
-  value: number
-  className?: string
+type ProgressProps = React.ComponentProps<typeof ProgressPrimitive.Root> & {
   indicatorClassName?: string
 }
 
-export function Progress({ value, className, indicatorClassName }: ProgressProps) {
-  const clamped = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0))
+function Progress({ className, value, indicatorClassName, ...props }: ProgressProps) {
+  const clamped = Math.max(0, Math.min(100, Number.isFinite(Number(value)) ? Number(value) : 0))
   return (
-    <View className={cn('h-2.5 w-full overflow-hidden rounded-full bg-muted', className)}>
-      <View
+    <ProgressPrimitive.Root
+      value={value}
+      className={cn('h-2.5 w-full overflow-hidden rounded-full bg-muted', className)}
+      {...props}
+    >
+      <ProgressPrimitive.Indicator
         className={cn('h-full rounded-full bg-primary', indicatorClassName)}
         style={{ width: `${clamped}%` }}
       />
-    </View>
+    </ProgressPrimitive.Root>
   )
 }
+
+export { Progress }

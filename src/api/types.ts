@@ -225,6 +225,7 @@ export interface GameDetail {
   pending_luck_decisions?: CheckResult[]
   round_check_results?: CheckResult[]
   total_tokens?: number
+  plot_tracker?: PlotTracker
   [key: string]: unknown
 }
 
@@ -500,4 +501,69 @@ export interface TranscriptionResponse {
 export interface PlayerContextResponse {
   preview?: boolean
   [key: string]: unknown
+}
+
+// ---------- 世界观模板 / 规则（创建对局选择器） ----------
+
+export interface WorldTemplateSummary {
+  id?: string
+  world_id?: string
+  name?: string
+  world_name?: string
+  description?: string
+  default_rule?: string
+  recommended_rules?: string[]
+  scene_image?: SceneImageRef
+  language?: string
+  [key: string]: unknown
+}
+
+export interface WorldTemplatesResponse {
+  templates?: WorldTemplateSummary[]
+}
+
+export interface RuleSummary {
+  rule_id: string
+  rule_name?: string
+  rule_name_en?: string
+  description?: string
+  dice_system?: string
+  combat_model?: string
+  attr_count?: number
+  custom?: boolean
+  file?: string
+  source_rule_id?: string
+  scene_image?: SceneImageRef
+  [key: string]: unknown
+}
+
+export interface RulesResponse {
+  rules?: RuleSummary[]
+  total?: number
+}
+
+// ---------- 剧情追踪（GameDetail.plot_tracker） ----------
+
+export interface PlotQuest {
+  title?: string
+  progress?: string
+  status?: string
+}
+
+export interface PlotRelation {
+  npc_name?: string
+  tier?: string
+}
+
+export interface PlotDecision {
+  title?: string
+  summary?: string
+  description?: string
+  round_number?: number
+}
+
+export interface PlotTracker {
+  quests?: Record<string, PlotQuest>
+  relations?: Record<string, PlotRelation>
+  decisions?: (PlotDecision | string)[]
 }
