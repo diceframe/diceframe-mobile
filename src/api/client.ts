@@ -119,6 +119,11 @@ export function buildUrl(path: string, extra?: URLSearchParams): string {
   return `${context.baseUrl}/api${normalized}${q && q.size > 0 ? (normalized.includes('?') ? '&' : '?') + q.toString() : ''}`
 }
 
+export function buildStaticAssetUrl(path: string): string {
+  const normalized = path.startsWith('/') ? path : `/${path}`
+  return `${context.baseUrl}/v2-assets${normalized}`
+}
+
 /** 游戏 SSE 地址（一次性票据 + 游标 + 分享参数；对齐 Web gameEventSource） */
 export function buildPlaySseUrl(gameKey: string, ticket: string, cursor = ''): string {
   const q = shareQuery() ?? new URLSearchParams()

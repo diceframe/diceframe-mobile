@@ -3,9 +3,9 @@ import { Pressable, View } from 'react-native'
 import { Image } from 'expo-image'
 import { Volume2 } from 'lucide-react-native'
 
-import { Avatar } from '@/components/ui/avatar'
 import { Card } from '@/components/ui/card'
 import { Text } from '@/components/ui/text'
+import { RemoteAvatar } from '@/components/ui/remote-avatar'
 import type { CharacterSheet, LogEntry, Player } from '@/api/types'
 import { avatarSource, sceneImageSource } from '@/api/assets'
 
@@ -80,16 +80,12 @@ export function TimelineItem({
             key={action.uid + action.text}
             className={mine ? 'flex-row-reverse items-start gap-2.5' : 'flex-row items-start gap-2.5'}
           >
-            {avatar ? (
-              <Image
-                source={avatar}
-                className="h-9 w-9 rounded-full"
-                contentFit="cover"
-                accessibilityLabel={nameOf(players, action.uid)}
-              />
-            ) : (
-              <Avatar name={nameOf(players, action.uid)} className="h-9 w-9" />
-            )}
+            <RemoteAvatar
+              key={`${action.uid}-${avatar?.uri ?? 'fallback'}`}
+              source={avatar}
+              name={nameOf(players, action.uid)}
+              className="h-9 w-9 rounded-full"
+            />
             <View
               className="max-w-[85%] rounded-md border border-border px-3 py-2"
               style={{

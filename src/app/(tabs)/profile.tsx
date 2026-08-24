@@ -32,7 +32,7 @@ export default function ProfileScreen() {
           <CardContent>
             <Button
               variant="outline"
-              onPress={() => router.push('/login')}
+              onPress={() => router.push({ pathname: '/login', params: { mode: 'switch' } })}
             >
               <ButtonText className="text-foreground">切换服务器</ButtonText>
             </Button>

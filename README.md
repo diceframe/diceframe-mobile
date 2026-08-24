@@ -21,6 +21,9 @@ DiceFrame（AI 跑团引擎）的 React Native 客户端。**v1 聚焦核心游�
 页面结构：一级 Tab = 对局列表 + 我的（换服务器/身份/朗读语速）；二级 = 对局内（`play/[gameKey]`）；
 login/join 为全屏流程页。
 
+移动端生命周期行为：切到后台会暂停 SSE 与轮询，回到前台立即刷新并重连；返回对局列表时自动刷新。
+行动提交失败会保留草稿，避免局域网波动时丢失输入。
+
 ## 开发调试（局域网跑团场景）
 
 前置：Node ≥ 20；PC 上运行 DiceFrame 服务端（`python web_server.py`，默认端口 18000）。
@@ -30,6 +33,24 @@ cd mobile
 npm install
 npx expo start        # 手机装 Expo Go 扫码，或 Android 调试构建
 ```
+
+如果使用内网穿透把 Expo 暴露给外部设备，隧道应配置为：本地 `127.0.0.1:8081`，远程端口例如
+`32218`。本机 Metro 仍然固定监听 `8081`，不要把本地端口改成 `32218`。
+
+把隧道公网地址写进本机专用的 `mobile/.env.local`：
+
+```env
+DICEFRAME_EXPO_PROXY_URL=http://43.248.188.28:32218
+```
+
+之后直接运行：
+
+```powershell
+npm run start:tunnel
+```
+
+这个命令会自动把本机配置转换为 Expo 的对外地址，只覆盖二维码/开发服务器地址，不改变本机
+Metro 的 `8081` 端口。`mobile/.env.local` 已被 Git 忽略，不会提交个人隧道地址。
 
 1. App 内"服务器地址"填 PC 的局域网地址（如 `192.168.1.5:18000`）
 2. Owner 输入访问密码登录；玩家从 Web 端复制分享链接，在 App「通过分享链接加入」粘贴

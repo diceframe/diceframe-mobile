@@ -4,7 +4,9 @@ import {
   ApiError,
   api,
   buildPlaySseUrl,
+  buildStaticAssetUrl,
   buildUrl,
+  checkOwnerAccess,
   configureApiClient,
   normalizeBaseUrl,
   shareQuery,
@@ -55,6 +57,13 @@ describe('buildUrl / buildPlaySseUrl', () => {
     expect(buildUrl('/games/x')).toBe('http://h:18000/api/games/x')
     expect(buildUrl('/games/x/log', new URLSearchParams('page=2'))).toBe(
       'http://h:18000/api/games/x/log?page=2',
+    )
+  })
+
+  it('构造静态资源 URL 时不额外拼 /api', () => {
+    configureApiClient({ baseUrl: 'http://h:18000' })
+    expect(buildStaticAssetUrl('/avatars/v3/dnd5e/realistic-1.jpg')).toBe(
+      'http://h:18000/v2-assets/avatars/v3/dnd5e/realistic-1.jpg',
     )
   })
 
@@ -160,6 +169,23 @@ describe('api()', () => {
     const { apiBlob } = await import('./client')
     const response = await apiBlob('/games/abc/speech', { method: 'POST', body: '{}' })
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]))
+  })
+})
+
+describe('checkOwnerAccess', () => {
+  it('开放服务器允许无 token 进入 Owner 列表', async () => {
+    configureApiClient({ baseUrl: 'http://h', token: null })
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }))
+    await expect(checkOwnerAccess()).resolves.toBe('allowed')
+  })
+
+  it('受保护服务器要求登录，离线时返回不可用', async () => {
+    configureApiClient({ baseUrl: 'http://h', token: null })
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'unauthorized' }, 401))
+    await expect(checkOwnerAccess()).resolves.toBe('login-required')
+
+    fetchMock.mockRejectedValueOnce(new Error('offline'))
+    await expect(checkOwnerAccess()).resolves.toBe('unavailable')
   })
 })
 

@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 
 import { PageHeader } from '@/components/page-header'
 import { Screen } from '@/components/screen'
@@ -20,6 +20,7 @@ import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 /** 服务器连接 + Owner 登录；已连接时进入即“换服务器”流程 */
 export default function LoginScreen() {
   const router = useRouter()
+  const { mode } = useLocalSearchParams<{ mode?: string }>()
   const settings = useSettingsStore()
 
   const [serverUrl, setServerUrl] = React.useState(settings.baseUrl)
@@ -32,11 +33,12 @@ export default function LoginScreen() {
   // 进入页面时的模式快照：已有服务器 = “换服务器”流程。
   // 用快照而不是响应式读取，避免首次连接成功保存 baseUrl 后页面中途翻转。
   const [switching] = React.useState(() => settings.baseUrl !== '')
+  const switchingServer = mode === 'switch'
 
   // 已连接过服务器时进入本页自动探测：直接显示密码框（或开放服务器直入按钮），
   // 不需要用户先按一次“连接”。
   React.useEffect(() => {
-    if (!settings.baseUrl) return
+    if (!settings.baseUrl || switchingServer) return
     let active = true
     async function probe() {
       setBusy('server')
@@ -53,7 +55,7 @@ export default function LoginScreen() {
     return () => {
       active = false
     }
-  }, [settings.baseUrl])
+  }, [settings.baseUrl, switchingServer])
 
   async function connectServer() {
     const normalized = normalizeBaseUrl(serverUrl)

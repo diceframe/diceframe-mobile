@@ -53,6 +53,7 @@
   },
   "scripts": {
     "start": "expo start",
+    "start:tunnel": "node ./scripts/start-with-proxy.mjs",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",

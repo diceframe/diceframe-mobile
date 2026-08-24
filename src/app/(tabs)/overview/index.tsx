@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Pressable, RefreshControl, View } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useNavigation, useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
 
 import { PageHeader } from '@/components/page-header'
@@ -13,19 +13,13 @@ import { Text } from '@/components/ui/text'
 import { errorMessage } from '@/api/client'
 import { fetchGames } from '@/api/games'
 import type { GameSummary } from '@/api/types'
+import { gameStateLabel, gameStateVariant } from '@/lib/game-state'
 import { useThemeToken } from '@/lib/theme-colors'
 import { strings } from '@/lib/strings'
 
-const STATE_VARIANT: Record<string, 'default' | 'secondary' | 'success' | 'warning' | 'info'> = {
-  active_action: 'success',
-  active_judgment: 'warning',
-  waiting: 'secondary',
-  paused: 'secondary',
-  ended: 'default',
-}
-
 export default function OverviewScreen() {
   const router = useRouter()
+  const navigation = useNavigation()
   const mutedForeground = useThemeToken('mutedForeground')
 
   const [games, setGames] = React.useState<GameSummary[] | null>(null)
@@ -53,6 +47,12 @@ export default function OverviewScreen() {
       active = false
     }
   }, [reloadToken])
+
+  React.useEffect(() => {
+    return navigation.addListener('focus', () => {
+      setReloadToken((token) => token + 1)
+    })
+  }, [navigation])
 
   function retry() {
     setReloadToken((token) => token + 1)
@@ -102,8 +102,8 @@ export default function OverviewScreen() {
               <Card>
                 <CardHeader className="flex-row items-center justify-between">
                   <CardTitle className="flex-1">{item.world_name || item.game_key}</CardTitle>
-                  <Badge variant={STATE_VARIANT[item.state ?? ''] ?? 'secondary'}>
-                    <BadgeText>{item.state || 'unknown'}</BadgeText>
+                  <Badge variant={gameStateVariant(item.state)}>
+                    <BadgeText>{gameStateLabel(item.state)}</BadgeText>
                   </Badge>
                 </CardHeader>
                 <CardContent className="flex-row gap-4">

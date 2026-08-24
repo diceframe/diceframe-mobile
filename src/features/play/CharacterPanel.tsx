@@ -1,14 +1,14 @@
 import * as React from 'react'
 import { ScrollView, View } from 'react-native'
-import { Image } from 'expo-image'
 
-import { Avatar } from '@/components/ui/avatar'
-import { Badge, BadgeText } from '@/components/ui/badge'
+import { RemoteAvatar } from '@/components/ui/remote-avatar'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import type { CharacterSheet, Player, RuleAttribute, RuleMeta } from '@/api/types'
 import { avatarSource } from '@/api/assets'
+
+import { characterAttributeRows } from './characterAttributes'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -16,6 +16,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <Text variant="small" className="font-semibold text-muted-foreground">
         {title}
       </Text>
+      {children}
+    </View>
+  )
+}
+
+function PanelCard({ children }: { children: React.ReactNode }) {
+  return (
+    <View
+      className="rounded-md border border-border bg-muted px-3 py-2"
+      style={{ flexBasis: '30%', flexGrow: 1 }}
+    >
       {children}
     </View>
   )
@@ -77,15 +88,26 @@ export function CharacterPanel({
   const sheet = player?.character_sheet ?? null
   const avatar = avatarSource(gameKey, sheet?.portrait)
   const specialStats = ruleMeta?.rule_special_stats ?? []
+  const attributes = characterAttributeRows(sheet?.attributes, ruleAttrs)
+  const skills = skillList(sheet)
+  const equipment = itemList(sheet?.equipment)
+  const inventory = itemList(sheet?.inventory)
+  const keyItems = itemList(sheet?.key_items)
 
   return (
-    <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-5 pb-8">
+    <ScrollView
+      className="flex-1"
+      nestedScrollEnabled
+      showsVerticalScrollIndicator={false}
+      contentContainerClassName="gap-5 pb-8"
+    >
       <View className="flex-row items-center gap-3">
-        {avatar ? (
-          <Image source={avatar} className="h-14 w-14 rounded-full" contentFit="cover" />
-        ) : (
-          <Avatar name={player?.character_name ?? '?'} className="h-14 w-14" />
-        )}
+        <RemoteAvatar
+          key={avatar?.uri ?? 'fallback'}
+          source={avatar}
+          name={player?.character_name ?? '?'}
+          className="h-14 w-14 rounded-full"
+        />
         <View className="flex-1 gap-0.5">
           <Text variant="h3">{player?.character_name ?? '未找到角色'}</Text>
           <Text variant="small">
@@ -115,30 +137,30 @@ export function CharacterPanel({
         </Section>
       )}
 
-      {sheet?.attributes && Object.keys(sheet.attributes).length > 0 && (
+      {attributes.length > 0 && (
         <Section title="属性">
           <View className="flex-row flex-wrap gap-2">
-            {(ruleAttrs.length > 0
-              ? ruleAttrs.map((attr) => ({ key: attr.key, label: attr.display_name || attr.name || attr.key }))
-              : Object.keys(sheet.attributes).map((key) => ({ key, label: key }))
-            ).map(({ key, label }) => (
-              <Badge key={key} variant="secondary">
-                <BadgeText>
-                  {label} {sheet.attributes?.[key] ?? '?'}
-                </BadgeText>
-              </Badge>
+            {attributes.map((attribute) => (
+              <PanelCard key={attribute.key}>
+                <Text variant="small" numberOfLines={1}>
+                  {attribute.label}
+                </Text>
+                <Text className="font-mono text-xl font-semibold">{attribute.value}</Text>
+              </PanelCard>
             ))}
           </View>
         </Section>
       )}
 
-      {skillList(sheet).length > 0 && (
+      {skills.length > 0 && (
         <Section title="技能">
           <View className="flex-row flex-wrap gap-2">
-            {skillList(sheet).map((skill) => (
-              <Badge key={skill} variant="outline">
-                <BadgeText>{skill}</BadgeText>
-              </Badge>
+            {skills.map((skill, index) => (
+              <PanelCard key={`${skill}-${index}`}>
+                <Text className="text-sm" numberOfLines={2}>
+                  {skill}
+                </Text>
+              </PanelCard>
             ))}
           </View>
         </Section>
@@ -146,41 +168,52 @@ export function CharacterPanel({
 
       {typeof sheet?.gold === 'number' && (
         <Section title="财产">
-          <Text className="font-mono">💰 {sheet.gold}</Text>
+          <View className="flex-row flex-wrap gap-2">
+            <PanelCard>
+              <Text variant="small">金币</Text>
+              <Text className="font-mono text-xl font-semibold">{sheet.gold}</Text>
+            </PanelCard>
+          </View>
         </Section>
       )}
 
-      {itemList(sheet?.equipment).length > 0 && (
+      {equipment.length > 0 && (
         <Section title="装备">
-          <View className="gap-1">
-            {itemList(sheet?.equipment).map((name) => (
-              <Text key={name} className="text-sm">
-                ⚔ {name}
-              </Text>
+          <View className="flex-row flex-wrap gap-2">
+            {equipment.map((name, index) => (
+              <PanelCard key={`${name}-${index}`}>
+                <Text className="text-sm" numberOfLines={2}>
+                  {name}
+                </Text>
+              </PanelCard>
             ))}
           </View>
         </Section>
       )}
 
-      {itemList(sheet?.inventory).length > 0 && (
+      {inventory.length > 0 && (
         <Section title="背包">
           <View className="flex-row flex-wrap gap-2">
-            {itemList(sheet?.inventory).map((name) => (
-              <Badge key={name} variant="secondary">
-                <BadgeText>{name}</BadgeText>
-              </Badge>
+            {inventory.map((name, index) => (
+              <PanelCard key={`${name}-${index}`}>
+                <Text className="text-sm" numberOfLines={2}>
+                  {name}
+                </Text>
+              </PanelCard>
             ))}
           </View>
         </Section>
       )}
 
-      {itemList(sheet?.key_items).length > 0 && (
+      {keyItems.length > 0 && (
         <Section title="关键物品">
-          <View className="gap-1">
-            {itemList(sheet?.key_items).map((name) => (
-              <Text key={name} className="text-sm">
-                🔑 {name}
-              </Text>
+          <View className="flex-row flex-wrap gap-2">
+            {keyItems.map((name, index) => (
+              <PanelCard key={`${name}-${index}`}>
+                <Text className="text-sm" numberOfLines={2}>
+                  🔑 {name}
+                </Text>
+              </PanelCard>
             ))}
           </View>
         </Section>
