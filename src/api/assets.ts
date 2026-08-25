@@ -17,6 +17,23 @@ export function assetSource(path: string): AssetSource {
   return { uri: buildUrl(path, shareQuery() ?? undefined), apiPath: path }
 }
 
+/**
+ * 地图素材 URL（服务端给出，对齐 Web 直接 <img src> 的字段）：
+ * - `/api/...`（地图背景/插件图标等鉴权资源）→ 经 apiBlob 下载转 data URI
+ * - `/v2-assets/...`（内置预设底图）→ 静态直链
+ * - 绝对 http(s) → 直链；其他未知格式不渲染
+ */
+export function mapAssetSource(url?: string | null): AssetSource | null {
+  const value = String(url ?? '').trim()
+  if (!value) return null
+  if (/^https?:\/\//i.test(value)) return { uri: value }
+  if (value.startsWith('/api/')) return assetSource(value.slice('/api'.length))
+  if (value.startsWith('/v2-assets/')) {
+    return { uri: buildStaticAssetUrl(value.slice('/v2-assets'.length)) }
+  }
+  return null
+}
+
 const dataUriCache = new Map<string, string>()
 const inflightDownloads = new Map<string, Promise<string>>()
 
@@ -51,6 +68,32 @@ export async function apiAssetDataUri(apiPath: string): Promise<string> {
   })()
   inflightDownloads.set(apiPath, download)
   return download
+}
+
+/** 规则内置场景图（对齐 Web useBackgroundImages 的 RULE_SCENE_SLOTS/DEFAULT_URLS） */
+const RULE_SCENE_ASSETS: Record<string, string> = {
+  dnd5e: '/ui/campaign-mountain-city.jpg',
+  freeform_fantasy: '/ui/rules/rule-freeform-fantasy.webp',
+  freeform_coc: '/ui/rules/rule-freeform-coc.webp',
+  freeform_cyberpunk: '/ui/rules/rule-freeform-cyberpunk.webp',
+  freeform_wuxia: '/ui/rules/rule-freeform-wuxia.webp',
+  tavern_free: '/ui/rules/rule-tavern-free.webp',
+}
+
+/** rule_id → 内置场景静态资源路径；未知规则回退 freeform_fantasy（同 Web ruleSceneSlot） */
+export function ruleSceneAssetPath(ruleId?: string | null): string {
+  return RULE_SCENE_ASSETS[String(ruleId || '').trim()] ?? RULE_SCENE_ASSETS.freeform_fantasy
+}
+
+/**
+ * 冒险封面：优先 /games/{key}/scene-image（服务端已含默认场景回退，鉴权经
+ * apiBlob），下载失败时组件回退到 uri 的规则内置场景直链（静态资源免鉴权）。
+ */
+export function gameSceneCoverSource(gameKey: string, ruleId?: string | null): AssetSource {
+  return {
+    uri: buildStaticAssetUrl(ruleSceneAssetPath(ruleId)),
+    apiPath: `/games/${encodeURIComponent(gameKey)}/scene-image`,
+  }
 }
 
 export function avatarSource(

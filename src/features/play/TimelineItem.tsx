@@ -5,7 +5,8 @@ import { Volume2 } from 'lucide-react-native'
 
 import { Card } from '@/components/ui/card'
 import { Text } from '@/components/ui/text'
-import { RemoteAvatar } from '@/components/ui/remote-avatar'
+import { RemoteAvatar } from '@/components/patterns/remote-avatar'
+import { Icon } from '@/components/ui/icon'
 import type { CharacterSheet, LogEntry, Player } from '@/api/types'
 import { avatarSource, sceneImageSource } from '@/api/assets'
 
@@ -125,7 +126,7 @@ export function TimelineItem({
                 className="h-7 w-7 items-center justify-center rounded-md active:bg-accent"
                 accessibilityLabel="朗读本回合"
               >
-                <Volume2 size={15} className="text-muted-foreground" />
+                <Icon as={Volume2} size={15} className="text-muted-foreground" />
               </Pressable>
             ) : null}
           </View>

@@ -4,18 +4,19 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft, Menu, Route, User } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import { Sheet } from '@/components/patterns/sheet'
+import { StatusBadge } from '@/components/patterns/status-badge'
 import { Screen } from '@/components/screen'
-import { Badge, BadgeText } from '@/components/ui/badge'
-import { IconButton } from '@/components/ui/icon-button'
-import { Sheet } from '@/components/ui/sheet'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
+import { Icon } from '@/components/ui/icon'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
 import { errorMessage } from '@/api/client'
 import { ActionComposer } from '@/features/play/ActionComposer'
 import { CharacterPanel } from '@/features/play/CharacterPanel'
 import { GameTimeline } from '@/features/play/GameTimeline'
 import { GmSheet } from '@/features/play/GmSheet'
-import { MiniMap } from '@/features/play/MiniMap'
+import { MapWorkspace } from '@/features/play/MapWorkspace'
 import { PlotTracker } from '@/features/play/PlotTracker'
 import { useSpeaker } from '@/features/play/useSpeaker'
 import { useVoiceInput } from '@/features/play/useVoiceInput'
@@ -144,17 +145,11 @@ export default function PlayScreen() {
 
   const statusBadge =
     streamStatus === 'live' ? (
-      <Badge variant="success">
-        <BadgeText>{strings.play.connected}</BadgeText>
-      </Badge>
+      <StatusBadge tone="success">{strings.play.connected}</StatusBadge>
     ) : streamStatus === 'degraded' ? (
-      <Badge variant="warning">
-        <BadgeText>{strings.play.polling}</BadgeText>
-      </Badge>
+      <StatusBadge tone="warning">{strings.play.polling}</StatusBadge>
     ) : (
-      <Badge variant="secondary">
-        <BadgeText>{strings.play.connecting}</BadgeText>
-      </Badge>
+      <StatusBadge tone="secondary">{strings.play.connecting}</StatusBadge>
     )
 
   return (
@@ -163,14 +158,16 @@ export default function PlayScreen() {
       <View className="flex-1" style={{ paddingBottom: keyboardHeight + insets.bottom }}>
         {/* 顶栏 */}
         <View className="flex-row items-center gap-2 border-b border-border px-3 py-2">
-          <IconButton
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-9 w-9"
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/overview'))}
             accessibilityLabel={strings.common.back}
             hitSlop={8}
           >
-            <ChevronLeft size={22} className="text-foreground" />
-          </IconButton>
+            <Icon as={ChevronLeft} size={22} />
+          </Button>
           <View className="flex-1">
             <Text variant="h4" numberOfLines={1}>
               {detail?.world_name || gameKey}
@@ -180,28 +177,34 @@ export default function PlayScreen() {
             </Text>
           </View>
           {statusBadge}
-          <IconButton
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-9 w-9"
             onPress={() => setCharacterOpen(true)}
             accessibilityLabel={strings.play.characterPanel}
           >
-            <User size={20} className="text-foreground" />
-          </IconButton>
-          <IconButton
+            <Icon as={User} size={20} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-9 w-9"
             onPress={() => setSidebarOpen(true)}
             accessibilityLabel="剧情与地图"
           >
-            <Route size={20} className="text-foreground" />
-          </IconButton>
+            <Icon as={Route} size={20} />
+          </Button>
           {isGm && (
-            <IconButton
+            <Button
+              variant="ghost"
+              size="icon"
               className="h-9 w-9"
               onPress={() => setMenuOpen(true)}
               accessibilityLabel={strings.play.gmCommand}
             >
-              <Menu size={20} className="text-foreground" />
-            </IconButton>
+              <Icon as={Menu} size={20} />
+            </Button>
           )}
         </View>
 
@@ -281,26 +284,30 @@ export default function PlayScreen() {
         />
       </Sheet>
 
+      {/* 剧情与地图在同一个抽屉中切换；全屏地图是明确的二级动作。 */}
       <Sheet open={sidebarOpen} onClose={() => setSidebarOpen(false)} className="h-[80%]" scrollable={false}>
-        <View className="flex-1 gap-3 pt-1">
-          <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as 'plot' | 'map')}>
-            <TabsList>
-              <TabsTrigger value="plot">
-                <Text variant="small">剧情</Text>
-              </TabsTrigger>
-              <TabsTrigger value="map">
-                <Text variant="small">地图</Text>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <View className="flex-1">
-            {sidebarTab === 'plot' ? (
-              <PlotTracker data={plotTracker} />
-            ) : (
-              <MiniMap data={map} />
-            )}
-          </View>
-        </View>
+        <Tabs
+          value={sidebarTab}
+          onValueChange={(value) => setSidebarTab(value as 'plot' | 'map')}
+          className="flex-1 pt-1"
+        >
+          <TabsList>
+            <TabsTrigger value="plot">
+              <Text variant="small">剧情</Text>
+            </TabsTrigger>
+            <TabsTrigger value="map">
+              <Text variant="small">地图</Text>
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="plot" className="min-h-0 flex-1 pt-1">
+            <PlotTracker data={plotTracker} />
+          </TabsContent>
+
+          <TabsContent value="map" className="min-h-0 flex-1 pt-1">
+            <MapWorkspace map={map} currentScene={detail?.scene} />
+          </TabsContent>
+        </Tabs>
       </Sheet>
     </Screen>
   )

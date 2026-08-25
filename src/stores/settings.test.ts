@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { configureApiClient, currentToken, normalizeBaseUrl } from '@/api/client'
+import { readThemeToken, resolveTheme } from '@/lib/theme'
 import { useSettingsStore } from './settings'
 
 // settings store 依赖 AsyncStorage（RN 模块），单测里换成内存实现。
@@ -17,7 +18,34 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   },
 }))
 
+vi.mock('react-native', () => ({
+  Appearance: {
+    getColorScheme: () => 'dark',
+  },
+}))
+
 describe('settings store 登录/登出状态机（回归：退出登录后必须能重新进入）', () => {
+  it('主题解析：system 跟随设备，显式模式覆盖设备主题', () => {
+    expect(resolveTheme('system', 'light')).toBe('light')
+    expect(resolveTheme('system', 'dark')).toBe('dark')
+    expect(resolveTheme('light', 'dark')).toBe('light')
+    expect(resolveTheme('dark', 'light')).toBe('dark')
+  })
+
+  it('原生/SVG 主题令牌随解析主题切换', () => {
+    expect(readThemeToken('foreground', 'dark')).toBe('#eef2ec')
+    expect(readThemeToken('foreground', 'light')).toBe('#201c16')
+    expect(readThemeToken('primary', 'dark')).toBe('#55b9bd')
+    expect(readThemeToken('primary', 'light')).toBe('#277f84')
+  })
+
+  it('主题偏好写入共享 store', () => {
+    useSettingsStore.getState().setThemeMode('light')
+    expect(useSettingsStore.getState().themeMode).toBe('light')
+    useSettingsStore.getState().setThemeMode('dark')
+    expect(useSettingsStore.getState().themeMode).toBe('dark')
+  })
+
   beforeEach(() => {
     useSettingsStore.setState({ baseUrl: '', token: null, share: null })
     configureApiClient({ baseUrl: '', token: null, share: null })

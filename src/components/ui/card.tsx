@@ -1,36 +1,55 @@
-import * as React from 'react'
-import { View, type ViewProps } from 'react-native'
+import { Text, TextClassContext } from '@/components/ui/text';
+import { cn } from '@/lib/utils';
+import { View } from 'react-native';
 
-import { Text } from '@/components/ui/text'
-import { cn } from '@/lib/utils'
-
-function Card({ className, ...props }: ViewProps & { className?: string }) {
+function Card({ className, ...props }: React.ComponentProps<typeof View> & React.RefAttributes<View>) {
   return (
-    <View
-      className={cn('rounded-lg border border-border bg-card p-5 gap-2', className)}
+    <TextClassContext.Provider value="text-card-foreground">
+      <View
+        className={cn(
+          'bg-card border-border flex flex-col gap-6 rounded-xl border py-6 shadow-sm shadow-black/5',
+          className
+        )}
+        {...props}
+      />
+    </TextClassContext.Provider>
+  );
+}
+
+function CardHeader({ className, ...props }: React.ComponentProps<typeof View> & React.RefAttributes<View>) {
+  return <View className={cn('flex flex-col gap-1.5 px-6', className)} {...props} />;
+}
+
+function CardTitle({
+  className,
+  ref,
+  ...props
+}: React.ComponentProps<typeof Text> & React.RefAttributes<typeof Text>) {
+
+  return (
+    <Text
+      ref={ref}
+      role="heading"
+      aria-level={3}
+      className={cn('font-semibold leading-none', className)}
       {...props}
     />
-  )
+  );
 }
 
-function CardHeader({ className, ...props }: ViewProps & { className?: string }) {
-  return <View className={cn('gap-1.5', className)} {...props} />
+function CardDescription({
+  className,
+  ...props
+}: React.ComponentProps<typeof Text> & React.RefAttributes<typeof Text>) {
+  return <Text className={cn('text-muted-foreground text-sm', className)} {...props} />;
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<typeof Text>) {
-  return <Text variant="h3" className={cn(className)} {...props} />
+function CardContent({ className, ...props }: React.ComponentProps<typeof View> & React.RefAttributes<View>) {
+  return <View className={cn('px-6', className)} {...props} />;
 }
 
-function CardDescription({ className, ...props }: React.ComponentProps<typeof Text>) {
-  return <Text variant="small" className={cn(className)} {...props} />
+function CardFooter({ className, ...props }: React.ComponentProps<typeof View> & React.RefAttributes<View>) {
+  return <View className={cn('flex flex-row items-center px-6', className)} {...props} />;
 }
 
-function CardContent({ className, ...props }: ViewProps & { className?: string }) {
-  return <View className={cn(className)} {...props} />
-}
-
-function CardFooter({ className, ...props }: ViewProps & { className?: string }) {
-  return <View className={cn('flex-row items-center gap-2 pt-2', className)} {...props} />
-}
-
-export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
+export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle };

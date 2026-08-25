@@ -2,10 +2,11 @@ import * as React from 'react'
 import { View } from 'react-native'
 import { ChevronFirst, ChevronLast, Terminal } from 'lucide-react-native'
 
-import { Button, ButtonText } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
+import { Icon } from '@/components/ui/icon'
 import type { Multiplayer } from '@/api/types'
 import { strings } from '@/lib/strings'
 
@@ -29,12 +30,12 @@ export function GmSheet({
     <View className="gap-4 pb-4">
       <View className="flex-row gap-2">
         <Button className="flex-1" disabled={busy} onPress={onAdvance}>
-          <ChevronLast size={16} className="text-primary-foreground" />
-          <ButtonText>{strings.play.advance}</ButtonText>
+          <Icon as={ChevronLast} size={16} />
+          <Text>{strings.play.advance}</Text>
         </Button>
         <Button variant="outline" className="flex-1" disabled={busy} onPress={onRollback}>
-          <ChevronFirst size={16} className="text-foreground" />
-          <ButtonText className="text-foreground">{strings.play.rollback}</ButtonText>
+          <Icon as={ChevronFirst} size={16} />
+          <Text>{strings.play.rollback}</Text>
         </Button>
       </View>
 
@@ -68,7 +69,7 @@ export function GmSheet({
             }}
             accessibilityLabel={strings.play.gmCommand}
           >
-            <Terminal size={18} className="text-primary-foreground" />
+            <Icon as={Terminal} size={18} />
           </Button>
         </View>
       </View>

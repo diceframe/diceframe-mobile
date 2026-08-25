@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { ScrollView, View } from 'react-native'
 
-import { Badge, BadgeText } from '@/components/ui/badge'
+import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import type { PlotDecision, PlotQuest, PlotRelation, PlotTracker as PlotTrackerData } from '@/api/types'
@@ -15,7 +15,7 @@ function Section({ title, count, children }: { title: string; count?: number; ch
         </Text>
         {count !== undefined && count > 0 && (
           <Badge variant="secondary">
-            <BadgeText>{count}</BadgeText>
+            <Text>{count}</Text>
           </Badge>
         )}
       </View>

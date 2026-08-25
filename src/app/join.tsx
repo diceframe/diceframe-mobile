@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router'
 
 import { PageHeader } from '@/components/page-header'
 import { Screen } from '@/components/screen'
-import { Button, ButtonText } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import { configureApiClient, errorMessage } from '@/api/client'
@@ -149,7 +149,7 @@ export default function JoinScreen() {
             {busy ? (
               <ActivityIndicator className="text-primary-foreground" />
             ) : (
-              <ButtonText>{strings.join.parse}</ButtonText>
+              <Text>{strings.join.parse}</Text>
             )}
           </Button>
         </View>
@@ -169,7 +169,7 @@ export default function JoinScreen() {
             {busy ? (
               <ActivityIndicator className="text-primary-foreground" />
             ) : (
-              <ButtonText>{strings.join.verify}</ButtonText>
+              <Text>{strings.join.verify}</Text>
             )}
           </Button>
         </View>
@@ -186,7 +186,7 @@ export default function JoinScreen() {
                 {busy ? (
                   <ActivityIndicator className="text-primary-foreground" />
                 ) : (
-                  <ButtonText>{strings.join.reclaimIdentity}</ButtonText>
+                  <Text>{strings.join.reclaimIdentity}</Text>
                 )}
               </Button>
             </>
@@ -203,7 +203,7 @@ export default function JoinScreen() {
                 {busy ? (
                   <ActivityIndicator className="text-primary-foreground" />
                 ) : (
-                  <ButtonText>{strings.join.createCharacter}</ButtonText>
+                  <Text>{strings.join.createCharacter}</Text>
                 )}
               </Button>
             </>

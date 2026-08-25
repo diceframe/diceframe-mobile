@@ -2,7 +2,8 @@ import * as React from 'react'
 import { View, type ViewProps } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 
-import { IconButton } from '@/components/ui/icon-button'
+import { Button } from '@/components/ui/button'
+import { Icon } from '@/components/ui/icon'
 import { Text } from '@/components/ui/text'
 import { strings } from '@/lib/strings'
 import { cn } from '@/lib/utils'
@@ -24,9 +25,15 @@ export function PageHeader({
   return (
     <View className={cn('flex-row items-center gap-2 px-4 py-3', className)} {...props}>
       {onBack ? (
-        <IconButton onPress={onBack} accessibilityLabel={strings.common.back} hitSlop={8}>
-          <ChevronLeft size={22} className="text-foreground" />
-        </IconButton>
+        <Button
+          variant="ghost"
+          size="icon"
+          onPress={onBack}
+          accessibilityLabel={strings.common.back}
+          hitSlop={8}
+        >
+          <Icon as={ChevronLeft} size={22} />
+        </Button>
       ) : null}
       <View className="flex-1 gap-0">
         <Text variant="h2" numberOfLines={1}>

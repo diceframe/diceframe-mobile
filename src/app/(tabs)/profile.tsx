@@ -6,11 +6,11 @@ import Constants from 'expo-constants'
 
 import { PageHeader } from '@/components/page-header'
 import { Screen } from '@/components/screen'
-import { Button, ButtonText } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
-import { useThemeToken } from '@/lib/theme-colors'
+import { useThemeToken } from '@/lib/theme'
 import { strings } from '@/lib/strings'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -34,7 +34,7 @@ export default function ProfileScreen() {
               variant="outline"
               onPress={() => router.push({ pathname: '/login', params: { mode: 'switch' } })}
             >
-              <ButtonText className="text-foreground">切换服务器</ButtonText>
+              <Text>切换服务器</Text>
             </Button>
             <Text variant="small" className="mt-2">
               切换会清除本机保存的 GM 密码与玩家身份
@@ -67,11 +67,11 @@ export default function ProfileScreen() {
                     router.replace('/login')
                   }}
                 >
-                  <ButtonText>{strings.common.logout}</ButtonText>
+                  <Text>{strings.common.logout}</Text>
                 </Button>
               ) : settings.baseUrl ? (
                 <Button size="sm" variant="outline" onPress={() => router.push('/login')}>
-                  <ButtonText className="text-foreground">去登录</ButtonText>
+                  <Text>去登录</Text>
                 </Button>
               ) : null}
             </View>
@@ -89,11 +89,11 @@ export default function ProfileScreen() {
               </View>
               {settings.share ? (
                 <Button size="sm" variant="outline" onPress={() => settings.setShare(null)}>
-                  <ButtonText className="text-foreground">清除</ButtonText>
+                  <Text>清除</Text>
                 </Button>
               ) : (
                 <Button size="sm" variant="outline" onPress={() => router.push('/join')}>
-                  <ButtonText className="text-foreground">加入</ButtonText>
+                  <Text>加入</Text>
                 </Button>
               )}
             </View>

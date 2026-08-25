@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { apiAssetDataUri, avatarSource } from './assets'
+import { apiAssetDataUri, avatarSource, gameSceneCoverSource, ruleSceneAssetPath } from './assets'
 import { apiBlob, configureApiClient } from './client'
 
 vi.mock('./client', async (importOriginal) => {
@@ -50,6 +50,26 @@ describe('avatarSource', () => {
 
   it('内置头像引用无效时回退到默认头像', () => {
     expect(avatarSource('game-1', { kind: 'builtin', id: 'unknown:99' })).toBeNull()
+  })
+})
+
+describe('gameSceneCoverSource', () => {
+  beforeEach(() => {
+    configureApiClient({ baseUrl: 'http://h:18000', token: null, share: null })
+  })
+
+  it('封面主图走 /games/{key}/scene-image，回退直链指向规则内置场景', () => {
+    expect(gameSceneCoverSource('game/1', 'freeform_coc')).toEqual({
+      uri: 'http://h:18000/v2-assets/ui/rules/rule-freeform-coc.webp',
+      apiPath: '/games/game%2F1/scene-image',
+    })
+  })
+
+  it('dnd5e 用专属场景图，未知规则回退 freeform_fantasy（对齐 Web ruleSceneSlot）', () => {
+    expect(ruleSceneAssetPath('dnd5e')).toBe('/ui/campaign-mountain-city.jpg')
+    expect(ruleSceneAssetPath('unknown_rule')).toBe('/ui/rules/rule-freeform-fantasy.webp')
+    expect(ruleSceneAssetPath('')).toBe('/ui/rules/rule-freeform-fantasy.webp')
+    expect(ruleSceneAssetPath(' freeform_wuxia ')).toBe('/ui/rules/rule-freeform-wuxia.webp')
   })
 })
 

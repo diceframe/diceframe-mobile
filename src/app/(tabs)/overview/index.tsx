@@ -1,27 +1,41 @@
 import * as React from 'react'
-import { Pressable, RefreshControl, View } from 'react-native'
+import { Pressable, RefreshControl, StyleSheet, View } from 'react-native'
+import { GlassView } from 'expo-glass-effect'
 import { useNavigation, useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
 import { Plus, Trash2 } from 'lucide-react-native'
 
 import { PageHeader } from '@/components/page-header'
+import { SceneCover } from '@/components/patterns/scene-cover'
+import { StatusBadge } from '@/components/patterns/status-badge'
 import { Screen } from '@/components/screen'
-import { Badge, BadgeText } from '@/components/ui/badge'
-import { Button, ButtonText } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { IconButton } from '@/components/ui/icon-button'
+import { Icon } from '@/components/ui/icon'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
 import { errorMessage } from '@/api/client'
 import { batchDeleteGames, deleteGame, fetchGames } from '@/api/games'
+import { gameSceneCoverSource } from '@/api/assets'
 import type { GameSummary } from '@/api/types'
-import { gameStateLabel, gameStateVariant } from '@/lib/game-state'
-import { useThemeToken } from '@/lib/theme-colors'
+import { gameStateLabel, gameStateTone } from '@/lib/game-state'
+import { useThemeToken } from '@/lib/theme'
 import { strings } from '@/lib/strings'
 import { CreateGameSheet } from '@/features/overview/CreateGameSheet'
 
 type SortMode = 'recent' | 'oldest' | 'name' | 'round'
+
+const styles = StyleSheet.create({
+  infoPanel: {
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    padding: 14,
+    overflow: 'hidden',
+  },
+})
 
 function activityTime(game: GameSummary): number | null {
   for (const value of [game.last_activity, game.started_at]) {
@@ -61,6 +75,7 @@ function OverviewContent({
   refreshing,
   busy,
   mutedForeground,
+  coverBase,
   onRetry,
   onRefresh,
   onSelect,
@@ -75,6 +90,7 @@ function OverviewContent({
   refreshing: boolean
   busy: boolean
   mutedForeground: string
+  coverBase: string
   onRetry: () => void
   onRefresh: () => void
   onSelect: (key: string) => void
@@ -87,7 +103,7 @@ function OverviewContent({
       <View className="gap-3">
         <Text className="text-destructive">{error}</Text>
         <Button onPress={onRetry} className="self-start">
-          <ButtonText>{strings.common.retry}</ButtonText>
+          <Text>{strings.common.retry}</Text>
         </Button>
       </View>
     )
@@ -110,7 +126,7 @@ function OverviewContent({
           {strings.overview.empty}
         </Text>
         <Button onPress={onCreate}>
-          <ButtonText>创建第一个对局</ButtonText>
+          <Text>创建第一个对局</Text>
         </Button>
       </View>
     )
@@ -138,33 +154,49 @@ function OverviewContent({
             onLongPress={() => onSelect(item.game_key)}
             className={`mb-3 active:opacity-80 ${isSelected ? 'ring-2 ring-primary' : ''}`}
           >
-            <Card>
-              <CardHeader className="flex-row items-center justify-between">
-                <CardTitle className="flex-1">{item.world_name || item.game_key}</CardTitle>
-                <Badge variant={gameStateVariant(item.state)}>
-                  <BadgeText>{gameStateLabel(item.state)}</BadgeText>
-                </Badge>
-              </CardHeader>
-              <CardContent className="flex-row gap-4">
-                <Text variant="small">
-                  {strings.overview.round} {item.round_number ?? 0}
-                </Text>
-                <Text variant="small">
-                  {strings.overview.players} {item.player_count ?? 0}/{item.max_players ?? '-'}
-                </Text>
-                <Text variant="small" className="flex-1 text-right">
-                  {item.last_activity?.slice(0, 10) ?? ''}
-                </Text>
-              </CardContent>
-              {isSelected && (
-                <CardContent className="pt-0">
-                  <View className="flex-row gap-2">
-                    <Button size="sm" variant="destructive" disabled={busy} onPress={() => onRemove(item.game_key)}>
-                      <ButtonText>删除</ButtonText>
-                    </Button>
-                  </View>
-                </CardContent>
-              )}
+            <Card className="gap-2 overflow-hidden p-0">
+              <SceneCover
+                source={gameSceneCoverSource(item.game_key, item.rule_id)}
+                className="absolute inset-0"
+                accessibilityLabel={`${item.world_name || item.game_key}封面`}
+              />
+              <View className="min-h-[196px] justify-end p-3">
+                <GlassView
+                  glassEffectStyle="regular"
+                  tintColor={coverBase}
+                  pointerEvents="box-none"
+                  style={[styles.infoPanel, { backgroundColor: `${coverBase}E6` }]}
+                >
+                  <CardHeader className="flex-row items-start justify-between">
+                    <CardTitle className="flex-1">
+                      {item.world_name || item.game_key}
+                    </CardTitle>
+                    <StatusBadge tone={gameStateTone(item.state)} className="mt-0.5">
+                      {gameStateLabel(item.state)}
+                    </StatusBadge>
+                  </CardHeader>
+                  <CardContent className="flex-row flex-wrap gap-x-4 gap-y-1">
+                    <Text variant="small">
+                      {strings.overview.round} {item.round_number ?? 0}
+                    </Text>
+                    <Text variant="small">
+                      {strings.overview.players} {item.player_count ?? 0}/{item.max_players ?? '-'}
+                    </Text>
+                    <Text variant="small" className="flex-1 text-right">
+                      {item.last_activity?.slice(0, 10) ?? ''}
+                    </Text>
+                  </CardContent>
+                  {isSelected && (
+                    <CardContent className="pt-3">
+                      <View className="flex-row gap-2">
+                        <Button size="sm" variant="destructive" disabled={busy} onPress={() => onRemove(item.game_key)}>
+                          <Text>删除</Text>
+                        </Button>
+                      </View>
+                    </CardContent>
+                  )}
+                </GlassView>
+              </View>
             </Card>
           </Pressable>
         )
@@ -177,6 +209,7 @@ export default function OverviewScreen() {
   const router = useRouter()
   const navigation = useNavigation()
   const mutedForeground = useThemeToken('mutedForeground')
+  const coverBase = useThemeToken('card')
 
   const [games, setGames] = React.useState<GameSummary[] | null>(null)
   const [error, setError] = React.useState('')
@@ -284,9 +317,14 @@ export default function OverviewScreen() {
         title={strings.overview.title}
         className="px-0"
         right={
-          <IconButton onPress={() => setCreateOpen(true)} accessibilityLabel="创建对局">
-            <Plus size={22} className="text-foreground" />
-          </IconButton>
+          <Button
+            variant="ghost"
+            size="icon"
+            onPress={() => setCreateOpen(true)}
+            accessibilityLabel="创建对局"
+          >
+            <Icon as={Plus} size={22} />
+          </Button>
         }
       />
 
@@ -335,9 +373,15 @@ export default function OverviewScreen() {
               </Tabs>
             </View>
             {selected.size > 0 && (
-              <IconButton onPress={batchRemove} accessibilityLabel="批量删除" disabled={busy}>
-                <Trash2 size={20} className="text-destructive" />
-              </IconButton>
+              <Button
+                variant="ghost"
+                size="icon"
+                onPress={batchRemove}
+                accessibilityLabel="批量删除"
+                disabled={busy}
+              >
+                <Icon as={Trash2} size={20} className="text-destructive" />
+              </Button>
             )}
           </View>
           {selected.size > 0 && (
@@ -361,6 +405,7 @@ export default function OverviewScreen() {
         refreshing={refreshing}
         busy={busy}
         mutedForeground={mutedForeground}
+        coverBase={coverBase}
         onRetry={() => setReloadToken((t) => t + 1)}
         onRefresh={refresh}
         onSelect={toggleSelect}

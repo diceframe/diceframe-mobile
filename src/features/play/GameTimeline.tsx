@@ -1,8 +1,8 @@
 import * as React from 'react'
 import { FlatList, Pressable, View } from 'react-native'
 
-import { Avatar } from '@/components/ui/avatar'
-import { Button, ButtonText } from '@/components/ui/button'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Text } from '@/components/ui/text'
@@ -37,7 +37,7 @@ function LuckCard({
           disabled={busy}
           onPress={() => onDecide(check, true)}
         >
-          <ButtonText>{strings.play.luckSpend}</ButtonText>
+          <Text>{strings.play.luckSpend}</Text>
         </Button>
         <Button
           size="sm"
@@ -45,7 +45,7 @@ function LuckCard({
           disabled={busy}
           onPress={() => onDecide(check, false)}
         >
-          <ButtonText className="text-foreground">{strings.play.luckDecline}</ButtonText>
+          <Text>{strings.play.luckDecline}</Text>
         </Button>
       </View>
     </Card>
@@ -114,7 +114,11 @@ export function GameTimeline({
             key={action.user_id + action.text}
             className={mine ? 'flex-row-reverse items-center gap-2.5 opacity-70' : 'flex-row items-center gap-2.5 opacity-70'}
           >
-            <Avatar name={action.character_name || action.user_id} className="h-8 w-8" />
+            <Avatar alt={action.character_name || action.user_id} className="h-8 w-8">
+              <AvatarFallback>
+                <Text>{(action.character_name || action.user_id || '?').trim().charAt(0).toUpperCase()}</Text>
+              </AvatarFallback>
+            </Avatar>
             <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
               <Text variant="small">
                 {action.character_name || action.user_id} · {strings.play.submitting}

@@ -442,7 +442,7 @@ export interface CharacterCardSummary extends CharacterSheet {
   [key: string]: unknown
 }
 
-// ---------- 地图（只读小地图） ----------
+// ---------- 地图 ----------
 
 export interface MapLocation {
   id?: string
@@ -460,12 +460,42 @@ export interface MapLocation {
   [key: string]: unknown
 }
 
+export interface MapAsset {
+  id: string
+  ref?: string
+  name?: string
+  description?: string
+  plugin_id?: string
+  plugin_name?: string
+  path?: string
+  url?: string
+  [key: string]: unknown
+}
+
+export interface MapDefinition {
+  id: string
+  source_id?: string
+  name: string
+  description?: string
+  mode: 'graph' | string
+  plugin_id?: string
+  plugin_name?: string
+  background?: MapAsset | null
+  default_view?: { x?: number; y?: number; zoom?: number }
+  [key: string]: unknown
+}
+
 export interface MapData {
   schema_version?: number
   map_mode?: 'graph' | string
   locations: MapLocation[]
   current_scene?: string
   current_location_id?: string
+  active_map?: MapDefinition | null
+  assets?: {
+    icons?: MapAsset[]
+    scenes?: MapAsset[]
+  }
   [key: string]: unknown
 }
 

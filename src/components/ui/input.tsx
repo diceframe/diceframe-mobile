@@ -1,22 +1,40 @@
-import * as React from 'react'
-import { TextInput, type TextInputProps } from 'react-native'
+import { useThemeToken } from '@/lib/theme';
+import { cn } from '@/lib/utils';
+import { Platform, TextInput } from 'react-native';
 
-import { cn } from '@/lib/utils'
+function Input({
+  className,
+  placeholderTextColor,
+  style,
+  ...props
+}: React.ComponentProps<typeof TextInput> & React.RefAttributes<TextInput>) {
+  const foreground = useThemeToken('foreground');
+  const mutedForeground = useThemeToken('mutedForeground');
 
-export type InputProps = TextInputProps & {
-  className?: string
-}
-
-export function Input({ className, placeholderClassName, ...props }: InputProps) {
   return (
     <TextInput
+      placeholderTextColor={placeholderTextColor ?? mutedForeground}
+      style={[{ color: foreground }, style]}
       className={cn(
-        'h-11 rounded-md border border-input bg-background px-4 text-base text-foreground web:ring-offset-background web:focus-visible:outline-none',
-        props.editable === false && 'opacity-50',
-        className,
+        'dark:bg-input/30 border-input bg-background text-foreground flex h-10 w-full min-w-0 flex-row items-center rounded-md border px-3 py-1 text-base leading-5 shadow-sm shadow-black/5 sm:h-9',
+        props.editable === false &&
+        cn(
+          'opacity-50',
+          Platform.select({ web: 'disabled:pointer-events-none disabled:cursor-not-allowed' })
+        ),
+        Platform.select({
+          web: cn(
+            'placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground outline-none transition-[color,box-shadow] md:text-sm',
+            'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
+            'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive'
+          ),
+          native: 'placeholder:text-muted-foreground/50',
+        }),
+        className
       )}
-      placeholderClassName={cn('text-muted-foreground', placeholderClassName)}
       {...props}
     />
-  )
+  );
 }
+
+export { Input };

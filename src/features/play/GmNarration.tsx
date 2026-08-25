@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { View } from 'react-native'
 
-import { Badge, BadgeText } from '@/components/ui/badge'
+import { Badge } from '@/components/ui/badge'
 import { Text } from '@/components/ui/text'
 import { cn } from '@/lib/utils'
 
@@ -49,13 +49,13 @@ function TagChip({ badge }: { badge: TagBadge }) {
   if (!tone) {
     return (
       <Badge variant="secondary">
-        <BadgeText>{badge.text}</BadgeText>
+        <Text>{badge.text}</Text>
       </Badge>
     )
   }
   return (
     <Badge className="border-transparent" style={{ backgroundColor: tone.bg }}>
-      <BadgeText style={{ color: tone.color }}>{badge.text}</BadgeText>
+      <Text style={{ color: tone.color }}>{badge.text}</Text>
     </Badge>
   )
 }

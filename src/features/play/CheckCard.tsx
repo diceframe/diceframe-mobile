@@ -1,6 +1,6 @@
 import { View } from 'react-native'
 
-import { Badge, BadgeText } from '@/components/ui/badge'
+import { StatusBadge, type StatusTone } from '@/components/patterns/status-badge'
 import { Card } from '@/components/ui/card'
 import { Text } from '@/components/ui/text'
 import type { CheckResult } from '@/api/types'
@@ -25,7 +25,7 @@ const STATUS_LABEL: Record<CheckStatus, string> = {
 /** 检定结果卡（对齐 Web CheckRevealCard：大成功=鎏金，成功/失败走语义令牌） */
 export function CheckCard({ check, className }: { check: CheckResult; className?: string }) {
   const status = statusOf(check)
-  const statusVariant =
+  const statusTone: StatusTone =
     status === 'critical' ? 'gold' : status === 'success' ? 'success' : 'destructive'
 
   const parts: string[] = []
@@ -47,9 +47,7 @@ export function CheckCard({ check, className }: { check: CheckResult; className?
           {actorLabel ? `${actorLabel} · ` : ''}
           {check.label || check.skill || check.attribute || '检定'}
         </Text>
-        <Badge variant={statusVariant}>
-          <BadgeText>{STATUS_LABEL[status]}</BadgeText>
-        </Badge>
+        <StatusBadge tone={statusTone}>{STATUS_LABEL[status]}</StatusBadge>
       </View>
       <Text className="font-mono text-base">{parts.join(' ')}</Text>
       {typeof check.opponent_total === 'number' && (

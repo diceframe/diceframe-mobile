@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { LogEntry } from '@/api/types'
-import { gameStateLabel, gameStateVariant, hasNewRound } from './game-state'
+import { gameStateLabel, gameStateTone, hasNewRound } from './game-state'
 
 function pageOf(size: number, newestRound: number): LogEntry[] {
   return Array.from({ length: size }, (_, index) => ({ round: newestRound - size + 1 + index }))
@@ -16,7 +16,7 @@ describe('game state presentation', () => {
 
   it('未知状态保持原值，便于发现新服务端状态', () => {
     expect(gameStateLabel('custom_state')).toBe('custom_state')
-    expect(gameStateVariant('custom_state')).toBe('secondary')
+    expect(gameStateTone('custom_state')).toBe('secondary')
   })
 })
 

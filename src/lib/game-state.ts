@@ -1,6 +1,6 @@
 import type { LogEntry } from '@/api/types'
 
-export type GameStateBadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'info'
+export type GameStateTone = 'default' | 'secondary' | 'success' | 'warning' | 'info'
 
 const STATE_LABELS: Record<string, string> = {
   setup: '准备中',
@@ -13,7 +13,7 @@ const STATE_LABELS: Record<string, string> = {
   ended: '已结束',
 }
 
-const STATE_VARIANTS: Record<string, GameStateBadgeVariant> = {
+const STATE_TONES: Record<string, GameStateTone> = {
   active_action: 'success',
   action: 'success',
   active_judgment: 'warning',
@@ -29,8 +29,8 @@ export function gameStateLabel(state?: string): string {
   return STATE_LABELS[state] ?? state
 }
 
-export function gameStateVariant(state?: string): GameStateBadgeVariant {
-  return STATE_VARIANTS[state ?? ''] ?? 'secondary'
+export function gameStateTone(state?: string): GameStateTone {
+  return STATE_TONES[state ?? ''] ?? 'secondary'
 }
 
 /**

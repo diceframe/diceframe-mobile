@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 
 import { PageHeader } from '@/components/page-header'
 import { Screen } from '@/components/screen'
-import { Button, ButtonText } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import {
@@ -141,7 +141,7 @@ export default function LoginScreen() {
             {busy === 'server' ? (
               <ActivityIndicator className="text-primary-foreground" />
             ) : (
-              <ButtonText>{switching ? '切换服务器' : strings.login.connect}</ButtonText>
+              <Text>{switching ? '切换服务器' : strings.login.connect}</Text>
             )}
           </Button>
         </View>
@@ -162,15 +162,13 @@ export default function LoginScreen() {
                   {busy === 'login' ? (
                     <ActivityIndicator className="text-primary-foreground" />
                   ) : (
-                    <ButtonText>{strings.login.login}</ButtonText>
+                    <Text>{strings.login.login}</Text>
                   )}
                 </Button>
               </>
             ) : (
               <Button variant="secondary" onPress={enterOpen} disabled={busy !== null}>
-                <ButtonText className="text-secondary-foreground">
-                  {strings.login.enterOpen}
-                </ButtonText>
+                <Text>{strings.login.enterOpen}</Text>
               </Button>
             )}
           </View>

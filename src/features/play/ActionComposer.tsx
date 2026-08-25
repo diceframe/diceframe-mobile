@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native'
 import { Mic, Send } from 'lucide-react-native'
 
 import { Button } from '@/components/ui/button'
+import { Icon } from '@/components/ui/icon'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
 import { appendActionText } from '@/lib/action-text'
@@ -70,7 +71,8 @@ export function ActionComposer({
               (voice.busy || (locked && !voice.recording)) && 'opacity-50',
             )}
           >
-            <Mic
+            <Icon
+              as={Mic}
               size={20}
               className={voice.recording ? 'text-destructive-foreground' : 'text-muted-foreground'}
             />
@@ -93,7 +95,7 @@ export function ActionComposer({
           accessibilityLabel={strings.play.send}
           className="h-12 w-12 shrink-0"
         >
-          <Send size={18} className="text-primary-foreground" />
+          <Icon as={Send} size={18} />
         </Button>
       </View>
 

@@ -1,7 +1,7 @@
 import { ScrollText, UserRound } from 'lucide-react-native'
 import { Tabs } from 'expo-router'
 
-import { useThemeToken } from '@/lib/theme-colors'
+import { useThemeToken } from '@/lib/theme'
 
 /** 一级页面：对局列表 + 我的（鎏金选中态，色值与 Web 一致） */
 export default function TabsLayout() {

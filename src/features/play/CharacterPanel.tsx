@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { ScrollView, View } from 'react-native'
 
-import { RemoteAvatar } from '@/components/ui/remote-avatar'
+import { RemoteAvatar } from '@/components/patterns/remote-avatar'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'

@@ -1,10 +1,18 @@
 import * as React from 'react'
 import { View } from 'react-native'
 
-import { Button, ButtonText } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Sheet } from '@/components/ui/sheet'
-import { Select } from '@/components/ui/select'
+import { Sheet } from '@/components/patterns/sheet'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  type Option,
+} from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
@@ -14,6 +22,41 @@ import type { RuleSummary, WorldTemplateSummary } from '@/api/types'
 /** 从模板摘要里取稳定 id */
 function worldIdOf(w: WorldTemplateSummary): string {
   return String(w.id || w.world_id || '')
+}
+
+function OptionSelect({
+  options,
+  value,
+  onValueChange,
+  placeholder,
+}: {
+  options: Exclude<Option, undefined>[]
+  value: string
+  onValueChange: (value: string) => void
+  placeholder: string
+}) {
+  const selected = options.find((option) => option.value === value)
+  return (
+    <Select
+      value={selected}
+      onValueChange={(option) => {
+        if (option) onValueChange(option.value)
+      }}
+    >
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent className="w-full">
+        <SelectGroup>
+          {options.map((option) => (
+            <SelectItem key={option.value} label={option.label} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  )
 }
 
 /** 创建对局底部抽屉（对齐 Web CreateView 的模板模式 v1 子集）。 */
@@ -109,7 +152,7 @@ export function CreateGameSheet({
             <Text variant="small" className="font-semibold text-muted-foreground">
               世界模板
             </Text>
-            <Select
+            <OptionSelect
               options={worldOptions}
               value={worldId}
               onValueChange={setWorldId}
@@ -123,7 +166,7 @@ export function CreateGameSheet({
             <Text variant="small" className="font-semibold text-muted-foreground">
               规则
             </Text>
-            <Select
+            <OptionSelect
               options={ruleOptions}
               value={effectiveRuleId}
               onValueChange={setRuleId}
@@ -174,8 +217,8 @@ export function CreateGameSheet({
 
         {error ? <Text className="text-destructive">{error}</Text> : null}
 
-        <Button disabled={!canSubmit} loading={busy} onPress={() => void submit()}>
-          <ButtonText>{busy ? '创建中…' : '创建'}</ButtonText>
+        <Button disabled={!canSubmit} onPress={() => void submit()}>
+          <Text>{busy ? '创建中…' : '创建'}</Text>
         </Button>
       </View>
     </Sheet>

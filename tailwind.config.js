@@ -1,8 +1,10 @@
+const { hairlineWidth } = require('nativewind/theme')
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ['./src/**/*.{js,jsx,ts,tsx}'],
   presets: [require('nativewind/preset')],
-  darkMode: 'media',
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
@@ -56,11 +58,21 @@ module.exports = {
           DEFAULT: 'var(--card)',
           foreground: 'var(--card-foreground)',
         },
+        chart: {
+          1: 'var(--chart-1)',
+          2: 'var(--chart-2)',
+          3: 'var(--chart-3)',
+          4: 'var(--chart-4)',
+          5: 'var(--chart-5)',
+        },
       },
       borderRadius: {
-        lg: '14px',
-        md: '9px',
-        sm: '5px',
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 5px)',
+        sm: 'calc(var(--radius) - 9px)',
+      },
+      borderWidth: {
+        hairline: hairlineWidth(),
       },
       fontFamily: {
         display: [
@@ -74,5 +86,8 @@ module.exports = {
       },
     },
   },
-  plugins: [],
+  future: {
+    hoverOnlyWhenSupported: true,
+  },
+  plugins: [require('tailwindcss-animate')],
 }
