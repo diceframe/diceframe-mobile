@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { ScrollView, View } from 'react-native'
 import Slider from '@react-native-community/slider'
+import { Moon, Sun, Monitor } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import Constants from 'expo-constants'
 
@@ -8,11 +9,18 @@ import { PageHeader } from '@/components/page-header'
 import { Screen } from '@/components/screen'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Icon } from '@/components/ui/icon'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import { useThemeToken } from '@/lib/theme'
 import { strings } from '@/lib/strings'
-import { useSettingsStore } from '@/stores/settings'
+import { type ThemeMode, useSettingsStore } from '@/stores/settings'
+
+const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
+  { value: 'system', label: '跟随系统', icon: Monitor },
+  { value: 'light', label: '浅色', icon: Sun },
+  { value: 'dark', label: '深色', icon: Moon },
+]
 
 export default function ProfileScreen() {
   const router = useRouter()
@@ -42,6 +50,33 @@ export default function ProfileScreen() {
             <Text variant="small" className="mt-2">
               切换会清除本机保存的 GM 密码与玩家身份
             </Text>
+          </CardContent>
+        </Card>
+
+        {/* 外观 */}
+        <Card className="gap-3">
+          <CardHeader>
+            <CardTitle>外观</CardTitle>
+          </CardHeader>
+          <CardContent className="gap-2">
+            <View className="flex-row gap-2">
+              {THEME_OPTIONS.map((option) => {
+                const active = settings.themeMode === option.value
+                return (
+                  <Button
+                    key={option.value}
+                    variant={active ? 'default' : 'outline'}
+                    className="flex-1 flex-row items-center justify-center gap-1.5"
+                    onPress={() => settings.setThemeMode(option.value)}
+                    accessibilityLabel={option.label}
+                    accessibilityState={{ selected: active }}
+                  >
+                    <Icon as={option.icon} size={16} />
+                    <Text variant="small">{option.label}</Text>
+                  </Button>
+                )
+              })}
+            </View>
           </CardContent>
         </Card>
 

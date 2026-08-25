@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { AppState, Pressable, useWindowDimensions, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft, Menu, Route, User } from 'lucide-react-native'
+import { ChevronLeft, Mail, Menu, Route, User } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Sheet } from '@/components/patterns/sheet'
@@ -18,6 +18,7 @@ import { GameTimeline } from '@/features/play/GameTimeline'
 import { GmSheet } from '@/features/play/GmSheet'
 import { MapWorkspace } from '@/features/play/MapWorkspace'
 import { PlotTracker } from '@/features/play/PlotTracker'
+import { PrivateMessagePanel } from '@/features/play/PrivateMessagePanel'
 import { useSpeaker } from '@/features/play/useSpeaker'
 import { useVoiceInput } from '@/features/play/useVoiceInput'
 import { appendActionText } from '@/lib/action-text'
@@ -58,6 +59,7 @@ export default function PlayScreen() {
   const [menuOpen, setMenuOpen] = React.useState(false)
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
   const [sidebarTab, setSidebarTab] = React.useState<'plot' | 'map'>('plot')
+  const [privateMessageOpen, setPrivateMessageOpen] = React.useState(false)
   const [luckBusyId, setLuckBusyId] = React.useState('')
 
   const voice = useVoiceInput(gameKey, (text) => {
@@ -69,6 +71,7 @@ export default function PlayScreen() {
 
   const pendingLuck = detail?.pending_luck_decisions ?? []
   const submittedActions = detail?.multiplayer?.submitted_actions ?? []
+  const privateMessages = useGameStore((s) => s.privateMessages)
   const myPlayer = players.find((player) => player.user_id === userId) ?? null
 
   React.useEffect(() => {
@@ -225,6 +228,20 @@ export default function PlayScreen() {
               <Icon as={Route} size={20} />
             </Button>
           )}
+          {privateMessages.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              onPress={() => setPrivateMessageOpen(true)}
+              accessibilityLabel={`私信（${privateMessages.length}）`}
+            >
+              <View>
+                <Icon as={Mail} size={20} />
+                <View className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-destructive" />
+              </View>
+            </Button>
+          )}
           {isGm && (
             <Button
               variant="ghost"
@@ -338,6 +355,15 @@ export default function PlayScreen() {
           {storyTools}
         </Sheet>
       )}
+
+      <Sheet
+        open={privateMessageOpen}
+        onClose={() => setPrivateMessageOpen(false)}
+        className="h-[80%]"
+        scrollable={false}
+      >
+        <PrivateMessagePanel messages={privateMessages} />
+      </Sheet>
     </Screen>
   )
 }

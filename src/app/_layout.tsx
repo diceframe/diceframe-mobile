@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { cssInterop, useColorScheme as useNativeWindColorScheme } from 'nativewind'
 import { PortalHost } from '@rn-primitives/portal'
 
+import { ErrorBoundary } from '@/components/error-boundary'
 import { configureApiClient } from '@/api/client'
 import { useResolvedTheme, useThemeToken } from '@/lib/theme'
 import { bootstrapSession, useSettingsStore } from '@/stores/settings'
@@ -49,15 +50,17 @@ export default function RootLayout() {
   if (!hydrated) return null
 
   return (
-    <ThemeProvider value={theme === 'dark' ? DarkTheme : DefaultTheme}>
-      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: background },
-        }}
-      />
-      <PortalHost />
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider value={theme === 'dark' ? DarkTheme : DefaultTheme}>
+        <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: background },
+          }}
+        />
+        <PortalHost />
+      </ThemeProvider>
+    </ErrorBoundary>
   )
 }
