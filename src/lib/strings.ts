@@ -16,6 +16,7 @@ export const strings = {
     title: '连接 DiceFrame 服务器',
     serverLabel: '服务器地址',
     serverPlaceholder: '例如 192.168.1.5:18000',
+    serverPlaceholderWeb: '留空使用当前站点，或输入服务器地址',
     connect: '连接',
     passwordLabel: '访问密码',
     passwordPlaceholder: '服务器访问密码',

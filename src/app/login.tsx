@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native'
+import { ActivityIndicator, Platform, Pressable, ScrollView, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 
 import { PageHeader } from '@/components/page-header'
@@ -30,6 +30,10 @@ export default function LoginScreen() {
   const [busy, setBusy] = React.useState<'server' | 'login' | null>(null)
   const [error, setError] = React.useState('')
 
+  // Web 端服务器地址可留空 = 使用当前站点（同源相对路径，dev 下由 Metro
+  // 的反向代理转发到后端）；原生端必须显式填写局域网地址。
+  const isWeb = Platform.OS === 'web'
+
   // 进入页面时的模式快照：已有服务器 = “换服务器”流程。
   // 用快照而不是响应式读取，避免首次连接成功保存 baseUrl 后页面中途翻转。
   const [switching] = React.useState(() => settings.baseUrl !== '')
@@ -38,7 +42,7 @@ export default function LoginScreen() {
   // 已连接过服务器时进入本页自动探测：直接显示密码框（或开放服务器直入按钮），
   // 不需要用户先按一次“连接”。
   React.useEffect(() => {
-    if (!settings.baseUrl || switchingServer) return
+    if ((!settings.baseUrl && !isWeb) || switchingServer) return
     let active = true
     async function probe() {
       setBusy('server')
@@ -55,11 +59,11 @@ export default function LoginScreen() {
     return () => {
       active = false
     }
-  }, [settings.baseUrl, switchingServer])
+  }, [settings.baseUrl, switchingServer, isWeb])
 
   async function connectServer() {
     const normalized = normalizeBaseUrl(serverUrl)
-    if (!normalized) {
+    if (!normalized && !isWeb) {
       setError(strings.common.networkError)
       return
     }
@@ -127,7 +131,7 @@ export default function LoginScreen() {
           <Input
             value={serverUrl}
             onChangeText={setServerUrl}
-            placeholder={strings.login.serverPlaceholder}
+            placeholder={isWeb ? strings.login.serverPlaceholderWeb : strings.login.serverPlaceholder}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"

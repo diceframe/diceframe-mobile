@@ -61,6 +61,20 @@ Metro 的 `8081` 端口。`mobile/.env.local` 已被 Git 忽略，不会提交�
 - Expo Go 内可直接测试录音/播放；独立 APK 构建用 `npx expo run:android` 或 EAS
 - iOS：代码已预留（ATS 例外在出包时启用），需 Mac 或 EAS 云构建验证
 
+### Web 端联调（`npm run web`）
+
+Expo Web 页面与后端不同源，浏览器会按 CORS 拦截 API/SSE 请求。`metro.config.js`
+内置了 dev 反向代理（`scripts/dev-api-proxy.cjs`）：Metro 收到的 `/api` 与
+`/v2-assets` 会被转发到本机后端（默认 `http://127.0.0.1:18000`），因此 Web 端
+登录页**服务器地址留空即可**，所有请求走同源，无跨域。
+
+- 后端不在本机时指定目标：`DICEFRAME_API_TARGET=http://192.168.1.5:18000 npm run web`
+- 会话 Cookie 在 Web 上由服务端 httponly `Set-Cookie` + 浏览器 cookie jar 自动管理
+  （原生端才是客户端自管 token + 手动 Cookie 头）
+- 代理仅存在于 Metro dev server：`expo export` 静态包与原生构建不受影响；静态包
+  若部署在后端同一域下，登录页同样留空直连，部署在其他域则填地址并配合后端
+  `TRPG_WEB_CORS_ORIGINS` 白名单
+
 ## 与 Web 端（frontend-v2）的关系
 
 - 后端零改动，REST + SSE 契约完全一致
