@@ -1,7 +1,16 @@
 import * as React from 'react'
-import { AppState, Pressable, useWindowDimensions, View } from 'react-native'
+import { AppState, Pressable, Share, useWindowDimensions, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft, Mail, Menu, Route, User } from 'lucide-react-native'
+import {
+  ChevronLeft,
+  Heart,
+  HelpCircle,
+  Image as ImageIcon,
+  Mail,
+  Menu,
+  Route,
+  User,
+} from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Sheet } from '@/components/patterns/sheet'
@@ -12,22 +21,52 @@ import { Icon } from '@/components/ui/icon'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
 import { errorMessage } from '@/api/client'
+import { exportGame, fetchBotBindToken, setGameRoomPassword } from '@/api/games'
+import type { GeneratedImageItem } from '@/api/types'
 import { ActionComposer } from '@/features/play/ActionComposer'
+import { CharacterCardsModal } from '@/features/play/CharacterCardsModal'
 import { CharacterPanel } from '@/features/play/CharacterPanel'
 import { GameTimeline } from '@/features/play/GameTimeline'
 import { GmSheet } from '@/features/play/GmSheet'
+import { HealthPanel } from '@/features/play/HealthPanel'
 import { MapWorkspace } from '@/features/play/MapWorkspace'
+import { MultiplayerPanel } from '@/features/play/MultiplayerPanel'
 import { PlotTracker } from '@/features/play/PlotTracker'
 import { PrivateMessagePanel } from '@/features/play/PrivateMessagePanel'
+import { RoomPasswordModal } from '@/features/play/RoomPasswordModal'
+import { RuleHelpModal } from '@/features/play/RuleHelpModal'
+import { SceneGalleryModal } from '@/features/play/SceneGalleryModal'
+import { WorldSwitchModal } from '@/features/play/WorldSwitchModal'
 import { useSpeaker } from '@/features/play/useSpeaker'
 import { useVoiceInput } from '@/features/play/useVoiceInput'
 import { appendActionText } from '@/lib/action-text'
 import { gameStateLabel } from '@/lib/game-state'
 import { appLayoutForWidth } from '@/lib/layout'
+import { buildShareLink } from '@/lib/share-link'
 import { strings } from '@/lib/strings'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import { selectGmThinking, useGameStore } from '@/stores/game'
+import { fetchAppConfig } from '@/api/client'
 import { useSettingsStore } from '@/stores/settings'
+
+/** 简单的剪贴板工具（优先使用 React Native 内置 Clipboard） */
+async function copyToClipboard(text: string): Promise<void> {
+  try {
+    const { Clipboard } = await import('react-native')
+    if (Clipboard?.setString) {
+      Clipboard.setString(text)
+      return
+    }
+  } catch {
+    // 回退：使用 Share API
+  }
+  // 最终回退：尝试使用 Share 分享纯文本
+  try {
+    await Share.share({ message: text })
+  } catch {
+    // 用户取消分享
+  }
+}
 
 export default function PlayScreen() {
   const router = useRouter()
@@ -51,16 +90,34 @@ export default function PlayScreen() {
   const map = useGameStore((s) => s.map)
   const plotTracker = useGameStore((s) => s.detail?.plot_tracker)
   const actionBusy = useGameStore((s) => s.actionBusy)
+  const gmBusy = useGameStore((s) => s.gmBusy)
   const ttsEnabled = useGameStore((s) => s.ttsEnabled)
+  const health = useGameStore((s) => s.health)
   const gmThinking = useGameStore(selectGmThinking)
 
   const [draft, setDraft] = React.useState('')
   const [characterOpen, setCharacterOpen] = React.useState(false)
   const [menuOpen, setMenuOpen] = React.useState(false)
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
-  const [sidebarTab, setSidebarTab] = React.useState<'plot' | 'map'>('plot')
+  const [sidebarTab, setSidebarTab] = React.useState<'plot' | 'map' | 'players' | 'health'>(
+    isGm ? 'players' : 'plot',
+  )
   const [privateMessageOpen, setPrivateMessageOpen] = React.useState(false)
   const [luckBusyId, setLuckBusyId] = React.useState('')
+  // 模态框状态
+  const [worldSwitchOpen, setWorldSwitchOpen] = React.useState(false)
+  const [worldCandidates, setWorldCandidates] = React.useState<
+    import('@/api/types').WorldCandidate[]
+  >([])
+  const [worldLoading, setWorldLoading] = React.useState(false)
+  const [roomPasswordOpen, setRoomPasswordOpen] = React.useState(false)
+  const [cardsOpen, setCardsOpen] = React.useState(false)
+  const [cards, setCards] = React.useState<import('@/api/types').CharacterCard[]>([])
+  const [cardsLoading, setCardsLoading] = React.useState(false)
+  const [ruleHelpOpen, setRuleHelpOpen] = React.useState(false)
+  const [sceneGalleryOpen, setSceneGalleryOpen] = React.useState(false)
+  const [sceneImages, setSceneImages] = React.useState<GeneratedImageItem[]>([])
+  const [sceneImagesLoading, setSceneImagesLoading] = React.useState(false)
 
   const voice = useVoiceInput(gameKey, (text) => {
     setDraft((current) => appendActionText(current, text))
@@ -73,6 +130,8 @@ export default function PlayScreen() {
   const submittedActions = detail?.multiplayer?.submitted_actions ?? []
   const privateMessages = useGameStore((s) => s.privateMessages)
   const myPlayer = players.find((player) => player.user_id === userId) ?? null
+
+  const busy = actionBusy || gmBusy
 
   React.useEffect(() => {
     if (gameKey) useGameStore.getState().enter(gameKey)
@@ -93,7 +152,6 @@ export default function PlayScreen() {
   }, [])
 
   // 玩家身份失效（被踢/存档重置）时清掉本地身份、回加入页重新加入
-  // （对齐 Web isStoredPlayerMember 检查；multiplayer 缺省的独占局不校验）
   React.useEffect(() => {
     if (isGm || !userId || !detail?.multiplayer) return
     const members = [
@@ -137,6 +195,196 @@ export default function PlayScreen() {
     }
   }
 
+  // GM 工具处理函数
+  async function handleRecap() {
+    try {
+      await useGameStore.getState().storyRecap()
+    } catch {
+      // 错误由 store 处理
+    }
+  }
+
+  async function handleBotBind() {
+    if (!gameKey) return
+    try {
+      const token = await fetchBotBindToken(gameKey)
+      const command = `绑定 ${gameKey} ${token}`
+      await copyToClipboard(command)
+    } catch {
+      // 错误由 store 处理
+    }
+  }
+
+  async function handleInvite() {
+    if (!gameKey) return
+    try {
+      const config = await fetchAppConfig()
+      const link = buildShareLink(
+        gameKey,
+        config.public_base_url || undefined,
+        undefined,
+        undefined,
+      )
+      await copyToClipboard(link)
+    } catch {
+      // 静默失败
+    }
+  }
+
+  async function handleExport() {
+    if (!gameKey) return
+    try {
+      const blob = await exportGame(gameKey)
+      // 使用 RN 的 Share API 分享文件
+      const reader = new FileReader()
+      reader.onload = async () => {
+        try {
+          await Share.share({ message: `DiceFrame 存档: ${detail?.world_name || gameKey}` })
+        } catch {
+          // 用户取消分享
+        }
+      }
+      reader.readAsDataURL(blob)
+    } catch {
+      // 错误由 store 处理
+    }
+  }
+
+  async function openWorldSwitch() {
+    if (!gameKey) return
+    setWorldSwitchOpen(true)
+    setWorldLoading(true)
+    try {
+      const candidates = await useGameStore.getState().fetchWorldCandidates()
+      setWorldCandidates(candidates)
+    } catch {
+      // 静默失败
+    } finally {
+      setWorldLoading(false)
+    }
+  }
+
+  async function handleWorldSwitch(worldId: string) {
+    try {
+      await useGameStore.getState().switchWorld(worldId)
+      setWorldSwitchOpen(false)
+    } catch {
+      // 错误由 store 处理
+    }
+  }
+
+  async function handleRoomPassword(password: string) {
+    if (!gameKey) return
+    try {
+      await setGameRoomPassword(gameKey, password)
+      setRoomPasswordOpen(false)
+      await useGameStore.getState().refresh()
+    } catch {
+      // 错误由 store 处理
+    }
+  }
+
+  async function openCards() {
+    if (!gameKey) return
+    setCardsOpen(true)
+    setCardsLoading(true)
+    try {
+      const result = await useGameStore.getState().fetchCharacterCards()
+      setCards(result.cards ?? [])
+    } catch {
+      // 静默失败
+    } finally {
+      setCardsLoading(false)
+    }
+  }
+
+  async function handleSelectCard(card: import('@/api/types').CharacterCard) {
+    try {
+      await useGameStore.getState().applyCharacterCard(card)
+      setCardsOpen(false)
+    } catch {
+      // 错误由 store 处理
+    }
+  }
+
+  async function openSceneGallery() {
+    if (!gameKey) return
+    setSceneGalleryOpen(true)
+    setSceneImagesLoading(true)
+    try {
+      const images = await useGameStore.getState().fetchGeneratedImages()
+      setSceneImages(images)
+    } catch {
+      // 静默失败
+    } finally {
+      setSceneImagesLoading(false)
+    }
+  }
+
+  async function handleReset() {
+    try {
+      await useGameStore.getState().resetGame()
+    } catch {
+      // 错误由 store 处理
+    }
+  }
+
+  async function handleRestart() {
+    try {
+      await useGameStore.getState().restartGame()
+    } catch {
+      // 错误由 store 处理
+    }
+  }
+
+  async function handleKick(uid: string) {
+    try {
+      await useGameStore.getState().kick(uid)
+    } catch {
+      // 错误由 store 处理
+    }
+  }
+
+  async function handleSetAway(uid: string, away: boolean) {
+    try {
+      await useGameStore.getState().setAway(uid, away)
+    } catch {
+      // 错误由 store 处理
+    }
+  }
+
+  async function handleCopyLink(uid: string) {
+    if (!gameKey) return
+    try {
+      const config = await fetchAppConfig()
+      const link = buildShareLink(
+        gameKey,
+        config.public_base_url || undefined,
+        uid,
+        undefined,
+      )
+      await copyToClipboard(link)
+    } catch {
+      // 静默失败
+    }
+  }
+
+  async function handlePerception(uid: string, text: string) {
+    try {
+      await useGameStore.getState().privateMessage(uid, text)
+    } catch {
+      // 错误由 store 处理
+    }
+  }
+
+  async function handleResolveHealth(id: string, action: 'resolve' | 'ignore') {
+    try {
+      await useGameStore.getState().resolveHealth(id, action)
+    } catch {
+      // 错误由 store 处理
+    }
+  }
+
   const stateLabel = pendingLuck.length
     ? strings.play.luckDecisionPending
     : gmThinking
@@ -161,31 +409,66 @@ export default function PlayScreen() {
   const storyTools = (
     <Tabs
       value={sidebarTab}
-      onValueChange={(value) => setSidebarTab(value as 'plot' | 'map')}
+      onValueChange={(value) => setSidebarTab(value as typeof sidebarTab)}
       className="flex-1 pt-1"
     >
       <TabsList>
-        <TabsTrigger value="plot">
+        {isGm && (
+          <TabsTrigger value="players" key="tab-players">
+            <Text variant="small">玩家</Text>
+          </TabsTrigger>
+        )}
+        <TabsTrigger value="plot" key="tab-plot">
           <Text variant="small">剧情</Text>
         </TabsTrigger>
-        <TabsTrigger value="map">
+        <TabsTrigger value="map" key="tab-map">
           <Text variant="small">地图</Text>
         </TabsTrigger>
+        {isGm && (
+          <TabsTrigger value="health" key="tab-health">
+            <Text variant="small">状态</Text>
+          </TabsTrigger>
+        )}
       </TabsList>
 
-      <TabsContent value="plot" className="min-h-0 flex-1 pt-1">
+      {isGm && (
+        <TabsContent value="players" key="content-players" className="min-h-0 flex-1 pt-1">
+          <MultiplayerPanel
+            players={players}
+            detail={detail!}
+            isGm={isGm}
+            currentUserId={userId}
+            onKick={(uid) => void handleKick(uid)}
+            onSetAway={(uid, away) => void handleSetAway(uid, away)}
+            onCopyLink={(uid) => void handleCopyLink(uid)}
+          />
+        </TabsContent>
+      )}
+
+      <TabsContent value="plot" key="content-plot" className="min-h-0 flex-1 pt-1">
         <PlotTracker data={plotTracker} />
       </TabsContent>
 
-      <TabsContent value="map" className="min-h-0 flex-1 pt-1">
+      <TabsContent value="map" key="content-map" className="min-h-0 flex-1 pt-1">
         <MapWorkspace map={map} currentScene={detail?.scene} />
       </TabsContent>
+
+      {isGm && (
+        <TabsContent value="health" key="content-health" className="min-h-0 flex-1 pt-1">
+          <HealthPanel
+            health={health}
+            detail={detail}
+            isGm={isGm}
+            onResolve={(id, action) => void handleResolveHealth(id, action)}
+          />
+        </TabsContent>
+      )}
     </Tabs>
   )
 
   return (
     <Screen className="gap-0">
-      {/* 键盘避让：底部垫高键盘实际高度，输入区始终可见（见 use-keyboard-height 注释） */}
+      {/* 键盘避让：底部垫高键盘实际高度，输入区始终可见 */}
       <View className="flex-1" style={{ paddingBottom: keyboardHeight + insets.bottom }}>
         {/* 顶栏 */}
         <View className="flex-row items-center gap-2 border-b border-border px-3 py-2">
@@ -228,6 +511,26 @@ export default function PlayScreen() {
               <Icon as={Route} size={20} />
             </Button>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            onPress={() => setRuleHelpOpen(true)}
+            accessibilityLabel={strings.play.ruleHelp}
+          >
+            <Icon as={HelpCircle} size={20} />
+          </Button>
+          {isGm && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              onPress={() => setSceneGalleryOpen(true)}
+              accessibilityLabel={strings.play.sceneGallery}
+            >
+              <Icon as={ImageIcon} size={20} />
+            </Button>
+          )}
           {privateMessages.length > 0 && (
             <Button
               variant="ghost"
@@ -260,7 +563,6 @@ export default function PlayScreen() {
             className="px-3 py-1.5"
             onPress={() => void useGameStore.getState().refresh()}
           >
-            {/* var() 令牌色不支持 /xx 透明度修饰符，用叠加层淡化 */}
             <View className="absolute inset-0 bg-destructive opacity-10" />
             <Text className="text-destructive" numberOfLines={1}>
               {error} · 点击重试
@@ -299,7 +601,7 @@ export default function PlayScreen() {
               value={draft}
               onChangeText={setDraft}
               onSend={() => void send()}
-              busy={actionBusy}
+              busy={busy}
               disabled={composerDisabled}
               disabledReason={composerDisabledReason}
               quickActions={detail?.quick_actions ?? []}
@@ -318,6 +620,7 @@ export default function PlayScreen() {
         </View>
       </View>
 
+      {/* 角色面板 */}
       <Sheet
         open={characterOpen}
         onClose={() => setCharacterOpen(false)}
@@ -331,20 +634,44 @@ export default function PlayScreen() {
             ruleAttrs={ruleAttrs}
             ruleMeta={ruleMeta}
           />
+          {isGm && (
+            <Button variant="outline" onPress={() => setCardsOpen(true)}>
+              <Text>{strings.play.selectCard}</Text>
+            </Button>
+          )}
         </View>
       </Sheet>
 
-      <Sheet open={menuOpen} onClose={() => setMenuOpen(false)}>
+      {/* GM 工具 */}
+      <Sheet open={menuOpen} onClose={() => setMenuOpen(false)} className="h-[85%]" scrollable={false}>
         <GmSheet
+          detail={detail!}
           multiplayer={detail?.multiplayer}
-          busy={actionBusy}
+          busy={busy}
           onAdvance={() => void runGm(() => useGameStore.getState().advance())}
           onRollback={() => void runGm(() => useGameStore.getState().rollback())}
           onCommand={(text) => void runGm(() => useGameStore.getState().command(text))}
+          onRecap={() => void handleRecap()}
+          onBotBind={() => void handleBotBind()}
+          onInvite={() => void handleInvite()}
+          onToggleMode={() => void runGm(() => useGameStore.getState().toggleMode())}
+          onToggleAccess={() => void runGm(() => useGameStore.getState().toggleAccess())}
+          onRoomPassword={() => {
+            setMenuOpen(false)
+            setRoomPasswordOpen(true)
+          }}
+          onWorldSwitch={() => {
+            setMenuOpen(false)
+            void openWorldSwitch()
+          }}
+          onExport={() => void handleExport()}
+          onReset={() => void handleReset()}
+          onRestart={() => void handleRestart()}
+          onPerception={(uid, text) => void handlePerception(uid, text)}
         />
       </Sheet>
 
-      {/* 窄窗口用抽屉，平板横屏则把剧情与地图常驻在右侧。 */}
+      {/* 侧边栏（窄屏抽屉） */}
       {!isWideTablet && (
         <Sheet
           open={sidebarOpen}
@@ -356,6 +683,7 @@ export default function PlayScreen() {
         </Sheet>
       )}
 
+      {/* 私信面板 */}
       <Sheet
         open={privateMessageOpen}
         onClose={() => setPrivateMessageOpen(false)}
@@ -364,6 +692,52 @@ export default function PlayScreen() {
       >
         <PrivateMessagePanel messages={privateMessages} />
       </Sheet>
+
+      {/* 世界观切换 */}
+      <WorldSwitchModal
+        open={worldSwitchOpen}
+        currentWorldId={detail?.world_id}
+        candidates={worldCandidates}
+        loading={worldLoading}
+        busy={busy}
+        onClose={() => setWorldSwitchOpen(false)}
+        onSwitch={(worldId) => void handleWorldSwitch(worldId)}
+      />
+
+      {/* 房间密码 */}
+      <RoomPasswordModal
+        open={roomPasswordOpen}
+        hasPassword={detail?.has_room_password ?? false}
+        busy={busy}
+        onClose={() => setRoomPasswordOpen(false)}
+        onSave={(password) => void handleRoomPassword(password)}
+      />
+
+      {/* 角色卡选择 */}
+      <CharacterCardsModal
+        open={cardsOpen}
+        cards={cards}
+        loading={cardsLoading}
+        busy={busy}
+        onClose={() => setCardsOpen(false)}
+        onSelect={(card) => void handleSelectCard(card)}
+      />
+
+      {/* 规则帮助 */}
+      <RuleHelpModal
+        open={ruleHelpOpen}
+        meta={ruleMeta}
+        onClose={() => setRuleHelpOpen(false)}
+      />
+
+      {/* 场景图集 */}
+      <SceneGalleryModal
+        open={sceneGalleryOpen}
+        gameKey={gameKey}
+        images={sceneImages}
+        loading={sceneImagesLoading}
+        onClose={() => setSceneGalleryOpen(false)}
+      />
     </Screen>
   )
 }

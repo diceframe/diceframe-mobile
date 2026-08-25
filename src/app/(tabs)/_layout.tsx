@@ -1,4 +1,4 @@
-import { ScrollText, UserRound } from 'lucide-react-native'
+import { ScrollText, UserRound, Users, BookOpen, Settings, Pocket } from 'lucide-react-native'
 import { useWindowDimensions } from 'react-native'
 import { Tabs } from 'expo-router'
 
@@ -36,6 +36,34 @@ export default function TabsLayout() {
         options={{
           title: '对局',
           tabBarIcon: ({ color }) => <ScrollText size={20} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="characters"
+        options={{
+          title: '角色',
+          tabBarIcon: ({ color }) => <Users size={20} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="lorebook"
+        options={{
+          title: '设定',
+          tabBarIcon: ({ color }) => <BookOpen size={20} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="plugins"
+        options={{
+          title: '插件',
+          tabBarIcon: ({ color }) => <Pocket size={20} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: '设置',
+          tabBarIcon: ({ color }) => <Settings size={20} color={color} />,
         }}
       />
       <Tabs.Screen

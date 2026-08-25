@@ -37,3 +37,24 @@ export function parseShareLink(input: string): ParsedShareLink | null {
     delegate: q.get('delegate') ?? undefined,
   }
 }
+
+/**
+ * 构建玩家邀请链接（对齐 Web buildJoinLink 的 play 路由分享格式）。
+ * 用于 GM 从移动端生成邀请链接复制到剪贴板。
+ */
+export function buildShareLink(
+  gameKey: string,
+  publicBaseUrl?: string,
+  userId?: string,
+  _backendUrl?: string,
+): string {
+  const base = publicBaseUrl || ''
+  const params = new URLSearchParams()
+  params.set('game', gameKey)
+  if (userId) {
+    params.set('user', userId)
+    params.set('share', '1')
+  }
+  const query = params.toString()
+  return `${base}/#/play?${query}`
+}

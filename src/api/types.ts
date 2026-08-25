@@ -597,3 +597,71 @@ export interface PlotTracker {
   relations?: Record<string, PlotRelation>
   decisions?: (PlotDecision | string)[]
 }
+
+// ---------- 生成图 ----------
+
+export interface GeneratedImageItem {
+  asset_id: string
+  generation_id?: string
+  prompt?: string
+  revised_prompt?: string
+  round?: number
+  status?: string
+}
+
+// ---------- 角色卡（character-cards 接口） ----------
+
+// ---------- 角色卡（character-cards 接口） ----------
+
+export interface CharacterCard {
+  card_id?: string
+  id?: string
+  character_name?: string
+  race?: string
+  class?: string
+  level?: number
+  background?: string
+  gold?: number
+  skills?: (string | CharacterSkill)[]
+  portrait?: CharacterPortrait | null
+  rule_id?: string
+  rule_name?: string
+  rule_version?: string
+  mechanics?: string
+  language?: string
+  source?: string
+  [key: string]: unknown
+}
+
+export interface CharacterCardsResponse {
+  cards?: CharacterCard[]
+  [key: string]: unknown
+}
+
+// ---------- 世界观切换 ----------
+
+export interface WorldCandidate {
+  id: string
+  name: string
+  description?: string
+  source?: string
+  default_rule?: string
+  entry_count?: number
+}
+
+// ---------- 机器人绑定 ----------
+
+export interface BotBindTokenResponse {
+  bind_token?: string
+  ok?: boolean
+  error?: string
+  [key: string]: unknown
+}
+
+// ---------- 支付决议 ----------
+
+export interface PaymentResolveResponse {
+  ok?: boolean
+  error?: string
+  [key: string]: unknown
+}

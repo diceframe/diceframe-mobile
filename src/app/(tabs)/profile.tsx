@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { ScrollView, View } from 'react-native'
 import Slider from '@react-native-community/slider'
-import { Moon, Sun, Monitor } from 'lucide-react-native'
+import { Moon, Sun, Monitor, Network, Brain, ScrollText as LogsIcon, Gavel, FileText } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import Constants from 'expo-constants'
 
@@ -161,6 +161,35 @@ export default function ProfileScreen() {
           </CardContent>
         </Card>
 
+        {/* 功能入口 */}
+        <Card className="gap-3">
+          <CardHeader>
+            <CardTitle>更多功能</CardTitle>
+          </CardHeader>
+          <CardContent className="gap-2">
+            <Button variant="outline" className="justify-start gap-2" onPress={() => router.push('/peer')}>
+              <Icon as={Network} size={16} />
+              <Text>P2P 连接</Text>
+            </Button>
+            <Button variant="outline" className="justify-start gap-2" onPress={() => router.push('/memory')}>
+              <Icon as={Brain} size={16} />
+              <Text>向量记忆</Text>
+            </Button>
+            <Button variant="outline" className="justify-start gap-2" onPress={() => router.push('/logs')}>
+              <Icon as={LogsIcon} size={16} />
+              <Text>系统日志</Text>
+            </Button>
+            <Button variant="outline" className="justify-start gap-2" onPress={() => router.push('/rules')}>
+              <Icon as={Gavel} size={16} />
+              <Text>规则管理</Text>
+            </Button>
+            <Button variant="outline" className="justify-start gap-2" onPress={() => router.push('/legal/terms')}>
+              <Icon as={FileText} size={16} />
+              <Text>服务条款与隐私政策</Text>
+            </Button>
+          </CardContent>
+        </Card>
+
         {/* 关于 */}
         <Card className="gap-1">
           <CardHeader>
@@ -168,7 +197,7 @@ export default function ProfileScreen() {
           </CardHeader>
           <CardContent>
             <Text variant="small">DiceFrame 移动端 v{Constants.expoConfig?.version ?? '-'}</Text>
-            <Text variant="small">跑团创建与设置请使用 Web 端</Text>
+            <Text variant="small">对局内完整 GM 工具已可在移动端使用</Text>
           </CardContent>
         </Card>
       </ScrollView>

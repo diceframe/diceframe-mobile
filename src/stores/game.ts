@@ -14,23 +14,46 @@ import {
   advanceGame,
   claimGm,
   fetchCharacters,
+  fetchCharacterCards,
   fetchGameDetail,
+  fetchGeneratedImages,
+  fetchHealth,
   fetchLog,
   fetchMap,
   fetchPrivateLog,
+  fetchWorldCandidates,
+  generateStoryRecap,
   gmCommand,
+  kickPlayer,
+  resolveHealthEvent,
   resolveLuck,
+  resolvePayment,
+  resetGame,
+  restartGame,
   rollbackGame,
+  selectCharacterCard,
+  sendPrivateMessage,
+  setPlayerAccess,
+  setPlayerAway,
+  setSoloMode,
   submitAction,
+  switchGameWorld,
+  updateCharacterPortrait,
 } from '@/api/games'
 import type {
+  CharacterCard,
+  CharacterCardsResponse,
+  CharacterSheet,
   GameDetail,
+  GeneratedImageItem,
+  HealthResponse,
   LogEntry,
   MapData,
   Player,
   PrivateMessage,
   RuleAttribute,
   RuleMeta,
+  WorldCandidate,
 } from '@/api/types'
 import {
   createGameStream,
@@ -62,6 +85,8 @@ interface GameStore {
   asrEnabled: boolean
   ttsEnabled: boolean
   actionBusy: boolean
+  gmBusy: boolean
+  health: HealthResponse | null
 
   enter: (gameKey: string) => void
   leave: () => void
@@ -74,6 +99,28 @@ interface GameStore {
   advance: () => Promise<void>
   rollback: () => Promise<void>
   command: (text: string) => Promise<void>
+  // GM 工具
+  storyRecap: () => Promise<void>
+  toggleMode: () => Promise<void>
+  toggleAccess: () => Promise<void>
+  setAway: (uid: string, away: boolean) => Promise<void>
+  kick: (uid: string) => Promise<void>
+  privateMessage: (uid: string, text: string) => Promise<void>
+  switchWorld: (worldId: string) => Promise<void>
+  resetGame: () => Promise<void>
+  restartGame: () => Promise<void>
+  refreshHealth: () => Promise<void>
+  resolveHealth: (id: string, action: 'resolve' | 'ignore') => Promise<void>
+  // 角色卡 / 肖像
+  fetchCharacterCards: () => Promise<CharacterCardsResponse>
+  applyCharacterCard: (card: CharacterCard) => Promise<void>
+  updatePortrait: (portrait: CharacterSheet['portrait']) => Promise<void>
+  // 世界观候选
+  fetchWorldCandidates: () => Promise<WorldCandidate[]>
+  // 生成图
+  fetchGeneratedImages: () => Promise<GeneratedImageItem[]>
+  // 支付决议
+  decidePayment: (paymentId: string, accepted: boolean) => Promise<void>
 }
 
 const initial = {
@@ -97,6 +144,8 @@ const initial = {
   asrEnabled: false,
   ttsEnabled: false,
   actionBusy: false,
+  gmBusy: false,
+  health: { events: [] },
 } satisfies Partial<GameStore>
 
 export const useGameStore = create<GameStore>((set, get) => {
@@ -237,21 +286,22 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     async refresh() {
-      const { gameKey, log: previousLog } = get()
+      const { gameKey, log: previousLog, isGm } = get()
       if (!gameKey) return
       const requestVersion = ++refreshVersion
       set({ loading: true })
       try {
-        const [detail, characters, log, privateLog, map] = await Promise.all([
+        const [detail, characters, log, privateLog, map, health] = await Promise.all([
           fetchGameDetail(gameKey),
           fetchCharacters(gameKey),
           fetchLog(gameKey),
           fetchPrivateLog(gameKey),
           fetchMap(gameKey),
+          isGm ? fetchHealth(gameKey, true) : Promise.resolve({ events: [] }),
         ])
         if (get().gameKey !== gameKey || requestVersion !== refreshVersion) return
         const newLog = log.log ?? []
-        // 新回合写入 log 时清掉上一轮的流式气泡，避免“思考中”与正式输出重复。
+        // 新回合写入 log 时清掉上一轮的流式气泡，避免"思考中"与正式输出重复。
         // 第一页满员后长度不再增长，须按最新条目的 round 判断。
         const clearNarration = hasNewRound(previousLog, newLog)
         set({
@@ -264,6 +314,7 @@ export const useGameStore = create<GameStore>((set, get) => {
           logTotalPages: log.total_pages ?? 1,
           privateMessages: privateLog.messages ?? privateLog.private_log ?? [],
           map,
+          health,
           error: '',
           loading: false,
           liveNarration: clearNarration ? '' : get().liveNarration,
@@ -338,6 +389,223 @@ export const useGameStore = create<GameStore>((set, get) => {
       if (!gameKey || !text.trim()) return
       await gmCommand(gameKey, text.trim())
       if (get().gameKey === gameKey) await get().refresh()
+    },
+
+    // ---------- GM 工具 ----------
+
+    async storyRecap() {
+      const { gameKey } = get()
+      if (!gameKey) return
+      set({ gmBusy: true })
+      try {
+        await generateStoryRecap(gameKey)
+        if (get().gameKey === gameKey) await get().refresh()
+      } catch (error) {
+        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        throw error
+      } finally {
+        if (get().gameKey === gameKey) set({ gmBusy: false })
+      }
+    },
+
+    async toggleMode() {
+      const { gameKey, detail } = get()
+      if (!gameKey || !detail) return
+      set({ gmBusy: true })
+      try {
+        await setSoloMode(gameKey, !detail.solo_mode)
+        if (get().gameKey === gameKey) await get().refresh()
+      } catch (error) {
+        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        throw error
+      } finally {
+        if (get().gameKey === gameKey) set({ gmBusy: false })
+      }
+    },
+
+    async toggleAccess() {
+      const { gameKey, detail } = get()
+      if (!gameKey || !detail) return
+      set({ gmBusy: true })
+      try {
+        await setPlayerAccess(gameKey, detail.player_access_open === false)
+        if (get().gameKey === gameKey) await get().refresh()
+      } catch (error) {
+        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        throw error
+      } finally {
+        if (get().gameKey === gameKey) set({ gmBusy: false })
+      }
+    },
+
+    async setAway(uid, away) {
+      const { gameKey } = get()
+      if (!gameKey) return
+      set({ gmBusy: true })
+      try {
+        await setPlayerAway(gameKey, uid, away)
+        if (get().gameKey === gameKey) await get().refresh()
+      } catch (error) {
+        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        throw error
+      } finally {
+        if (get().gameKey === gameKey) set({ gmBusy: false })
+      }
+    },
+
+    async kick(uid) {
+      const { gameKey } = get()
+      if (!gameKey) return
+      set({ gmBusy: true })
+      try {
+        await kickPlayer(gameKey, uid)
+        if (get().gameKey === gameKey) await get().refresh()
+      } catch (error) {
+        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        throw error
+      } finally {
+        if (get().gameKey === gameKey) set({ gmBusy: false })
+      }
+    },
+
+    async privateMessage(uid, text) {
+      const { gameKey } = get()
+      if (!gameKey || !text.trim()) return
+      try {
+        await sendPrivateMessage(gameKey, uid, text.trim())
+      } catch (error) {
+        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        throw error
+      }
+    },
+
+    async switchWorld(worldId) {
+      const { gameKey } = get()
+      if (!gameKey) return
+      set({ gmBusy: true })
+      try {
+        await switchGameWorld(gameKey, worldId)
+        if (get().gameKey === gameKey) await get().refresh()
+      } catch (error) {
+        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        throw error
+      } finally {
+        if (get().gameKey === gameKey) set({ gmBusy: false })
+      }
+    },
+
+    async resetGame() {
+      const { gameKey } = get()
+      if (!gameKey) return
+      set({ gmBusy: true })
+      try {
+        await resetGame(gameKey)
+        if (get().gameKey === gameKey) await get().refresh()
+      } catch (error) {
+        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        throw error
+      } finally {
+        if (get().gameKey === gameKey) set({ gmBusy: false })
+      }
+    },
+
+    async restartGame() {
+      const { gameKey } = get()
+      if (!gameKey) return
+      set({ gmBusy: true })
+      try {
+        await restartGame(gameKey)
+        if (get().gameKey === gameKey) await get().refresh()
+      } catch (error) {
+        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        throw error
+      } finally {
+        if (get().gameKey === gameKey) set({ gmBusy: false })
+      }
+    },
+
+    async refreshHealth() {
+      const { gameKey, isGm } = get()
+      if (!gameKey || !isGm) return
+      try {
+        const health = await fetchHealth(gameKey, true)
+        if (get().gameKey === gameKey) set({ health })
+      } catch (error) {
+        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+      }
+    },
+
+    async resolveHealth(id, action) {
+      const { gameKey } = get()
+      if (!gameKey) return
+      try {
+        await resolveHealthEvent(gameKey, id, action)
+        if (get().gameKey === gameKey) await get().refreshHealth()
+      } catch (error) {
+        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        throw error
+      }
+    },
+
+    async fetchCharacterCards() {
+      const { gameKey } = get()
+      if (!gameKey) return { cards: [] }
+      return fetchCharacterCards(gameKey)
+    },
+
+    async applyCharacterCard(card) {
+      const { gameKey, userId } = get()
+      if (!gameKey || !userId) return
+      set({ gmBusy: true })
+      try {
+        await selectCharacterCard(gameKey, userId, card)
+        if (get().gameKey === gameKey) await get().refresh()
+      } catch (error) {
+        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        throw error
+      } finally {
+        if (get().gameKey === gameKey) set({ gmBusy: false })
+      }
+    },
+
+    async updatePortrait(portrait) {
+      const { gameKey, userId } = get()
+      if (!gameKey || !userId) return
+      set({ gmBusy: true })
+      try {
+        await updateCharacterPortrait(gameKey, userId, portrait)
+        if (get().gameKey === gameKey) await get().refresh()
+      } catch (error) {
+        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        throw error
+      } finally {
+        if (get().gameKey === gameKey) set({ gmBusy: false })
+      }
+    },
+
+    async fetchWorldCandidates() {
+      const { gameKey } = get()
+      if (!gameKey) return []
+      return fetchWorldCandidates(gameKey)
+    },
+
+    async fetchGeneratedImages() {
+      const { gameKey } = get()
+      if (!gameKey) return []
+      const result = await fetchGeneratedImages(gameKey)
+      return result.images ?? []
+    },
+
+    async decidePayment(paymentId, accepted) {
+      const { gameKey } = get()
+      if (!gameKey) return
+      try {
+        await resolvePayment(gameKey, paymentId, accepted)
+        if (get().gameKey === gameKey) await get().refresh()
+      } catch (error) {
+        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        throw error
+      }
     },
   }
 })

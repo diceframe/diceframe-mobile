@@ -221,7 +221,7 @@ export function CharacterPanel({
 
       <Separator />
       <Text variant="small" className="text-center text-muted-foreground">
-        角色编辑请使用 Web 端（GM 或设置中的角色管理）
+        详细角色编辑请使用角色卡功能（GM 或设置中的角色管理）
       </Text>
     </ScrollView>
   )

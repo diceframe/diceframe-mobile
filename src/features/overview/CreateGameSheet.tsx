@@ -46,7 +46,7 @@ function OptionSelect({
       <SelectTrigger className="w-full">
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
-      <SelectContent className="w-full">
+      <SelectContent className="w-full" inline>
         <SelectGroup>
           {options.map((option) => (
             <SelectItem key={option.value} label={option.label} value={option.value}>
