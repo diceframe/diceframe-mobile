@@ -1,7 +1,8 @@
 import * as React from 'react'
-import { Modal, Pressable, ScrollView, View } from 'react-native'
+import { Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import { appLayoutForWidth } from '@/lib/layout'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import { cn } from '@/lib/utils'
 
@@ -27,6 +28,8 @@ export function Sheet({
 }: SheetProps) {
   const insets = useSafeAreaInsets()
   const keyboardHeight = useKeyboardHeight()
+  const { width } = useWindowDimensions()
+  const { isTablet } = appLayoutForWidth(width)
   return (
     <Modal
       visible={open}
@@ -36,14 +39,18 @@ export function Sheet({
       statusBarTranslucent
       navigationBarTranslucent
     >
-      <View className="flex-1 justify-end">
+      <View className={cn('flex-1', isTablet ? 'items-center justify-center px-6' : 'justify-end')}>
         <Pressable className="absolute inset-0 bg-black/60" onPress={onClose} />
         <View
           className={cn(
-            'max-h-[90%] rounded-t-xl border-t border-border bg-card px-5 pt-2',
+            'max-h-[90%] border-border bg-card px-5 pt-2',
+            isTablet ? 'w-full rounded-xl border' : 'rounded-t-xl border-t',
             className,
           )}
-          style={{ paddingBottom: insets.bottom + 16 + keyboardHeight }}
+          style={{
+            maxWidth: isTablet ? 680 : undefined,
+            paddingBottom: (isTablet ? 16 : insets.bottom + 16) + keyboardHeight,
+          }}
         >
           {!noHandle && (
             <View className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-muted-foreground/30" />

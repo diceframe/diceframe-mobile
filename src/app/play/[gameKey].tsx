@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { AppState, Pressable, View } from 'react-native'
+import { AppState, Pressable, useWindowDimensions, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft, Menu, Route, User } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -22,6 +22,7 @@ import { useSpeaker } from '@/features/play/useSpeaker'
 import { useVoiceInput } from '@/features/play/useVoiceInput'
 import { appendActionText } from '@/lib/action-text'
 import { gameStateLabel } from '@/lib/game-state'
+import { appLayoutForWidth } from '@/lib/layout'
 import { strings } from '@/lib/strings'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import { selectGmThinking, useGameStore } from '@/stores/game'
@@ -30,6 +31,8 @@ import { useSettingsStore } from '@/stores/settings'
 export default function PlayScreen() {
   const router = useRouter()
   const { gameKey } = useLocalSearchParams<{ gameKey: string }>()
+  const { width } = useWindowDimensions()
+  const { isWideTablet, gameSidebarWidth } = appLayoutForWidth(width)
 
   const detail = useGameStore((s) => s.detail)
   const players = useGameStore((s) => s.players)
@@ -152,6 +155,31 @@ export default function PlayScreen() {
       <StatusBadge tone="secondary">{strings.play.connecting}</StatusBadge>
     )
 
+  const storyTools = (
+    <Tabs
+      value={sidebarTab}
+      onValueChange={(value) => setSidebarTab(value as 'plot' | 'map')}
+      className="flex-1 pt-1"
+    >
+      <TabsList>
+        <TabsTrigger value="plot">
+          <Text variant="small">剧情</Text>
+        </TabsTrigger>
+        <TabsTrigger value="map">
+          <Text variant="small">地图</Text>
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="plot" className="min-h-0 flex-1 pt-1">
+        <PlotTracker data={plotTracker} />
+      </TabsContent>
+
+      <TabsContent value="map" className="min-h-0 flex-1 pt-1">
+        <MapWorkspace map={map} currentScene={detail?.scene} />
+      </TabsContent>
+    </Tabs>
+  )
+
   return (
     <Screen className="gap-0">
       {/* 键盘避让：底部垫高键盘实际高度，输入区始终可见（见 use-keyboard-height 注释） */}
@@ -186,15 +214,17 @@ export default function PlayScreen() {
           >
             <Icon as={User} size={20} />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9"
-            onPress={() => setSidebarOpen(true)}
-            accessibilityLabel="剧情与地图"
-          >
-            <Icon as={Route} size={20} />
-          </Button>
+          {!isWideTablet && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              onPress={() => setSidebarOpen(true)}
+              accessibilityLabel="剧情与地图"
+            >
+              <Icon as={Route} size={20} />
+            </Button>
+          )}
           {isGm && (
             <Button
               variant="ghost"
@@ -221,41 +251,54 @@ export default function PlayScreen() {
           </Pressable>
         ) : null}
 
-        {/* 时间线 */}
-        <View className="flex-1">
-          <GameTimeline
-            gameKey={gameKey}
-            log={log}
-            players={players}
-            currentUserId={userId}
-            loading={loading}
-            logPage={logPage}
-            logTotalPages={logTotalPages}
-            pendingLuck={pendingLuck}
-            luckBusy={!!luckBusyId}
-            liveNarration={liveNarration}
-            gmThinking={gmThinking}
-            submittedActions={submittedActions}
-            onLoadOlder={() => void useGameStore.getState().loadOlderLog()}
-            onDecideLuck={(check, spend) =>
-              void decideLuck(check.check_id ?? '', spend)
-            }
-            ttsEnabled={ttsEnabled}
-            onSpeak={(text) => void speaker.speak(text)}
-          />
-        </View>
+        <View className="min-h-0 flex-1 flex-row">
+          <View className="min-w-0 flex-1">
+            {/* 时间线 */}
+            <View className="flex-1">
+              <GameTimeline
+                gameKey={gameKey}
+                log={log}
+                players={players}
+                currentUserId={userId}
+                loading={loading}
+                logPage={logPage}
+                logTotalPages={logTotalPages}
+                pendingLuck={pendingLuck}
+                luckBusy={!!luckBusyId}
+                liveNarration={liveNarration}
+                gmThinking={gmThinking}
+                submittedActions={submittedActions}
+                onLoadOlder={() => void useGameStore.getState().loadOlderLog()}
+                onDecideLuck={(check, spend) =>
+                  void decideLuck(check.check_id ?? '', spend)
+                }
+                ttsEnabled={ttsEnabled}
+                onSpeak={(text) => void speaker.speak(text)}
+              />
+            </View>
 
-        {/* 输入区 */}
-        <ActionComposer
-          value={draft}
-          onChangeText={setDraft}
-          onSend={() => void send()}
-          busy={actionBusy}
-          disabled={composerDisabled}
-          disabledReason={composerDisabledReason}
-          quickActions={detail?.quick_actions ?? []}
-          voice={voice}
-        />
+            {/* 输入区 */}
+            <ActionComposer
+              value={draft}
+              onChangeText={setDraft}
+              onSend={() => void send()}
+              busy={actionBusy}
+              disabled={composerDisabled}
+              disabledReason={composerDisabledReason}
+              quickActions={detail?.quick_actions ?? []}
+              voice={voice}
+            />
+          </View>
+
+          {isWideTablet && (
+            <View
+              className="border-l border-border bg-card px-3 py-2"
+              style={{ width: gameSidebarWidth }}
+            >
+              {storyTools}
+            </View>
+          )}
+        </View>
       </View>
 
       <Sheet
@@ -284,31 +327,17 @@ export default function PlayScreen() {
         />
       </Sheet>
 
-      {/* 剧情与地图在同一个抽屉中切换；全屏地图是明确的二级动作。 */}
-      <Sheet open={sidebarOpen} onClose={() => setSidebarOpen(false)} className="h-[80%]" scrollable={false}>
-        <Tabs
-          value={sidebarTab}
-          onValueChange={(value) => setSidebarTab(value as 'plot' | 'map')}
-          className="flex-1 pt-1"
+      {/* 窄窗口用抽屉，平板横屏则把剧情与地图常驻在右侧。 */}
+      {!isWideTablet && (
+        <Sheet
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          className="h-[80%]"
+          scrollable={false}
         >
-          <TabsList>
-            <TabsTrigger value="plot">
-              <Text variant="small">剧情</Text>
-            </TabsTrigger>
-            <TabsTrigger value="map">
-              <Text variant="small">地图</Text>
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="plot" className="min-h-0 flex-1 pt-1">
-            <PlotTracker data={plotTracker} />
-          </TabsContent>
-
-          <TabsContent value="map" className="min-h-0 flex-1 pt-1">
-            <MapWorkspace map={map} currentScene={detail?.scene} />
-          </TabsContent>
-        </Tabs>
-      </Sheet>
+          {storyTools}
+        </Sheet>
+      )}
     </Screen>
   )
 }

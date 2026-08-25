@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Pressable, RefreshControl, StyleSheet, View } from 'react-native'
+import { Pressable, RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { GlassView } from 'expo-glass-effect'
 import { useNavigation, useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
@@ -20,6 +20,7 @@ import { batchDeleteGames, deleteGame, fetchGames } from '@/api/games'
 import { gameSceneCoverSource } from '@/api/assets'
 import type { GameSummary } from '@/api/types'
 import { gameStateLabel, gameStateTone } from '@/lib/game-state'
+import { appLayoutForWidth } from '@/lib/layout'
 import { useThemeToken } from '@/lib/theme'
 import { strings } from '@/lib/strings'
 import { CreateGameSheet } from '@/features/overview/CreateGameSheet'
@@ -76,6 +77,7 @@ function OverviewContent({
   busy,
   mutedForeground,
   coverBase,
+  columns,
   onRetry,
   onRefresh,
   onSelect,
@@ -91,6 +93,7 @@ function OverviewContent({
   busy: boolean
   mutedForeground: string
   coverBase: string
+  columns: 1 | 2 | 3
   onRetry: () => void
   onRefresh: () => void
   onSelect: (key: string) => void
@@ -134,7 +137,9 @@ function OverviewContent({
 
   return (
     <FlashList
+      key={`game-grid-${columns}`}
       data={sorted}
+      numColumns={columns}
       keyExtractor={(item) => item.game_key}
       contentContainerStyle={{ paddingBottom: 24 }}
       refreshControl={
@@ -152,7 +157,12 @@ function OverviewContent({
               }
             }}
             onLongPress={() => onSelect(item.game_key)}
-            className={`mb-3 active:opacity-80 ${isSelected ? 'ring-2 ring-primary' : ''}`}
+            className={`mb-3 flex-1 active:opacity-80 ${isSelected ? 'ring-2 ring-primary' : ''}`}
+            style={
+              columns > 1
+                ? { marginHorizontal: 6 }
+                : undefined
+            }
           >
             <Card className="gap-2 overflow-hidden p-0">
               <SceneCover
@@ -208,6 +218,8 @@ function OverviewContent({
 export default function OverviewScreen() {
   const router = useRouter()
   const navigation = useNavigation()
+  const { width } = useWindowDimensions()
+  const { gameListColumns } = appLayoutForWidth(width)
   const mutedForeground = useThemeToken('mutedForeground')
   const coverBase = useThemeToken('card')
 
@@ -312,7 +324,10 @@ export default function OverviewScreen() {
   const totalRounds = games?.reduce((sum, g) => sum + Number(g.round_number || 0), 0) ?? 0
 
   return (
-    <Screen className="px-4">
+    <Screen
+      className="px-4"
+      style={{ width: '100%', maxWidth: 1280, alignSelf: 'center' }}
+    >
       <PageHeader
         title={strings.overview.title}
         className="px-0"
@@ -406,6 +421,7 @@ export default function OverviewScreen() {
         busy={busy}
         mutedForeground={mutedForeground}
         coverBase={coverBase}
+        columns={gameListColumns}
         onRetry={() => setReloadToken((t) => t + 1)}
         onRefresh={refresh}
         onSelect={toggleSelect}

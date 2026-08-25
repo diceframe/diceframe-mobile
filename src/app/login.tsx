@@ -107,7 +107,7 @@ export default function LoginScreen() {
   }
 
   return (
-    <Screen>
+    <Screen style={{ width: '100%', maxWidth: 600, alignSelf: 'center' }}>
       {switching ? (
         <PageHeader title="切换服务器" onBack={() => router.back()} />
       ) : (

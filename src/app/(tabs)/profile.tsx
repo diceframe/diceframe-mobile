@@ -20,7 +20,10 @@ export default function ProfileScreen() {
   const gold = useThemeToken('gold')
 
   return (
-    <Screen className="px-4">
+    <Screen
+      className="px-4"
+      style={{ width: '100%', maxWidth: 760, alignSelf: 'center' }}
+    >
       <PageHeader title="我的" className="px-0" />
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-4 pb-8">
         {/* 服务器 */}

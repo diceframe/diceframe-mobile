@@ -118,7 +118,10 @@ export default function JoinScreen() {
   }
 
   return (
-    <Screen className="px-4">
+    <Screen
+      className="px-4"
+      style={{ width: '100%', maxWidth: 600, alignSelf: 'center' }}
+    >
       <PageHeader
         title={strings.join.title}
         subtitle={detail?.world_name}
