@@ -34,7 +34,9 @@ export function parseShareLink(input: string): ParsedShareLink | null {
   return {
     // Standalone Web links carry the actual API origin separately from the
     // public frontend origin. Mobile must connect to that backend directly.
-    baseUrl: server ? normalizePublicBaseUrl(server) : url.origin,
+    baseUrl: server
+      ? normalizePublicBaseUrl(server)
+      : normalizePublicBaseUrl(`${url.origin}${url.pathname}`),
     game,
     user: q.get('user') ?? undefined,
     name: q.get('name') ?? undefined,

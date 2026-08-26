@@ -30,6 +30,12 @@ describe('parseShareLink', () => {
     expect(parseShareLink('http://h:18000/?game=abc&user=u1')?.user).toBe('u1')
   })
 
+  it('保留同源反向代理路径作为 API 基址', () => {
+    expect(parseShareLink('https://play.example.com/trpg/#/join?game=abc')?.baseUrl).toBe(
+      'https://play.example.com/trpg',
+    )
+  })
+
   it('独立前端链接优先连接 server 参数指定的后端', () => {
     expect(parseShareLink('https://play.example.com/trpg/#/join?game=abc&share=1&server=nas.local:18000')).toMatchObject({
       baseUrl: 'http://nas.local:18000',
