@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Pressable, View } from 'react-native'
+import { Pressable, ScrollView, View } from 'react-native'
 import { Mic, Send } from 'lucide-react-native'
 
 import { Button } from '@/components/ui/button'
@@ -27,6 +27,7 @@ export function ActionComposer({
   disabledReason,
   quickActions,
   voice,
+  topControls,
 }: {
   value: string
   onChangeText: (text: string) => void
@@ -36,13 +37,20 @@ export function ActionComposer({
   disabledReason?: string
   quickActions: string[]
   voice?: VoiceInputState
+  topControls?: React.ReactNode
 }) {
   const locked = busy || !!disabled
 
   return (
-    <View className="gap-2 px-3 pb-2">
+    <View className="gap-2 pb-2">
+      {topControls}
       {quickActions.length > 0 && (
-        <View className="mt-2 flex-row flex-wrap gap-2">
+        <ScrollView
+          horizontal
+          className="mt-2 max-h-9"
+          contentContainerClassName="gap-2 px-3"
+          showsHorizontalScrollIndicator={false}
+        >
           {quickActions.map((action) => (
             <Pressable
               key={action}
@@ -56,10 +64,10 @@ export function ActionComposer({
               <Text className="text-sm text-muted-foreground">{action}</Text>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
       )}
 
-      <View className="flex-row items-end gap-2">
+      <View className="flex-row items-end gap-2 px-3">
         {voice?.available ? (
           <Pressable
             onPress={voice.onToggle}
@@ -99,10 +107,10 @@ export function ActionComposer({
         </Button>
       </View>
 
-      {voice?.error ? <Text className="text-destructive">{voice.error}</Text> : null}
-      {disabledReason ? <Text variant="small">{disabledReason}</Text> : null}
+      {voice?.error ? <Text className="px-3 text-destructive">{voice.error}</Text> : null}
+      {disabledReason ? <Text variant="small" className="px-3">{disabledReason}</Text> : null}
       {voice?.recording ? (
-        <Text variant="small" className="text-destructive">
+        <Text variant="small" className="px-3 text-destructive">
           录音中…再次点击结束并识别
         </Text>
       ) : null}

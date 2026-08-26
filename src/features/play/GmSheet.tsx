@@ -6,8 +6,6 @@ import {
   BookOpen,
   ChevronFirst,
   ChevronLast,
-  CirclePower,
-  Cog,
   Download,
   KeyRound,
   Link,
@@ -16,7 +14,6 @@ import {
   RefreshCw,
   Shield,
   ShieldOff,
-  Sparkles,
   UserCircle,
   Users,
 } from 'lucide-react-native'
@@ -33,6 +30,8 @@ interface GmSheetProps {
   detail: GameDetail
   multiplayer?: Multiplayer
   busy: boolean
+  showFlowControls?: boolean
+  showPlayerRoster?: boolean
   onAdvance: () => void
   onRollback: () => void
   onCommand: (text: string) => void
@@ -50,13 +49,15 @@ interface GmSheetProps {
 }
 
 /**
- * GM 工具托盘（对齐 Web GmToolbar 的完整功能子集）。
- * 按功能分区：流程、指令、玩家、模式、存档、私信。
+ * GM 桌面管理托盘。
+ * 高频流程可由对局页常驻控制条承载；这里集中放指令、房间、存档和私密感知。
  */
 export function GmSheet({
   detail,
   multiplayer,
   busy,
+  showFlowControls = true,
+  showPlayerRoster = true,
   onAdvance,
   onRollback,
   onCommand,
@@ -76,7 +77,6 @@ export function GmSheet({
   const [perceptionTarget, setPerceptionTarget] = React.useState('')
   const [perceptionText, setPerceptionText] = React.useState('')
 
-  const players = multiplayer?.ready_players ?? []
   const allPlayers = [
     ...(multiplayer?.ready_players ?? []),
     ...(multiplayer?.waiting_players ?? []),
@@ -99,28 +99,32 @@ export function GmSheet({
 
   return (
     <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-4 pb-6">
-      {/* 流程控制 */}
-      <View className="gap-2">
-        <Text variant="small" className="font-semibold text-muted-foreground">
-          流程
-        </Text>
-        <View className="flex-row gap-2">
-          <Button className="flex-1" disabled={busy} onPress={onAdvance}>
-            <Icon as={ChevronLast} size={16} />
-            <Text>{strings.play.advance}</Text>
-          </Button>
-          <Button variant="outline" className="flex-1" disabled={busy} onPress={onRollback}>
-            <Icon as={ChevronFirst} size={16} />
-            <Text>{strings.play.rollback}</Text>
-          </Button>
-        </View>
-        <Button variant="outline" disabled={busy} onPress={onRecap}>
-          <Icon as={BookOpen} size={16} />
-          <Text>{strings.play.recap}</Text>
-        </Button>
-      </View>
+      {showFlowControls && (
+        <>
+          {/* 流程控制 */}
+          <View className="gap-2">
+            <Text variant="small" className="font-semibold text-muted-foreground">
+              流程
+            </Text>
+            <View className="flex-row gap-2">
+              <Button className="flex-1" disabled={busy} onPress={onAdvance}>
+                <Icon as={ChevronLast} size={16} />
+                <Text>{strings.play.advance}</Text>
+              </Button>
+              <Button variant="outline" className="flex-1" disabled={busy} onPress={onRollback}>
+                <Icon as={ChevronFirst} size={16} />
+                <Text>{strings.play.rollback}</Text>
+              </Button>
+            </View>
+          </View>
+          <Separator />
+        </>
+      )}
 
-      <Separator />
+      <Button variant="outline" disabled={busy} onPress={onRecap}>
+        <Icon as={BookOpen} size={16} />
+        <Text>{strings.play.recap}</Text>
+      </Button>
 
       {/* GM 指令 */}
       <View className="gap-2">
@@ -163,7 +167,7 @@ export function GmSheet({
       </View>
 
       {/* 多人状态 */}
-      {multiplayer?.player_count ? (
+      {showPlayerRoster && multiplayer?.player_count ? (
         <View className="gap-1.5">
           <Text variant="small" className="font-semibold text-muted-foreground">
             {strings.play.playerList} · {multiplayer.ready_count ?? 0}/{multiplayer.player_count} 已就绪

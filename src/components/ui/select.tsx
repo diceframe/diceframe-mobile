@@ -3,13 +3,11 @@ import { NativeOnlyAnimatedView } from '@/components/ui/native-only-animated-vie
 import { TextClassContext } from '@/components/ui/text';
 import { cn } from '@/lib/utils';
 import * as SelectPrimitive from '@rn-primitives/select';
-import { Portal } from '@rn-primitives/portal';
 import { Check, ChevronDown, ChevronDownIcon, ChevronUpIcon } from 'lucide-react-native';
 import * as React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated';
 import { FullWindowOverlay as RNFullWindowOverlay } from 'react-native-screens';
-import { useSheetPortal } from '@/components/patterns/sheet';
 
 type Option = SelectPrimitive.Option;
 
@@ -74,77 +72,64 @@ function SelectContent({
   children,
   position = 'popper',
   portalHost,
-  inline = false,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content> & {
     className?: string;
     portalHost?: string;
-    /** 不使用 Portal，渲染到 Sheet 的 portal 层（用于 Modal/Sheet 内部） */
-    inline?: boolean;
   }) {
-  const sheetPortalName = useSheetPortal()
-  const content = (
-    <SelectPrimitive.Overlay
-      style={Platform.select({ native: inline ? undefined : StyleSheet.absoluteFill })}
-      asChild={Platform.OS !== 'web'}>
-      <NativeOnlyAnimatedView
-        className={inline ? 'absolute inset-0 z-50' : 'z-50'}
-        entering={FadeIn.reduceMotion(ReduceMotion.System)}
-        exiting={FadeOut.reduceMotion(ReduceMotion.System)}
-        as="Pressable">
-        <TextClassContext.Provider value="text-popover-foreground">
-          <SelectPrimitive.Content
-            className={cn(
-              'bg-popover border-border relative z-50 min-w-[8rem] rounded-md border shadow-md shadow-black/5',
-              Platform.select({
-                web: cn(
-                  'animate-in fade-in-0 zoom-in-95 origin-(--radix-select-content-transform-origin) max-h-52 overflow-y-auto overflow-x-hidden',
-                  props.side === 'bottom' && 'slide-in-from-top-2',
-                  props.side === 'top' && 'slide-in-from-bottom-2'
-                ),
-                native: 'p-1',
-              }),
-              position === 'popper' &&
-              Platform.select({
-                web: cn(
-                  props.side === 'bottom' && 'translate-y-1',
-                  props.side === 'top' && '-translate-y-1'
-                ),
-              }),
-              className
-            )}
-            position={position}
-            {...props}>
-            <SelectScrollUpButton />
-            <SelectPrimitive.Viewport
-              className={cn(
-                'p-1',
-                position === 'popper' &&
-                cn(
-                  'w-full',
-                  Platform.select({
-                    web: 'h-[var(--radix-select-trigger-height)] min-w-[var(--radix-select-trigger-width)]',
-                  })
-                )
-              )}>
-              {children}
-            </SelectPrimitive.Viewport>
-            <SelectScrollDownButton />
-          </SelectPrimitive.Content>
-        </TextClassContext.Provider>
-      </NativeOnlyAnimatedView>
-    </SelectPrimitive.Overlay>
-  );
-
-  // inline 模式：渲染到 Sheet 的 portal 层
-  if (inline) {
-    return <Portal name="SelectContent" hostName={sheetPortalName}>{content}</Portal>
-  }
-
   return (
     <SelectPrimitive.Portal hostName={portalHost}>
       <FullWindowOverlay>
-        {content}
+        <SelectPrimitive.Overlay
+          style={Platform.select({ native: StyleSheet.absoluteFill })}
+          asChild={Platform.OS !== 'web'}>
+          <NativeOnlyAnimatedView
+            className="z-50"
+            entering={FadeIn.reduceMotion(ReduceMotion.System)}
+            exiting={FadeOut.reduceMotion(ReduceMotion.System)}
+            as="Pressable">
+            <TextClassContext.Provider value="text-popover-foreground">
+              <SelectPrimitive.Content
+                className={cn(
+                  'bg-popover border-border relative z-50 min-w-[8rem] rounded-md border shadow-md shadow-black/5',
+                  Platform.select({
+                    web: cn(
+                      'animate-in fade-in-0 zoom-in-95 origin-(--radix-select-content-transform-origin) max-h-52 overflow-y-auto overflow-x-hidden',
+                      props.side === 'bottom' && 'slide-in-from-top-2',
+                      props.side === 'top' && 'slide-in-from-bottom-2'
+                    ),
+                    native: 'p-1',
+                  }),
+                  position === 'popper' &&
+                  Platform.select({
+                    web: cn(
+                      props.side === 'bottom' && 'translate-y-1',
+                      props.side === 'top' && '-translate-y-1'
+                    ),
+                  }),
+                  className
+                )}
+                position={position}
+                {...props}>
+                <SelectScrollUpButton />
+                <SelectPrimitive.Viewport
+                  className={cn(
+                    'p-1',
+                    position === 'popper' &&
+                    cn(
+                      'w-full',
+                      Platform.select({
+                        web: 'h-[var(--radix-select-trigger-height)] min-w-[var(--radix-select-trigger-width)]',
+                      })
+                    )
+                  )}>
+                  {children}
+                </SelectPrimitive.Viewport>
+                <SelectScrollDownButton />
+              </SelectPrimitive.Content>
+            </TextClassContext.Provider>
+          </NativeOnlyAnimatedView>
+        </SelectPrimitive.Overlay>
       </FullWindowOverlay>
     </SelectPrimitive.Portal>
   );

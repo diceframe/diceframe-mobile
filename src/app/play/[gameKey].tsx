@@ -1,13 +1,14 @@
 import * as React from 'react'
-import { AppState, Pressable, Share, useWindowDimensions, View } from 'react-native'
+import { AppState, Pressable, ScrollView, Share, useWindowDimensions, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   ChevronLeft,
-  Heart,
   HelpCircle,
   Image as ImageIcon,
   Mail,
+  Map,
   Menu,
+  MoreHorizontal,
   Route,
   User,
 } from 'lucide-react-native'
@@ -20,7 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
-import { errorMessage } from '@/api/client'
+import { errorMessage, fetchAppConfig } from '@/api/client'
 import { exportGame, fetchBotBindToken, setGameRoomPassword } from '@/api/games'
 import type { GeneratedImageItem } from '@/api/types'
 import { ActionComposer } from '@/features/play/ActionComposer'
@@ -46,7 +47,6 @@ import { buildShareLink } from '@/lib/share-link'
 import { strings } from '@/lib/strings'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import { selectGmThinking, useGameStore } from '@/stores/game'
-import { fetchAppConfig } from '@/api/client'
 import { useSettingsStore } from '@/stores/settings'
 
 /** 简单的剪贴板工具（优先使用 React Native 内置 Clipboard） */
@@ -99,9 +99,9 @@ export default function PlayScreen() {
   const [characterOpen, setCharacterOpen] = React.useState(false)
   const [menuOpen, setMenuOpen] = React.useState(false)
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
-  const [sidebarTab, setSidebarTab] = React.useState<'plot' | 'map' | 'players' | 'health'>(
-    isGm ? 'players' : 'plot',
-  )
+  const [sidebarTab, setSidebarTab] = React.useState<'plot' | 'map'>('plot')
+  const [gmPanelTab, setGmPanelTab] = React.useState<'controls' | 'players' | 'health'>('controls')
+  const [utilityOpen, setUtilityOpen] = React.useState(false)
   const [privateMessageOpen, setPrivateMessageOpen] = React.useState(false)
   const [luckBusyId, setLuckBusyId] = React.useState('')
   // 模态框状态
@@ -406,6 +406,16 @@ export default function PlayScreen() {
       <StatusBadge tone="secondary">{strings.play.connecting}</StatusBadge>
     )
 
+  function openStoryTool(tab: 'plot' | 'map') {
+    setSidebarTab(tab)
+    if (!isWideTablet) setSidebarOpen(true)
+  }
+
+  function openGmPanel(tab: 'controls' | 'players' | 'health' = 'controls') {
+    setGmPanelTab(tab)
+    setMenuOpen(true)
+  }
+
   const storyTools = (
     <Tabs
       value={sidebarTab}
@@ -413,58 +423,47 @@ export default function PlayScreen() {
       className="flex-1 pt-1"
     >
       <TabsList>
-        {isGm && (
-          <TabsTrigger value="players" key="tab-players">
-            <Text variant="small">玩家</Text>
-          </TabsTrigger>
-        )}
-        <TabsTrigger value="plot" key="tab-plot">
+        <TabsTrigger value="plot">
           <Text variant="small">剧情</Text>
         </TabsTrigger>
-        <TabsTrigger value="map" key="tab-map">
+        <TabsTrigger value="map">
           <Text variant="small">地图</Text>
         </TabsTrigger>
-        {isGm && (
-          <TabsTrigger value="health" key="tab-health">
-            <Text variant="small">状态</Text>
-          </TabsTrigger>
-        )}
       </TabsList>
-
-      {isGm && (
-        <TabsContent value="players" key="content-players" className="min-h-0 flex-1 pt-1">
-          <MultiplayerPanel
-            players={players}
-            detail={detail!}
-            isGm={isGm}
-            currentUserId={userId}
-            onKick={(uid) => void handleKick(uid)}
-            onSetAway={(uid, away) => void handleSetAway(uid, away)}
-            onCopyLink={(uid) => void handleCopyLink(uid)}
-          />
-        </TabsContent>
-      )}
-
-      <TabsContent value="plot" key="content-plot" className="min-h-0 flex-1 pt-1">
+      <TabsContent value="plot" className="min-h-0 flex-1 pt-1">
         <PlotTracker data={plotTracker} />
       </TabsContent>
-
-      <TabsContent value="map" key="content-map" className="min-h-0 flex-1 pt-1">
+      <TabsContent value="map" className="min-h-0 flex-1 pt-1">
         <MapWorkspace map={map} currentScene={detail?.scene} />
       </TabsContent>
-
-      {isGm && (
-        <TabsContent value="health" key="content-health" className="min-h-0 flex-1 pt-1">
-          <HealthPanel
-            health={health}
-            detail={detail}
-            isGm={isGm}
-            onResolve={(id, action) => void handleResolveHealth(id, action)}
-          />
-        </TabsContent>
-      )}
     </Tabs>
   )
+
+  const gmRoundControls = isGm ? (
+    <View className="flex-row gap-2 border-t border-border px-3 pt-2">
+      <Button
+        size="sm"
+        className="flex-1"
+        disabled={busy}
+        onPress={() => void runGm(() => useGameStore.getState().advance())}
+      >
+        <Text>{strings.play.advance}</Text>
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="flex-1"
+        disabled={busy}
+        onPress={() => void runGm(() => useGameStore.getState().rollback())}
+      >
+        <Text>{strings.play.rollback}</Text>
+      </Button>
+      <Button size="sm" variant="ghost" onPress={() => openGmPanel()}>
+        <Icon as={Menu} size={16} />
+        <Text>管理</Text>
+      </Button>
+    </View>
+  ) : null
 
   return (
     <Screen className="gap-0">
@@ -495,68 +494,60 @@ export default function PlayScreen() {
             variant="ghost"
             size="icon"
             className="h-9 w-9"
-            onPress={() => setCharacterOpen(true)}
-            accessibilityLabel={strings.play.characterPanel}
+            onPress={() => setUtilityOpen(true)}
+            accessibilityLabel="更多操作"
           >
-            <Icon as={User} size={20} />
+            <Icon as={MoreHorizontal} size={21} />
+          </Button>
+        </View>
+
+        {/* 情境入口：只放当前游玩中会频繁切换的内容。 */}
+        <ScrollView
+          horizontal
+          className="max-h-11 border-b border-border"
+          contentContainerClassName="items-center gap-1 px-3 py-1"
+          showsHorizontalScrollIndicator={false}
+        >
+          <Button size="sm" variant="ghost" onPress={() => setCharacterOpen(true)}>
+            <Icon as={User} size={16} />
+            <Text>角色</Text>
           </Button>
           {!isWideTablet && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9"
-              onPress={() => setSidebarOpen(true)}
-              accessibilityLabel="剧情与地图"
-            >
-              <Icon as={Route} size={20} />
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9"
-            onPress={() => setRuleHelpOpen(true)}
-            accessibilityLabel={strings.play.ruleHelp}
-          >
-            <Icon as={HelpCircle} size={20} />
-          </Button>
-          {isGm && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9"
-              onPress={() => setSceneGalleryOpen(true)}
-              accessibilityLabel={strings.play.sceneGallery}
-            >
-              <Icon as={ImageIcon} size={20} />
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant={sidebarTab === 'plot' ? 'secondary' : 'ghost'}
+                onPress={() => openStoryTool('plot')}
+              >
+                <Icon as={Route} size={16} />
+                <Text>剧情</Text>
+              </Button>
+              <Button
+                size="sm"
+                variant={sidebarTab === 'map' ? 'secondary' : 'ghost'}
+                onPress={() => openStoryTool('map')}
+              >
+                <Icon as={Map} size={16} />
+                <Text>地图</Text>
+              </Button>
+            </>
           )}
           {privateMessages.length > 0 && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9"
-              onPress={() => setPrivateMessageOpen(true)}
-              accessibilityLabel={`私信（${privateMessages.length}）`}
-            >
+            <Button size="sm" variant="ghost" onPress={() => setPrivateMessageOpen(true)}>
               <View>
-                <Icon as={Mail} size={20} />
-                <View className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-destructive" />
+                <Icon as={Mail} size={16} />
+                <View className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" />
               </View>
+              <Text>感知 {privateMessages.length}</Text>
             </Button>
           )}
           {isGm && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9"
-              onPress={() => setMenuOpen(true)}
-              accessibilityLabel={strings.play.gmCommand}
-            >
-              <Icon as={Menu} size={20} />
+            <Button size="sm" variant="ghost" onPress={() => openGmPanel()}>
+              <Icon as={Menu} size={16} />
+              <Text>桌面管理</Text>
             </Button>
           )}
-        </View>
+        </ScrollView>
 
         {error ? (
           <Pressable
@@ -606,6 +597,7 @@ export default function PlayScreen() {
               disabledReason={composerDisabledReason}
               quickActions={detail?.quick_actions ?? []}
               voice={voice}
+              topControls={gmRoundControls}
             />
           </View>
 
@@ -635,40 +627,136 @@ export default function PlayScreen() {
             ruleMeta={ruleMeta}
           />
           {isGm && (
-            <Button variant="outline" onPress={() => setCardsOpen(true)}>
+            <Button variant="outline" onPress={() => void openCards()}>
               <Text>{strings.play.selectCard}</Text>
             </Button>
           )}
         </View>
       </Sheet>
 
-      {/* GM 工具 */}
+      {/* GM 桌面管理：流程、玩家和健康事件各自成组，不与剧情地图混放。 */}
       <Sheet open={menuOpen} onClose={() => setMenuOpen(false)} className="h-[85%]" scrollable={false}>
-        <GmSheet
-          detail={detail!}
-          multiplayer={detail?.multiplayer}
-          busy={busy}
-          onAdvance={() => void runGm(() => useGameStore.getState().advance())}
-          onRollback={() => void runGm(() => useGameStore.getState().rollback())}
-          onCommand={(text) => void runGm(() => useGameStore.getState().command(text))}
-          onRecap={() => void handleRecap()}
-          onBotBind={() => void handleBotBind()}
-          onInvite={() => void handleInvite()}
-          onToggleMode={() => void runGm(() => useGameStore.getState().toggleMode())}
-          onToggleAccess={() => void runGm(() => useGameStore.getState().toggleAccess())}
-          onRoomPassword={() => {
-            setMenuOpen(false)
-            setRoomPasswordOpen(true)
-          }}
-          onWorldSwitch={() => {
-            setMenuOpen(false)
-            void openWorldSwitch()
-          }}
-          onExport={() => void handleExport()}
-          onReset={() => void handleReset()}
-          onRestart={() => void handleRestart()}
-          onPerception={(uid, text) => void handlePerception(uid, text)}
-        />
+        <Tabs
+          value={gmPanelTab}
+          onValueChange={(value) => setGmPanelTab(value as typeof gmPanelTab)}
+          className="min-h-0 flex-1"
+        >
+          <TabsList>
+            <TabsTrigger value="controls"><Text variant="small">管理</Text></TabsTrigger>
+            <TabsTrigger value="players"><Text variant="small">玩家</Text></TabsTrigger>
+            <TabsTrigger value="health"><Text variant="small">状态</Text></TabsTrigger>
+          </TabsList>
+          <TabsContent value="controls" className="min-h-0 flex-1 pt-2">
+            <GmSheet
+              detail={detail!}
+              multiplayer={detail?.multiplayer}
+              busy={busy}
+              showFlowControls={false}
+              showPlayerRoster={false}
+              onAdvance={() => void runGm(() => useGameStore.getState().advance())}
+              onRollback={() => void runGm(() => useGameStore.getState().rollback())}
+              onCommand={(text) => void runGm(() => useGameStore.getState().command(text))}
+              onRecap={() => void handleRecap()}
+              onBotBind={() => void handleBotBind()}
+              onInvite={() => void handleInvite()}
+              onToggleMode={() => void runGm(() => useGameStore.getState().toggleMode())}
+              onToggleAccess={() => void runGm(() => useGameStore.getState().toggleAccess())}
+              onRoomPassword={() => {
+                setMenuOpen(false)
+                setRoomPasswordOpen(true)
+              }}
+              onWorldSwitch={() => {
+                setMenuOpen(false)
+                void openWorldSwitch()
+              }}
+              onExport={() => void handleExport()}
+              onReset={() => void handleReset()}
+              onRestart={() => void handleRestart()}
+              onPerception={(uid, text) => void handlePerception(uid, text)}
+            />
+          </TabsContent>
+          <TabsContent value="players" className="min-h-0 flex-1 pt-2">
+            <MultiplayerPanel
+              players={players}
+              detail={detail!}
+              isGm={isGm}
+              currentUserId={userId}
+              onKick={(uid) => void handleKick(uid)}
+              onSetAway={(uid, away) => void handleSetAway(uid, away)}
+              onCopyLink={(uid) => void handleCopyLink(uid)}
+            />
+          </TabsContent>
+          <TabsContent value="health" className="min-h-0 flex-1 pt-2">
+            <HealthPanel
+              health={health}
+              detail={detail}
+              isGm={isGm}
+              onResolve={(id, action) => void handleResolveHealth(id, action)}
+            />
+          </TabsContent>
+        </Tabs>
+      </Sheet>
+
+      {/* 低频页面工具 */}
+      <Sheet open={utilityOpen} onClose={() => setUtilityOpen(false)} className="h-auto">
+        <View className="gap-2 pt-1">
+          <Text variant="h4">更多操作</Text>
+          <Button
+            variant="outline"
+            onPress={() => {
+              setUtilityOpen(false)
+              setCharacterOpen(true)
+            }}
+          >
+            <Icon as={User} size={17} />
+            <Text>角色详情</Text>
+          </Button>
+          <Button
+            variant="outline"
+            onPress={() => {
+              setUtilityOpen(false)
+              setRuleHelpOpen(true)
+            }}
+          >
+            <Icon as={HelpCircle} size={17} />
+            <Text>{strings.play.ruleHelp}</Text>
+          </Button>
+          {isGm && (
+            <Button
+              variant="outline"
+              onPress={() => {
+                setUtilityOpen(false)
+                void openSceneGallery()
+              }}
+            >
+              <Icon as={ImageIcon} size={17} />
+              <Text>{strings.play.sceneGallery}</Text>
+            </Button>
+          )}
+          {privateMessages.length > 0 && (
+            <Button
+              variant="outline"
+              onPress={() => {
+                setUtilityOpen(false)
+                setPrivateMessageOpen(true)
+              }}
+            >
+              <Icon as={Mail} size={17} />
+              <Text>私密感知（{privateMessages.length}）</Text>
+            </Button>
+          )}
+          {isGm && (
+            <Button
+              onPress={() => {
+                setUtilityOpen(false)
+                openGmPanel()
+              }}
+            >
+              <Icon as={Menu} size={17} />
+              <Text>桌面管理</Text>
+            </Button>
+          )}
+        </View>
       </Sheet>
 
       {/* 侧边栏（窄屏抽屉） */}

@@ -1,19 +1,10 @@
 import * as React from 'react'
 import { Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { PortalHost } from '@rn-primitives/portal'
 
 import { appLayoutForWidth } from '@/lib/layout'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import { cn } from '@/lib/utils'
-
-/** Sheet portal 名称 - 用于在 Sheet 内部渲染浮层内容 */
-export const SHEET_PORTAL_NAME = 'SheetPortal'
-
-/** 在 Sheet 内部使用，获取 portal host 名称 */
-export function useSheetPortal() {
-  return SHEET_PORTAL_NAME
-}
 
 type SheetProps = {
   open: boolean
@@ -24,6 +15,8 @@ type SheetProps = {
   noHandle?: boolean
   /** 由 Sheet 提供滚动；关闭后由子组件接管唯一滚动容器 */
   scrollable?: boolean
+  /** Sheet 滚动容器中需要固定的直接子项索引 */
+  stickyHeaderIndices?: number[]
 }
 
 /** 底部抽屉（Modal + slide）；键盘弹出时整体垫高，内容超高时内部滚动 */
@@ -34,6 +27,7 @@ export function Sheet({
   className,
   noHandle = false,
   scrollable = true,
+  stickyHeaderIndices,
 }: SheetProps) {
   const insets = useSafeAreaInsets()
   const keyboardHeight = useKeyboardHeight()
@@ -70,6 +64,7 @@ export function Sheet({
               showsVerticalScrollIndicator={false}
               bounces={false}
               keyboardShouldPersistTaps="handled"
+              stickyHeaderIndices={stickyHeaderIndices}
             >
               {children}
             </ScrollView>
@@ -77,8 +72,6 @@ export function Sheet({
             <View className="min-h-0 flex-1">{children}</View>
           )}
         </View>
-        {/* Portal 层 - 用于渲染浮层内容（如 Select 下拉框） */}
-        <PortalHost name={SHEET_PORTAL_NAME} />
       </View>
     </Modal>
   )
