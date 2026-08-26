@@ -96,28 +96,50 @@ export function gameSceneCoverSource(gameKey: string, ruleId?: string | null): A
   }
 }
 
+function builtinAvatarSource(portrait: CharacterPortrait): AssetSource | null {
+  const [rawRule, rawIndex] = String(portrait.id || '').split(':')
+  const rule = rawRule.replace(/_en$/, '')
+  const index = Number(rawIndex)
+  const supportedRules = new Set([
+    'dnd5e',
+    'freeform_coc',
+    'freeform_cyberpunk',
+    'freeform_fantasy',
+    'freeform_wuxia',
+    'tavern_free',
+  ])
+  if (!supportedRules.has(rule) || !Number.isInteger(index) || index < 0 || index > 7) return null
+  const fileName = index < 4 ? `realistic-${index + 1}.jpg` : `anime-${index - 3}.jpg`
+  return { uri: buildStaticAssetUrl(`/avatars/v3/${rule}/${fileName}`) }
+}
+
+function pluginAvatarSource(portrait: CharacterPortrait): AssetSource | null {
+  if (!portrait.plugin_id || !portrait.path) return null
+  const path = portrait.path.replace(/\\/g, '/').split('/').map(encodeURIComponent).join('/')
+  return assetSource(`/plugins/assets/${encodeURIComponent(portrait.plugin_id)}/${path}`)
+}
+
+/** 跨对局角色卡库头像；上传与生成资源使用全局资源端点。 */
+export function libraryAvatarSource(portrait?: CharacterPortrait | null): AssetSource | null {
+  if (!portrait) return null
+  if (portrait.kind === 'builtin') return builtinAvatarSource(portrait)
+  if (portrait.kind === 'upload' && portrait.asset_id) {
+    return assetSource(`/avatars/${encodeURIComponent(portrait.asset_id)}`)
+  }
+  if (portrait.kind === 'generated' && portrait.asset_id) {
+    return assetSource(`/generated-images/${encodeURIComponent(portrait.asset_id)}`)
+  }
+  if (portrait.kind === 'plugin') return pluginAvatarSource(portrait)
+  return null
+}
+
 export function avatarSource(
   gameKey: string,
   portrait?: CharacterPortrait | null,
 ): AssetSource | null {
   if (!portrait) return null
 
-  if (portrait.kind === 'builtin') {
-    const [rawRule, rawIndex] = String(portrait.id || '').split(':')
-    const rule = rawRule.replace(/_en$/, '')
-    const index = Number(rawIndex)
-    const supportedRules = new Set([
-      'dnd5e',
-      'freeform_coc',
-      'freeform_cyberpunk',
-      'freeform_fantasy',
-      'freeform_wuxia',
-      'tavern_free',
-    ])
-    if (!supportedRules.has(rule) || !Number.isInteger(index) || index < 0 || index > 7) return null
-    const fileName = index < 4 ? `realistic-${index + 1}.jpg` : `anime-${index - 3}.jpg`
-    return { uri: buildStaticAssetUrl(`/avatars/v3/${rule}/${fileName}`) }
-  }
+  if (portrait.kind === 'builtin') return builtinAvatarSource(portrait)
 
   if (portrait.kind === 'upload' && portrait.asset_id) {
     return assetSource(
@@ -131,10 +153,7 @@ export function avatarSource(
     )
   }
 
-  if (portrait.kind === 'plugin' && portrait.plugin_id && portrait.path) {
-    const path = portrait.path.replace(/\\/g, '/').split('/').map(encodeURIComponent).join('/')
-    return assetSource(`/plugins/assets/${encodeURIComponent(portrait.plugin_id)}/${path}`)
-  }
+  if (portrait.kind === 'plugin') return pluginAvatarSource(portrait)
 
   return null
 }

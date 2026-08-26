@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { apiAssetDataUri, avatarSource, gameSceneCoverSource, ruleSceneAssetPath } from './assets'
+import { apiAssetDataUri, avatarSource, gameSceneCoverSource, libraryAvatarSource, ruleSceneAssetPath } from './assets'
 import { apiBlob, configureApiClient } from './client'
 
 vi.mock('./client', async (importOriginal) => {
@@ -50,6 +50,35 @@ describe('avatarSource', () => {
 
   it('内置头像引用无效时回退到默认头像', () => {
     expect(avatarSource('game-1', { kind: 'builtin', id: 'unknown:99' })).toBeNull()
+  })
+})
+
+describe('libraryAvatarSource', () => {
+  beforeEach(() => {
+    configureApiClient({ baseUrl: 'http://h:18000', token: null, share: null })
+  })
+
+  it('uses global resources for reusable character-card portraits', () => {
+    expect(libraryAvatarSource({ kind: 'builtin', id: 'dnd5e:0' })).toEqual({
+      uri: 'http://h:18000/v2-assets/avatars/v3/dnd5e/realistic-1.jpg',
+    })
+    expect(libraryAvatarSource({ kind: 'upload', asset_id: 'portrait/a' })).toEqual({
+      uri: 'http://h:18000/api/avatars/portrait%2Fa',
+      apiPath: '/avatars/portrait%2Fa',
+    })
+    expect(libraryAvatarSource({ kind: 'generated', asset_id: 'image/a' })).toEqual({
+      uri: 'http://h:18000/api/generated-images/image%2Fa',
+      apiPath: '/generated-images/image%2Fa',
+    })
+    expect(libraryAvatarSource({ kind: 'plugin', plugin_id: 'plugin/a', path: 'portraits/hero.png' })).toEqual({
+      uri: 'http://h:18000/api/plugins/assets/plugin%2Fa/portraits/hero.png',
+      apiPath: '/plugins/assets/plugin%2Fa/portraits/hero.png',
+    })
+  })
+
+  it('returns no image for an absent or invalid portrait reference', () => {
+    expect(libraryAvatarSource(null)).toBeNull()
+    expect(libraryAvatarSource({ kind: 'builtin', id: 'missing:0' })).toBeNull()
   })
 })
 

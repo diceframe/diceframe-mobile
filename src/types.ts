@@ -1,8 +1,10 @@
+import type { CharacterPortrait } from '@/api/types';
+
 export interface Character {
   id: string;
   name: string;
   description?: string;
-  avatar?: string;
+  portrait?: CharacterPortrait | null;
   createdAt: string;
   updatedAt: string;
 }

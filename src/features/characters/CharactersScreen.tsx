@@ -2,7 +2,9 @@ import * as React from 'react'
 import { FlatList, View } from 'react-native'
 import { Plus, RefreshCw, Swords, UserRound } from 'lucide-react-native'
 
+import { libraryAvatarSource } from '@/api/assets'
 import { PageHeader } from '@/components/page-header'
+import { RemoteAvatar } from '@/components/patterns/remote-avatar'
 import { Sheet } from '@/components/patterns/sheet'
 import { Screen } from '@/components/screen'
 import { Button } from '@/components/ui/button'
@@ -69,7 +71,7 @@ export default function CharactersScreen() {
         onRefresh={() => void refresh()}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
-          <Card className="gap-3 py-4"><CardContent className="flex-row items-center gap-3 px-4"><View className="h-11 w-11 items-center justify-center rounded-full border border-border bg-muted"><Icon as={UserRound} size={20} /></View><View className="min-w-0 flex-1"><Text className="font-semibold" numberOfLines={1}>{item.name}</Text><Text variant="small" numberOfLines={2}>{item.description || '还没有补充角色背景'}</Text></View><View className="gap-1"><Button size="sm" variant="ghost" onPress={() => openEditor(item)}><Text>编辑</Text></Button><Button size="sm" variant="ghost" onPress={() => void deleteCharacter(item.id)}><Text className="text-destructive">删除</Text></Button></View></CardContent></Card>
+          <Card className="gap-3 py-4"><CardContent className="flex-row items-center gap-3 px-4"><RemoteAvatar source={libraryAvatarSource(item.portrait)} name={item.name} className="h-11 w-11 rounded-full border border-border bg-muted" /><View className="min-w-0 flex-1"><Text className="font-semibold" numberOfLines={1}>{item.name}</Text><Text variant="small" numberOfLines={2}>{item.description || '还没有补充角色背景'}</Text></View><View className="gap-1"><Button size="sm" variant="ghost" onPress={() => openEditor(item)}><Text>编辑</Text></Button><Button size="sm" variant="ghost" onPress={() => void deleteCharacter(item.id)}><Text className="text-destructive">删除</Text></Button></View></CardContent></Card>
         )}
         ListEmptyComponent={!loading ? <View className="items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12"><Icon as={UserRound} size={28} className="text-muted-foreground" /><Text className="font-semibold">角色卡库还是空的</Text><Text variant="small">创建第一张角色卡，之后可以在不同对局复用。</Text></View> : null}
       />

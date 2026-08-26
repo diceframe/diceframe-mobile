@@ -17,7 +17,7 @@ export function useCharacters() {
         id: String(card.id || card.card_id || ''),
         name: String(card.character_name || '未命名角色'),
         description: String(card.background || [card.race, card.class].filter(Boolean).join(' · ')),
-        avatar: '',
+        portrait: card.portrait ?? null,
         createdAt: '',
         updatedAt: '',
       })).filter((card) => card.id))
@@ -31,7 +31,7 @@ export function useCharacters() {
 
   React.useEffect(() => { queueMicrotask(() => void load()) }, [load])
 
-  async function addCharacter(data: { name: string; description?: string; avatar?: string }) {
+  async function addCharacter(data: { name: string; description?: string }) {
     const result = await createCharacterCard({
       character_name: data.name,
       background: data.description || '',
@@ -43,7 +43,7 @@ export function useCharacters() {
     await load()
   }
 
-  async function updateCharacter(id: string, data: { name: string; description?: string; avatar?: string }) {
+  async function updateCharacter(id: string, data: { name: string; description?: string }) {
     const result = await updateCharacterCard(id, {
       character_name: data.name,
       background: data.description || '',
