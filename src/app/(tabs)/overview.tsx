@@ -21,6 +21,7 @@ import { gameSceneCoverSource } from '@/api/assets'
 import type { GameSummary } from '@/api/types'
 import { gameStateLabel, gameStateTone } from '@/lib/game-state'
 import { appLayoutForWidth } from '@/lib/layout'
+import { confirmDestructive } from '@/lib/confirm'
 import { useThemeToken } from '@/lib/theme'
 import { strings } from '@/lib/strings'
 import { CreateGameSheet } from '@/features/overview/CreateGameSheet'
@@ -276,6 +277,13 @@ export default function OverviewScreen() {
   }
 
   async function removeGame(key: string) {
+    const confirmed = await confirmDestructive({
+      title: strings.overview.deleteTitle,
+      message: strings.overview.deleteMessage,
+      confirmText: strings.common.confirm,
+      cancelText: strings.common.cancel,
+    })
+    if (!confirmed) return
     setBusy(true)
     try {
       await deleteGame(key)
@@ -295,6 +303,13 @@ export default function OverviewScreen() {
 
   async function batchRemove() {
     if (selected.size === 0) return
+    const confirmed = await confirmDestructive({
+      title: strings.overview.batchDeleteTitle,
+      message: strings.overview.batchDeleteMessage,
+      confirmText: strings.common.confirm,
+      cancelText: strings.common.cancel,
+    })
+    if (!confirmed) return
     setBusy(true)
     try {
       const result = await batchDeleteGames([...selected])
