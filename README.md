@@ -92,6 +92,15 @@ npm run lint      # eslint（react-hooks + compiler 规则）
 npx expo export --platform android --output-dir dist  # 本地整包冒烟
 ```
 
+### 不安装 Android Studio 构建 APK
+
+仓库提供手动触发的 GitHub Actions 工作流 `Build Android APK`。在 GitHub 仓库的
+**Actions** 页面选择该工作流，点击 **Run workflow**；构建完成后，从运行页面底部的
+Artifacts 下载 `diceframe-android-apk`。压缩包内包含可直接安装的
+`DiceFrame-android.apk` 及其 SHA-256 校验文件。
+
+该工作流使用测试签名，适合自用和内测，不用于 Google Play 正式发布。Artifact 保留 14 天。
+
 ## 目录导览
 
 ```
