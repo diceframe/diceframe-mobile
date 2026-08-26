@@ -1,1 +1,1 @@
-export { default } from '../lorebook'
+export { default } from '@/features/lorebook/LorebookScreen'
