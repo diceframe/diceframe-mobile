@@ -1,346 +1,79 @@
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Modal } from 'react-native';
-import { useMemory } from '@/hooks/useMemory';
-import { useState } from 'react';
-import { MemoryItem } from '@/types';
+import * as React from 'react'
+import { FlatList, View } from 'react-native'
+import { Brain, Search, X } from 'lucide-react-native'
+import { useRouter } from 'expo-router'
 
-export default function MemoryScreen() {
-  const { memories, addMemory, deleteMemory, searchMemories, refreshMemories } = useMemory();
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [formData, setFormData] = useState({ content: '', weight: 1 });
-  const [isSearching, setIsSearching] = useState(false);
+import { fetchGames } from '@/api/games'
+import { deleteMemory, fetchMemories, type MemoryRecord } from '@/api/library'
+import type { GameSummary } from '@/api/types'
+import { PageHeader } from '@/components/page-header'
+import { SheetSelect } from '@/components/patterns/sheet-select'
+import { Screen } from '@/components/screen'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Icon } from '@/components/ui/icon'
+import { Input } from '@/components/ui/input'
+import { Text } from '@/components/ui/text'
 
-  const handleSave = async () => {
-    if (!formData.content.trim()) return;
-    
-    await addMemory(formData);
-    setShowAddModal(false);
-    setFormData({ content: '', weight: 1 });
-  };
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      setIsSearching(false);
-      return;
-    }
-    
-    setIsSearching(true);
-    await searchMemories(searchQuery);
-  };
-
-  const handleClearSearch = () => {
-    setSearchQuery('');
-    setIsSearching(false);
-    refreshMemories();
-  };
-
-  const displayedMemories = isSearching ? memories : memories;
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>向量记忆</Text>
-        <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
-          <Text style={styles.buttonText}>添加记忆</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.searchSection}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="搜索记忆内容..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onSubmitEditing={handleSearch}
-        />
-        <View style={styles.searchButtons}>
-          <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
-            <Text style={styles.buttonText}>搜索</Text>
-          </TouchableOpacity>
-          {isSearching && (
-            <TouchableOpacity style={styles.clearButton} onPress={handleClearSearch}>
-              <Text style={styles.buttonText}>清除</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      {isSearching && (
-        <Text style={styles.searchResultText}>
-          搜索结果：找到 {displayedMemories.length} 条相关记忆
-        </Text>
-      )}
-
-      <FlatList
-        data={displayedMemories}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.memoryItem}>
-            <View style={styles.memoryHeader}>
-              <Text style={styles.memoryWeight}>权重：{item.weight}</Text>
-              {item.similarity && (
-                <Text style={styles.similarity}>相似度：{(item.similarity * 100).toFixed(1)}%</Text>
-              )}
-            </View>
-            <Text style={styles.memoryContent}>{item.content}</Text>
-            <View style={styles.memoryActions}>
-              <Text style={styles.memoryTime}>
-                创建时间：{new Date(item.createdAt).toLocaleString()}
-              </Text>
-              <TouchableOpacity style={styles.deleteButton} onPress={() => deleteMemory(item.id)}>
-                <Text style={styles.actionText}>删除</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>
-            {isSearching ? '未找到匹配的记忆' : '暂无记忆'}
-          </Text>
-        }
-      />
-
-      <Modal visible={showAddModal} animationType="slide" transparent>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>添加记忆</Text>
-            
-            <TextInput
-              style={[styles.input, styles.multilineInput]}
-              placeholder="记忆内容"
-              value={formData.content}
-              onChangeText={(text) => setFormData({ ...formData, content: text })}
-              multiline
-              numberOfLines={6}
-            />
-            
-            <View style={styles.weightSection}>
-              <Text style={styles.weightLabel}>记忆权重：</Text>
-              <View style={styles.weightPicker}>
-                {[1, 2, 3, 4, 5].map(weight => (
-                  <TouchableOpacity
-                    key={weight}
-                    style={[
-                      styles.weightOption,
-                      formData.weight === weight && styles.selectedWeight
-                    ]}
-                    onPress={() => setFormData({ ...formData, weight })}
-                  >
-                    <Text style={[
-                      styles.weightText,
-                      formData.weight === weight && styles.selectedWeightText
-                    ]}>
-                      {weight}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => {
-                setShowAddModal(false);
-                setFormData({ content: '', weight: 1 });
-              }}>
-                <Text style={styles.buttonText}>取消</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                <Text style={styles.buttonText}>保存</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
+function memoryText(item: MemoryRecord) {
+  const entity = String(item.entity || '')
+  const relation = String(item.relation || '')
+  const value = String(item.value || item.content || item.text || item.summary || '')
+  return [entity, relation, value].filter(Boolean).join(' · ')
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: '#fff',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  addButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#007AFF',
-    borderRadius: 6,
-  },
-  buttonText: {
-    color: '#fff',
-    fontWeight: '500',
-  },
-  searchSection: {
-    marginBottom: 16,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    fontSize: 16,
-  },
-  searchButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  searchButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#007AFF',
-    borderRadius: 6,
-  },
-  clearButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#999',
-    borderRadius: 6,
-  },
-  searchResultText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-    fontStyle: 'italic',
-  },
-  memoryItem: {
-    padding: 16,
-    marginBottom: 8,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-  },
-  memoryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  memoryWeight: {
-    fontSize: 14,
-    color: '#666',
-  },
-  similarity: {
-    fontSize: 14,
-    color: '#34C759',
-    fontWeight: '500',
-  },
-  memoryContent: {
-    fontSize: 16,
-    lineHeight: 22,
-    marginBottom: 12,
-  },
-  memoryActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  memoryTime: {
-    fontSize: 12,
-    color: '#999',
-  },
-  deleteButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#FF3B30',
-    borderRadius: 6,
-  },
-  actionText: {
-    color: '#fff',
-    fontSize: 14,
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 24,
-    fontSize: 16,
-    color: '#666',
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalContent: {
-    width: '90%',
-    padding: 24,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    fontSize: 16,
-  },
-  multilineInput: {
-    height: 120,
-    textAlignVertical: 'top',
-  },
-  weightSection: {
-    marginBottom: 16,
-  },
-  weightLabel: {
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  weightPicker: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  weightOption: {
-    width: 40,
-    height: 40,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  selectedWeight: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
-  weightText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  selectedWeightText: {
-    color: '#fff',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 16,
-  },
-  cancelButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#999',
-    borderRadius: 6,
-  },
-  saveButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#007AFF',
-    borderRadius: 6,
-  },
-});
+export default function MemoryScreen() {
+  const router = useRouter()
+  const [games, setGames] = React.useState<GameSummary[]>([])
+  const [gameKey, setGameKey] = React.useState('')
+  const [memories, setMemories] = React.useState<MemoryRecord[]>([])
+  const [query, setQuery] = React.useState('')
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState('')
+
+  React.useEffect(() => {
+    void fetchGames().then((result) => {
+      const next = result.games ?? []
+      setGames(next)
+      setGameKey((current) => current || next[0]?.game_key || '')
+    }).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
+  }, [])
+
+  const load = React.useCallback(async (targetGameKey: string, keyword = '') => {
+    if (!targetGameKey) { setMemories([]); setLoading(false); return }
+    setLoading(true)
+    try {
+      const result = await fetchMemories(targetGameKey, keyword)
+      setMemories(result.memories ?? result.entries ?? [])
+      setError('')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
+    finally { setLoading(false) }
+  }, [])
+
+  React.useEffect(() => { queueMicrotask(() => void load(gameKey)) }, [gameKey, load])
+
+  async function remove(id: number) {
+    const result = await deleteMemory(gameKey, id)
+    if (result.ok === false) throw new Error(result.error || '删除记忆失败')
+    await load(gameKey, query)
+  }
+
+  return (
+    <Screen className="px-4" style={{ width: '100%', maxWidth: 840, alignSelf: 'center' }}>
+      <PageHeader title="叙事记忆" subtitle="按对局管理服务器生成的长期事实" onBack={() => router.back()} className="px-0" />
+      {error ? <View className="mb-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3"><Text className="text-destructive">{error}</Text></View> : null}
+      <View className="mb-3"><SheetSelect options={games.map((game) => ({ label: game.world_name || game.game_key, value: game.game_key }))} value={gameKey} onValueChange={setGameKey} placeholder="选择对局" /></View>
+      <View className="mb-3 flex-row gap-2"><View className="flex-1 flex-row items-center gap-2 rounded-xl border border-border bg-card px-3"><Icon as={Search} size={17} className="text-muted-foreground" /><Input value={query} onChangeText={setQuery} onSubmitEditing={() => void load(gameKey, query)} placeholder="按实体名称检索" className="flex-1 border-0 px-0" /></View>{query ? <Button size="icon" variant="outline" onPress={() => { setQuery(''); void load(gameKey) }}><Icon as={X} size={18} /></Button> : <Button size="sm" disabled={!gameKey} onPress={() => void load(gameKey, query)}><Text>搜索</Text></Button>}</View>
+      <FlatList
+        data={memories}
+        keyExtractor={(item) => String(item.id)}
+        className="flex-1"
+        contentContainerClassName="gap-2 pb-8"
+        refreshing={loading}
+        onRefresh={() => void load(gameKey, query)}
+        renderItem={({ item }) => <Card className="gap-3 py-4"><CardContent className="gap-3 px-4"><View className="flex-row items-center gap-2"><View className="h-8 w-8 items-center justify-center rounded-full bg-primary/15"><Icon as={Brain} size={16} /></View><Text variant="small" className="flex-1">置信度 {Number(item.confidence ?? 1).toFixed(2)}{item.source_round ? ` · 第 ${item.source_round} 轮` : ''}</Text><Button size="sm" variant="ghost" onPress={() => void remove(item.id)}><Text className="text-destructive">遗忘</Text></Button></View><Text className="leading-6">{memoryText(item) || '空记忆'}</Text><Text variant="small">{String(item.updated_at || item.created_at || '')}</Text></CardContent></Card>}
+        ListEmptyComponent={!loading ? <View className="items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12"><Icon as={Brain} size={28} className="text-muted-foreground" /><Text className="font-semibold">{gameKey ? '这局还没有长期记忆' : '请先选择对局'}</Text><Text variant="small">记忆由对局推进时自动提取，不在这里手工伪造。</Text></View> : null}
+      />
+    </Screen>
+  )
+}

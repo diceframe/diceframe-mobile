@@ -1,120 +1,37 @@
-import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
-import { usePeer } from '@/hooks/usePeer';
-import { useState } from 'react';
+import { View } from 'react-native'
+import { RadioTower, ServerOff } from 'lucide-react-native'
+import { useRouter } from 'expo-router'
 
-export default function PeerConnectScreen() {
-  const { peers, connect, disconnect, status } = usePeer();
-  const [connecting, setConnecting] = useState<string | null>(null);
+import { PageHeader } from '@/components/page-header'
+import { Screen } from '@/components/screen'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Icon } from '@/components/ui/icon'
+import { Text } from '@/components/ui/text'
 
-  const handleConnect = async (peerId: string) => {
-    setConnecting(peerId);
-    try {
-      await connect(peerId);
-    } finally {
-      setConnecting(null);
-    }
-  };
+export default function PeerScreen() {
+  const router = useRouter()
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>P2P 连接</Text>
-      <Text style={styles.status}>连接状态: {status}</Text>
-      
-      <FlatList
-        data={peers}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.peerItem}>
-            <View style={styles.peerInfo}>
-              <Text style={styles.peerName}>{item.name}</Text>
-              <Text style={styles.peerId}>ID: {item.id}</Text>
-              <Text style={styles.peerStatus}>
-                状态: {item.connected ? '已连接' : '未连接'}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[
-                styles.connectButton,
-                item.connected && styles.disconnectButton,
-                connecting === item.id && styles.disabledButton,
-              ]}
-              onPress={() => item.connected ? disconnect(item.id) : handleConnect(item.id)}
-              disabled={connecting === item.id}
-            >
-              <Text style={styles.buttonText}>
-                {connecting === item.id ? '连接中...' : item.connected ? '断开' : '连接'}
-              </Text>
-            </TouchableOpacity>
+    <Screen className="px-4" style={{ width: '100%', maxWidth: 720, alignSelf: 'center' }}>
+      <PageHeader title="附近连接" subtitle="旧版兼容页面" onBack={() => router.back()} className="px-0" />
+      <Card className="mt-4 py-8">
+        <CardContent className="items-center gap-4 px-6">
+          <View className="h-16 w-16 items-center justify-center rounded-full border border-border bg-muted">
+            <Icon as={ServerOff} size={28} className="text-muted-foreground" />
           </View>
-        )}
-        ListEmptyComponent={<Text style={styles.emptyText}>暂无可用设备</Text>}
-      />
-    </View>
-  );
+          <View className="items-center gap-2">
+            <Text variant="h3" className="text-center">当前服务器未提供 P2P 设备接口</Text>
+            <Text className="text-center leading-6 text-muted-foreground">
+              移动端不会显示模拟设备或伪造连接状态。加入对局请使用服务器分享的房间链接或邀请码。
+            </Text>
+          </View>
+          <Button onPress={() => router.replace('/(tabs)/overview')}>
+            <Icon as={RadioTower} size={16} />
+            <Text>返回对局大厅</Text>
+          </Button>
+        </CardContent>
+      </Card>
+    </Screen>
+  )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: '#fff',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  status: {
-    fontSize: 16,
-    marginBottom: 24,
-    color: '#666',
-  },
-  peerItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    marginBottom: 8,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-  },
-  peerInfo: {
-    flex: 1,
-  },
-  peerName: {
-    fontSize: 18,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  peerId: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  peerStatus: {
-    fontSize: 14,
-    color: '#333',
-  },
-  connectButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#007AFF',
-    borderRadius: 6,
-  },
-  disconnectButton: {
-    backgroundColor: '#FF3B30',
-  },
-  disabledButton: {
-    backgroundColor: '#999',
-  },
-  buttonText: {
-    color: '#fff',
-    fontWeight: '500',
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 24,
-    fontSize: 16,
-    color: '#666',
-  },
-});

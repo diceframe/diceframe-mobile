@@ -1,45 +1,46 @@
-import { useState, useEffect } from 'react';
-import { MemoryItem } from '@/types';
+import * as React from 'react'
 
-export const useMemory = () => {
-  const [memories, setMemories] = useState<MemoryItem[]>([]);
+import { errorMessage } from '@/api/client'
+import { deleteMemory as deleteMemoryApi, fetchMemories } from '@/api/library'
+import type { MemoryItem } from '@/types'
 
-  useEffect(() => {
-    // 模拟获取记忆列表
-    const mockMemories: MemoryItem[] = [
-      { id: '1', content: '勇者来自异世界，擅长剑术', weight: 3, createdAt: new Date().toISOString() },
-    ];
-    setMemories(mockMemories);
-  }, []);
+function toMemoryItem(entry: Record<string, unknown>): MemoryItem {
+  return {
+    id: String(entry.id || ''),
+    content: [entry.entity, entry.relation, entry.value].filter(Boolean).map(String).join(' · '),
+    weight: Number(entry.confidence ?? 1),
+    createdAt: String(entry.created_at || ''),
+  }
+}
 
-  const addMemory = async (data: { content: string; weight: number }) => {
-    const newMemory: MemoryItem = {
-      id: Date.now().toString(),
-      ...data,
-      createdAt: new Date().toISOString(),
-    };
-    setMemories(prev => [...prev, newMemory]);
-  };
+/** 真实记忆存储是按对局隔离的，并且只允许系统提取、人工编辑/遗忘。 */
+export function useMemory(gameKey: string) {
+  const [memories, setMemories] = React.useState<MemoryItem[]>([])
+  const [loading, setLoading] = React.useState(false)
+  const [error, setError] = React.useState('')
 
-  const deleteMemory = async (id: string) => {
-    setMemories(prev => prev.filter(m => m.id !== id));
-  };
+  const searchMemories = React.useCallback(async (query = '') => {
+    if (!gameKey) { setMemories([]); return }
+    setLoading(true)
+    try {
+      const result = await fetchMemories(gameKey, query)
+      setMemories((result.memories ?? result.entries ?? []).map(toMemoryItem))
+      setError('')
+    } catch (cause) { setError(errorMessage(cause)) }
+    finally { setLoading(false) }
+  }, [gameKey])
 
-  const searchMemories = async (query: string) => {
-    // 模拟搜索记忆
-    const mockResults: MemoryItem[] = [
-      { id: '1', content: `包含"${query}"的记忆内容`, weight: 3, similarity: 0.85, createdAt: new Date().toISOString() },
-    ];
-    setMemories(mockResults);
-  };
+  React.useEffect(() => { queueMicrotask(() => void searchMemories()) }, [searchMemories])
 
-  const refreshMemories = async () => {
-    // 模拟刷新记忆列表
-    const mockMemories: MemoryItem[] = [
-      { id: '1', content: '勇者来自异世界，擅长剑术', weight: 3, createdAt: new Date().toISOString() },
-    ];
-    setMemories(mockMemories);
-  };
+  async function deleteMemory(id: string) {
+    const result = await deleteMemoryApi(gameKey, Number(id))
+    if (result.ok === false) throw new Error(result.error || '删除记忆失败')
+    await searchMemories()
+  }
 
-  return { memories, addMemory, deleteMemory, searchMemories, refreshMemories };
-};
+  async function addMemory(): Promise<never> {
+    throw new Error('服务器不支持手工创建叙事记忆；记忆会在对局推进时自动提取')
+  }
+
+  return { memories, loading, error, addMemory, deleteMemory, searchMemories, refreshMemories: searchMemories }
+}

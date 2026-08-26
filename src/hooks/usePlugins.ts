@@ -1,49 +1,52 @@
-import { useState, useEffect } from 'react';
-import { Plugin } from '@/types';
+import * as React from 'react'
 
-export const usePlugins = () => {
-  const [plugins, setPlugins] = useState<Plugin[]>([]);
+import { errorMessage } from '@/api/client'
+import { controlPlugin, fetchInstalledPlugins, fetchMarketplacePlugins, installMarketplacePlugin, uninstallPlugin as uninstallPluginApi } from '@/api/library'
+import type { Plugin } from '@/types'
 
-  useEffect(() => {
-    // 模拟获取插件列表
-    const mockPlugins: Plugin[] = [
-      { 
-        id: '1', 
-        name: 'Dice Roller', 
-        description: '掷骰子插件，支持各种骰子类型', 
-        version: '1.0.0',
-        author: 'System',
-        isInstalled: true,
-        isEnabled: true
-      },
-      { 
-        id: '2', 
-        name: 'Combat Tracker', 
-        description: '战斗管理插件', 
-        version: '1.2.0',
-        author: 'Community',
-        isInstalled: false,
-        isEnabled: false
-      },
-    ];
-    setPlugins(mockPlugins);
-  }, []);
+export function usePlugins() {
+  const [plugins, setPlugins] = React.useState<Plugin[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState('')
 
-  const installPlugin = async (pluginId: string) => {
-    setPlugins(prev => prev.map(p => p.id === pluginId ? { ...p, isInstalled: true } : p));
-  };
+  const load = React.useCallback(async () => {
+    setLoading(true)
+    try {
+      const [installedResult, marketResult] = await Promise.all([
+        fetchInstalledPlugins(),
+        fetchMarketplacePlugins().catch(() => ({ plugins: [] })),
+      ])
+      const installed = installedResult.plugins ?? []
+      const installedIds = new Set(installed.map((plugin) => plugin.id))
+      setPlugins([
+        ...installed.map((plugin) => ({ id: plugin.id, name: plugin.name, description: plugin.description, version: plugin.version || '-', author: '', isInstalled: true, isEnabled: plugin.running })),
+        ...(marketResult.plugins ?? []).filter((plugin) => !installedIds.has(plugin.id)).map((plugin) => ({ id: plugin.id, name: plugin.name, description: plugin.description, version: plugin.version || '-', author: typeof plugin.author === 'string' ? plugin.author : '', isInstalled: false, isEnabled: false })),
+      ])
+      setError('')
+    } catch (cause) { setError(errorMessage(cause)) } finally { setLoading(false) }
+  }, [])
 
-  const uninstallPlugin = async (pluginId: string) => {
-    setPlugins(prev => prev.map(p => p.id === pluginId ? { ...p, isInstalled: false, isEnabled: false } : p));
-  };
+  React.useEffect(() => { queueMicrotask(() => void load()) }, [load])
 
-  const togglePlugin = async (pluginId: string) => {
-    setPlugins(prev => prev.map(p => p.id === pluginId && p.isInstalled ? { ...p, isEnabled: !p.isEnabled } : p));
-  };
+  async function installPlugin(pluginId: string) {
+    const result = await installMarketplacePlugin(pluginId)
+    if (result.ok === false) throw new Error(result.error || '安装插件失败')
+    await load()
+  }
 
-  const searchPlugins = async (query: string) => {
-    // 模拟搜索插件，这里不修改状态，由页面处理筛选
-  };
+  async function uninstallPlugin(pluginId: string) {
+    const result = await uninstallPluginApi(pluginId)
+    if (result.ok === false) throw new Error(result.error || '卸载插件失败')
+    await load()
+  }
 
-  return { plugins, installPlugin, uninstallPlugin, togglePlugin, searchPlugins };
-};
+  async function togglePlugin(pluginId: string) {
+    const plugin = plugins.find((item) => item.id === pluginId)
+    if (!plugin?.isInstalled) return
+    const result = await controlPlugin(pluginId, plugin.isEnabled ? 'stop' : 'start')
+    if (result.ok === false) throw new Error(result.error || '切换插件状态失败')
+    await load()
+  }
+
+  return { plugins, loading, error, refresh: load, installPlugin, uninstallPlugin, togglePlugin }
+}

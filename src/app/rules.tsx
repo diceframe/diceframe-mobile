@@ -1,286 +1,56 @@
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, TextInput, Modal, Switch } from 'react-native';
-import { useRules } from '@/hooks/useRules';
-import { useState } from 'react';
-import { Rule } from '@/types';
+import * as React from 'react'
+import { FlatList, View } from 'react-native'
+import { CopyPlus, Gavel, Plus, Star } from 'lucide-react-native'
+import { useRouter } from 'expo-router'
+
+import { PageHeader } from '@/components/page-header'
+import { Sheet } from '@/components/patterns/sheet'
+import { SheetSelect } from '@/components/patterns/sheet-select'
+import { Screen } from '@/components/screen'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Icon } from '@/components/ui/icon'
+import { Input } from '@/components/ui/input'
+import { Text } from '@/components/ui/text'
+import { Textarea } from '@/components/ui/textarea'
+import { useRules } from '@/hooks/useRules'
 
 export default function RulesScreen() {
-  const { rules, addRule, updateRule, deleteRule, toggleRule } = useRules();
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editingRule, setEditingRule] = useState<Rule | null>(null);
-  const [formData, setFormData] = useState({ 
-    name: '', 
-    content: '', 
-    isEnabled: true,
-    isDefault: false 
-  });
+  const router = useRouter()
+  const { rules, loading, error, refresh, addRule, deleteRule } = useRules()
+  const [editorOpen, setEditorOpen] = React.useState(false)
+  const [sourceId, setSourceId] = React.useState('')
+  const [ruleId, setRuleId] = React.useState('')
+  const [name, setName] = React.useState('')
+  const [description, setDescription] = React.useState('')
+  const [busy, setBusy] = React.useState(false)
 
-  const handleSave = async () => {
-    if (!formData.name.trim() || !formData.content.trim()) return;
-    
-    if (editingRule) {
-      await updateRule(editingRule.id, formData);
-    } else {
-      await addRule(formData);
-    }
-    
-    setShowAddModal(false);
-    setEditingRule(null);
-    setFormData({ name: '', content: '', isEnabled: true, isDefault: false });
-  };
+  const effectiveSourceId = sourceId || rules[0]?.rule_id || ''
 
-  const handleEdit = (rule: Rule) => {
-    setEditingRule(rule);
-    setFormData({
-      name: rule.name,
-      content: rule.content,
-      isEnabled: rule.isEnabled,
-      isDefault: rule.isDefault,
-    });
-    setShowAddModal(true);
-  };
+  function close() { setEditorOpen(false); setRuleId(''); setName(''); setDescription('') }
+  async function save() {
+    if (!effectiveSourceId || !ruleId.trim() || !name.trim()) return
+    setBusy(true)
+    try { await addRule({ source_rule_id: effectiveSourceId, rule_id: ruleId.trim(), rule_name: name.trim(), description: description.trim() }); close() }
+    finally { setBusy(false) }
+  }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>规则管理</Text>
-        <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
-          <Text style={styles.buttonText}>添加规则</Text>
-        </TouchableOpacity>
-      </View>
-
+    <Screen className="px-4" style={{ width: '100%', maxWidth: 840, alignSelf: 'center' }}>
+      <PageHeader title="规则库" subtitle={loading ? '正在同步规则' : `${rules.length} 套可用规则`} onBack={() => router.back()} className="px-0" right={<Button size="sm" onPress={() => setEditorOpen(true)}><Icon as={Plus} size={16} /><Text>复制规则</Text></Button>} />
+      {error ? <View className="mb-3 flex-row items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3"><Text className="flex-1 text-destructive">{error}</Text><Button size="sm" variant="outline" onPress={() => void refresh()}><Text>重试</Text></Button></View> : null}
+      <View className="mb-3 flex-row items-center gap-3 rounded-xl border border-border bg-card p-4"><View className="h-10 w-10 items-center justify-center rounded-full bg-primary/15"><Icon as={CopyPlus} size={19} /></View><View className="flex-1"><Text className="font-semibold">从稳定规则复制</Text><Text variant="small">自定义规则由基础规则复制而来，避免从空白配置遗漏机制字段。</Text></View></View>
       <FlatList
         data={rules}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.ruleItem}>
-            <View style={styles.ruleHeader}>
-              <Text style={styles.ruleName}>{item.name}</Text>
-              <View style={styles.ruleMeta}>
-                {item.isDefault && <Text style={styles.defaultTag}>默认</Text>}
-                <Switch
-                  value={item.isEnabled}
-                  onValueChange={() => toggleRule(item.id)}
-                  trackColor={{ false: '#ddd', true: '#007AFF' }}
-                />
-              </View>
-            </View>
-            <Text style={styles.ruleContent} numberOfLines={2}>{item.content}</Text>
-            <View style={styles.ruleActions}>
-              <TouchableOpacity style={styles.editButton} onPress={() => handleEdit(item)}>
-                <Text style={styles.actionText}>编辑</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.deleteButton} onPress={() => deleteRule(item.id)}>
-                <Text style={styles.actionText}>删除</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-        ListEmptyComponent={<Text style={styles.emptyText}>暂无规则</Text>}
+        keyExtractor={(item) => item.rule_id}
+        className="flex-1"
+        contentContainerClassName="gap-2 pb-8"
+        refreshing={loading}
+        onRefresh={() => void refresh()}
+        renderItem={({ item }) => <Card className="gap-3 py-4"><CardContent className="gap-3 px-4"><View className="flex-row items-center gap-3"><View className="h-10 w-10 items-center justify-center rounded-xl border border-border bg-muted"><Icon as={Gavel} size={18} /></View><View className="min-w-0 flex-1"><View className="flex-row items-center gap-2"><Text className="flex-1 font-semibold" numberOfLines={1}>{item.rule_name || item.rule_id}</Text>{item.custom ? <View className="flex-row items-center gap-1 rounded-full bg-primary/15 px-2 py-1"><Icon as={Star} size={12} /><Text variant="small">自定义</Text></View> : null}</View><Text variant="small">{item.rule_id} · {item.dice_system || '通用骰制'}</Text></View></View><Text className="leading-6 text-muted-foreground" numberOfLines={3}>{item.description || '没有提供规则说明'}</Text>{item.custom ? <View className="flex-row justify-end"><Button size="sm" variant="ghost" onPress={() => void deleteRule(item.rule_id)}><Text className="text-destructive">删除自定义规则</Text></Button></View> : null}</CardContent></Card>}
+        ListEmptyComponent={!loading ? <View className="items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12"><Icon as={Gavel} size={28} className="text-muted-foreground" /><Text className="font-semibold">服务器没有返回规则</Text></View> : null}
       />
-
-      <Modal visible={showAddModal} animationType="slide" transparent>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {editingRule ? '编辑规则' : '添加规则'}
-            </Text>
-            
-            <TextInput
-              style={styles.input}
-              placeholder="规则名称"
-              value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
-            />
-            
-            <TextInput
-              style={[styles.input, styles.multilineInput]}
-              placeholder="规则内容"
-              value={formData.content}
-              onChangeText={(text) => setFormData({ ...formData, content: text })}
-              multiline
-              numberOfLines={6}
-            />
-            
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>启用规则：</Text>
-              <Switch
-                value={formData.isEnabled}
-                onValueChange={(value) => setFormData({ ...formData, isEnabled: value })}
-                trackColor={{ false: '#ddd', true: '#007AFF' }}
-              />
-            </View>
-            
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>设为默认规则：</Text>
-              <Switch
-                value={formData.isDefault}
-                onValueChange={(value) => setFormData({ ...formData, isDefault: value })}
-                trackColor={{ false: '#ddd', true: '#007AFF' }}
-              />
-            </View>
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => {
-                setShowAddModal(false);
-                setEditingRule(null);
-                setFormData({ name: '', content: '', isEnabled: true, isDefault: false });
-              }}>
-                <Text style={styles.buttonText}>取消</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                <Text style={styles.buttonText}>保存</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
+      <Sheet open={editorOpen} onClose={close} className="h-auto"><View className="gap-4 pt-1"><View><Text variant="h3">复制自定义规则</Text><Text variant="small">选择基础规则并指定稳定 ID；创建后可在新对局中选择。</Text></View><View className="gap-1.5"><Text variant="small" className="font-semibold">基础规则</Text><SheetSelect options={rules.map((rule) => ({ label: rule.rule_name || rule.rule_id, value: rule.rule_id }))} value={effectiveSourceId} onValueChange={setSourceId} placeholder="选择基础规则" /></View><View className="gap-1.5"><Text variant="small" className="font-semibold">规则 ID</Text><Input value={ruleId} onChangeText={setRuleId} placeholder="例如 my_campaign_rule" autoCapitalize="none" /></View><View className="gap-1.5"><Text variant="small" className="font-semibold">显示名称</Text><Input value={name} onChangeText={setName} placeholder="规则名称" /></View><Textarea value={description} onChangeText={setDescription} placeholder="规则说明（可选）" className="min-h-24" /><View className="flex-row gap-2"><Button variant="outline" className="flex-1" onPress={close}><Text>取消</Text></Button><Button className="flex-1" disabled={busy || !effectiveSourceId || !ruleId.trim() || !name.trim()} onPress={() => void save()}><Text>{busy ? '创建中' : '创建'}</Text></Button></View></View></Sheet>
+    </Screen>
+  )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
-    backgroundColor: '#fff',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  addButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#007AFF',
-    borderRadius: 6,
-  },
-  buttonText: {
-    color: '#fff',
-    fontWeight: '500',
-  },
-  ruleItem: {
-    padding: 16,
-    marginBottom: 8,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-  },
-  ruleHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  ruleName: {
-    fontSize: 18,
-    fontWeight: '500',
-    flex: 1,
-  },
-  ruleMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  defaultTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    backgroundColor: '#34C759',
-    color: '#fff',
-    borderRadius: 4,
-    fontSize: 12,
-  },
-  ruleContent: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-    lineHeight: 20,
-  },
-  ruleActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  editButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#007AFF',
-    borderRadius: 6,
-  },
-  deleteButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#FF3B30',
-    borderRadius: 6,
-  },
-  actionText: {
-    color: '#fff',
-    fontSize: 14,
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 24,
-    fontSize: 16,
-    color: '#666',
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalContent: {
-    width: '90%',
-    maxHeight: '80%',
-    padding: 24,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    fontSize: 16,
-  },
-  multilineInput: {
-    height: 120,
-    textAlignVertical: 'top',
-  },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  switchLabel: {
-    fontSize: 16,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 16,
-  },
-  cancelButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#999',
-    borderRadius: 6,
-  },
-  saveButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#007AFF',
-    borderRadius: 6,
-  },
-});

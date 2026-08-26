@@ -299,7 +299,7 @@ export async function switchGameWorld(gameKey: string, worldId: string): Promise
 export async function fetchWorldCandidates(gameKey: string, language = 'zh-CN'): Promise<WorldCandidate[]> {
   const [templateData, worldData] = await Promise.all([
     fetchWorldTemplates(),
-    api<{ worlds?: Array<{ id?: string; world_id?: string; name?: string; world_name?: string; description?: string; entry_count?: number }> }>('/worlds'),
+    api<{ worlds?: { id?: string; world_id?: string; name?: string; world_name?: string; description?: string; entry_count?: number }[] }>('/worlds'),
   ])
   const candidates: WorldCandidate[] = []
   const seen = new Set<string>()

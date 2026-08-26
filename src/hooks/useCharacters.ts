@@ -1,48 +1,62 @@
-import { useState, useEffect } from 'react';
-import { Character, Npc } from '@/types';
+import * as React from 'react'
 
-export const useCharacters = () => {
-  const [characters, setCharacters] = useState<Character[]>([]);
-  const [npcs, setNpcs] = useState<Npc[]>([]);
+import { createCharacterCard, deleteCharacterCard, fetchCharacterCards, updateCharacterCard } from '@/api/library'
+import { errorMessage } from '@/api/client'
+import type { Character } from '@/types'
 
-  useEffect(() => {
-    // 模拟获取角色列表
-    const mockCharacters: Character[] = [
-      { id: '1', name: '勇者', description: '来自异世界的勇者', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-    ];
-    const mockNpcs: Npc[] = [
-      { id: '1', name: '村长', description: '新手村的引导NPC', createdAt: new Date().toISOString() },
-    ];
-    setCharacters(mockCharacters);
-    setNpcs(mockNpcs);
-  }, []);
+export function useCharacters() {
+  const [characters, setCharacters] = React.useState<Character[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState('')
 
-  const addCharacter = async (data: { name: string; description?: string; avatar?: string }) => {
-    const newCharacter: Character = {
-      id: Date.now().toString(),
-      ...data,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setCharacters(prev => [...prev, newCharacter]);
-  };
+  const load = React.useCallback(async () => {
+    setLoading(true)
+    try {
+      const result = await fetchCharacterCards()
+      setCharacters((result.cards ?? []).map((card) => ({
+        id: String(card.id || card.card_id || ''),
+        name: String(card.character_name || '未命名角色'),
+        description: String(card.background || [card.race, card.class].filter(Boolean).join(' · ')),
+        avatar: '',
+        createdAt: '',
+        updatedAt: '',
+      })).filter((card) => card.id))
+      setError('')
+    } catch (cause) {
+      setError(errorMessage(cause))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  const updateCharacter = async (id: string, data: { name: string; description?: string; avatar?: string }) => {
-    setCharacters(prev => prev.map(c => c.id === id ? { ...c, ...data, updatedAt: new Date().toISOString() } : c));
-  };
+  React.useEffect(() => { queueMicrotask(() => void load()) }, [load])
 
-  const deleteCharacter = async (id: string) => {
-    setCharacters(prev => prev.filter(c => c.id !== id));
-  };
+  async function addCharacter(data: { name: string; description?: string; avatar?: string }) {
+    const result = await createCharacterCard({
+      character_name: data.name,
+      background: data.description || '',
+      race: '人类',
+      class: '冒险者',
+      source: '移动端角色名册',
+    })
+    if (result.ok === false) throw new Error(result.error || '保存角色失败')
+    await load()
+  }
 
-  const addNpc = async (data: { name: string; description?: string }) => {
-    const newNpc: Npc = {
-      id: Date.now().toString(),
-      ...data,
-      createdAt: new Date().toISOString(),
-    };
-    setNpcs(prev => [...prev, newNpc]);
-  };
+  async function updateCharacter(id: string, data: { name: string; description?: string; avatar?: string }) {
+    const result = await updateCharacterCard(id, {
+      character_name: data.name,
+      background: data.description || '',
+    })
+    if (result.ok === false) throw new Error(result.error || '更新角色失败')
+    await load()
+  }
 
-  return { characters, npcs, addCharacter, updateCharacter, deleteCharacter, addNpc };
-};
+  async function removeCharacter(id: string) {
+    const result = await deleteCharacterCard(id)
+    if (result.ok === false) throw new Error(result.error || '删除角色失败')
+    await load()
+  }
+
+  return { characters, loading, error, refresh: load, addCharacter, updateCharacter, deleteCharacter: removeCharacter }
+}

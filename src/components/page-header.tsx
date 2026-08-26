@@ -23,7 +23,7 @@ export function PageHeader({
   right?: React.ReactNode
 }) {
   return (
-    <View className={cn('flex-row items-center gap-2 px-4 py-3', className)} {...props}>
+    <View className={cn('flex-row items-center gap-3 px-4 pb-4 pt-5', className)} {...props}>
       {onBack ? (
         <Button
           variant="ghost"
@@ -35,12 +35,12 @@ export function PageHeader({
           <Icon as={ChevronLeft} size={22} />
         </Button>
       ) : null}
-      <View className="flex-1 gap-0">
-        <Text variant="h2" numberOfLines={1}>
+      <View className="min-w-0 flex-1">
+        <Text variant="h2" className="border-b-0 pb-1 pt-1 leading-[1.35]" numberOfLines={1}>
           {title}
         </Text>
         {subtitle ? (
-          <Text variant="small" numberOfLines={1}>
+          <Text variant="small" className="mt-1.5 leading-5" numberOfLines={1}>
             {subtitle}
           </Text>
         ) : null}

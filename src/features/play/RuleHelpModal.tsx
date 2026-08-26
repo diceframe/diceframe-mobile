@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { ScrollView, View } from 'react-native'
 
-import { Button } from '@/components/ui/button'
 import { Sheet } from '@/components/patterns/sheet'
 import { Text } from '@/components/ui/text'
 import type { RuleMeta } from '@/api/types'

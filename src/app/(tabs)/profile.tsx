@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { ScrollView, View } from 'react-native'
 import Slider from '@react-native-community/slider'
-import { Moon, Sun, Monitor, Network, Brain, ScrollText as LogsIcon, Gavel, FileText } from 'lucide-react-native'
+import { Moon, Sun, Monitor, Brain, ScrollText as LogsIcon, Gavel, FileText, PackageOpen } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import Constants from 'expo-constants'
 
@@ -32,7 +32,7 @@ export default function ProfileScreen() {
       className="px-4"
       style={{ width: '100%', maxWidth: 760, alignSelf: 'center' }}
     >
-      <PageHeader title="我的" className="px-0" />
+      <PageHeader title="我的" subtitle="身份、偏好与桌面工具" className="px-0" />
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-4 pb-8">
         {/* 服务器 */}
         <Card className="gap-3">
@@ -167,17 +167,17 @@ export default function ProfileScreen() {
             <CardTitle>更多功能</CardTitle>
           </CardHeader>
           <CardContent className="gap-2">
-            <Button variant="outline" className="justify-start gap-2" onPress={() => router.push('/peer')}>
-              <Icon as={Network} size={16} />
-              <Text>P2P 连接</Text>
+            <Button variant="outline" className="justify-start gap-2" onPress={() => router.push('/plugins')}>
+              <Icon as={PackageOpen} size={16} />
+              <Text>插件与内容包</Text>
             </Button>
             <Button variant="outline" className="justify-start gap-2" onPress={() => router.push('/memory')}>
               <Icon as={Brain} size={16} />
-              <Text>向量记忆</Text>
+              <Text>叙事记忆</Text>
             </Button>
             <Button variant="outline" className="justify-start gap-2" onPress={() => router.push('/logs')}>
               <Icon as={LogsIcon} size={16} />
-              <Text>系统日志</Text>
+              <Text>对局记录</Text>
             </Button>
             <Button variant="outline" className="justify-start gap-2" onPress={() => router.push('/rules')}>
               <Icon as={Gavel} size={16} />
@@ -185,7 +185,11 @@ export default function ProfileScreen() {
             </Button>
             <Button variant="outline" className="justify-start gap-2" onPress={() => router.push('/legal/terms')}>
               <Icon as={FileText} size={16} />
-              <Text>服务条款与隐私政策</Text>
+              <Text>服务条款</Text>
+            </Button>
+            <Button variant="outline" className="justify-start gap-2" onPress={() => router.push('/legal/privacy')}>
+              <Icon as={FileText} size={16} />
+              <Text>隐私政策</Text>
             </Button>
           </CardContent>
         </Card>

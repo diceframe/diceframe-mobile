@@ -1,46 +1,34 @@
-import { useState, useEffect } from 'react';
-import { Rule } from '@/types';
+import * as React from 'react'
 
-export const useRules = () => {
-  const [rules, setRules] = useState<Rule[]>([]);
+import { errorMessage } from '@/api/client'
+import { createCustomRule, deleteCustomRule, fetchRuleLibrary } from '@/api/library'
+import type { RuleSummary } from '@/api/types'
 
-  useEffect(() => {
-    // 模拟获取规则列表
-    const mockRules: Rule[] = [
-      { 
-        id: '1', 
-        name: '基础规则', 
-        content: '这是默认的游戏规则', 
-        isEnabled: true,
-        isDefault: true,
-        createdAt: new Date().toISOString(), 
-        updatedAt: new Date().toISOString() 
-      },
-    ];
-    setRules(mockRules);
-  }, []);
+export function useRules() {
+  const [rules, setRules] = React.useState<RuleSummary[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState('')
 
-  const addRule = async (data: { name: string; content: string; isEnabled: boolean; isDefault: boolean }) => {
-    const newRule: Rule = {
-      id: Date.now().toString(),
-      ...data,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setRules(prev => [...prev, newRule]);
-  };
+  const load = React.useCallback(async () => {
+    setLoading(true)
+    try { const result = await fetchRuleLibrary(); setRules(result.rules ?? []); setError('') }
+    catch (cause) { setError(errorMessage(cause)) }
+    finally { setLoading(false) }
+  }, [])
 
-  const updateRule = async (id: string, data: { name: string; content: string; isEnabled: boolean; isDefault: boolean }) => {
-    setRules(prev => prev.map(r => r.id === id ? { ...r, ...data, updatedAt: new Date().toISOString() } : r));
-  };
+  React.useEffect(() => { queueMicrotask(() => void load()) }, [load])
 
-  const deleteRule = async (id: string) => {
-    setRules(prev => prev.filter(r => r.id !== id));
-  };
+  async function addRule(payload: { source_rule_id: string; rule_id: string; rule_name: string; description: string }) {
+    const result = await createCustomRule(payload)
+    if (result.ok === false) throw new Error(result.error || '创建规则失败')
+    await load()
+  }
 
-  const toggleRule = async (id: string) => {
-    setRules(prev => prev.map(r => r.id === id ? { ...r, isEnabled: !r.isEnabled, updatedAt: new Date().toISOString() } : r));
-  };
+  async function deleteRule(ruleId: string) {
+    const result = await deleteCustomRule(ruleId)
+    if (result.ok === false) throw new Error(result.error || '删除规则失败')
+    await load()
+  }
 
-  return { rules, addRule, updateRule, deleteRule, toggleRule };
-};
+  return { rules, loading, error, refresh: load, addRule, deleteRule }
+}

@@ -2,7 +2,6 @@ import * as React from 'react'
 import { ActivityIndicator, ScrollView, View } from 'react-native'
 import { Image as ExpoImage } from 'expo-image'
 
-import { Button } from '@/components/ui/button'
 import { Sheet } from '@/components/patterns/sheet'
 import { Text } from '@/components/ui/text'
 import type { GeneratedImageItem } from '@/api/types'

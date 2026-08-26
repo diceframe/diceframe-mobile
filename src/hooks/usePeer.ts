@@ -1,31 +1,23 @@
-import { useState, useEffect } from 'react';
-import { Peer } from '@/types';
+import type { Peer } from '@/types'
 
-export const usePeer = () => {
-  const [peers, setPeers] = useState<Peer[]>([]);
-  const [status, setStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
+const UNSUPPORTED_MESSAGE = '当前服务器未提供 P2P 设备发现与连接接口'
 
-  useEffect(() => {
-    // 模拟获取P2P设备列表
-    const mockPeers: Peer[] = [
-      { id: '1', name: 'User的iPhone', connected: false, lastSeen: new Date().toISOString() },
-      { id: '2', name: 'User的iPad', connected: false, lastSeen: new Date().toISOString() },
-    ];
-    setPeers(mockPeers);
-  }, []);
+/**
+ * 保留给旧路由的兼容边界。服务端提供真实接口前，不生成模拟设备或连接状态。
+ */
+export function usePeer() {
+  const peers: Peer[] = []
 
-  const connect = async (peerId: string) => {
-    setStatus('connecting');
-    // 模拟连接请求
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setPeers(prev => prev.map(p => p.id === peerId ? { ...p, connected: true } : p));
-    setStatus('connected');
-  };
+  async function unsupported(): Promise<never> {
+    throw new Error(UNSUPPORTED_MESSAGE)
+  }
 
-  const disconnect = async (peerId: string) => {
-    setPeers(prev => prev.map(p => p.id === peerId ? { ...p, connected: false } : p));
-    setStatus('disconnected');
-  };
-
-  return { peers, status, connect, disconnect };
-};
+  return {
+    peers,
+    loading: false,
+    error: UNSUPPORTED_MESSAGE,
+    refreshPeers: unsupported,
+    connectPeer: unsupported,
+    disconnectPeer: unsupported,
+  }
+}

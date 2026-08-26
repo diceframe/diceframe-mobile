@@ -26,12 +26,18 @@ export function RoomPasswordModal({
 }: RoomPasswordModalProps) {
   const [password, setPassword] = React.useState('')
 
-  React.useEffect(() => {
-    if (open) setPassword('')
-  }, [open])
+  function close() {
+    setPassword('')
+    onClose()
+  }
+
+  function save() {
+    onSave(password)
+    setPassword('')
+  }
 
   return (
-    <Sheet open={open} onClose={onClose}>
+    <Sheet open={open} onClose={close}>
       <View className="gap-4 pb-4">
         <Text variant="h3">{hasPassword ? '修改房间密码' : '设置房间密码'}</Text>
         <Text variant="muted">
@@ -45,7 +51,7 @@ export function RoomPasswordModal({
           autoCapitalize="none"
           editable={!busy}
         />
-        <Button disabled={busy} onPress={() => onSave(password)}>
+        <Button disabled={busy} onPress={save}>
           <Text>{busy ? '保存中…' : '保存'}</Text>
         </Button>
       </View>
