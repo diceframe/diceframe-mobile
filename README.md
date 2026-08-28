@@ -41,7 +41,7 @@ npx expo start        # 手机装 Expo Go 扫码，或 Android 调试构建
 把隧道公网地址写进本机专用的 `.env.local`：
 
 ```env
-DICEFRAME_EXPO_PROXY_URL=http://43.248.188.28:32218
+DICEFRAME_EXPO_PROXY_URL=http://YOUR_TUNNEL_HOST:32218
 ```
 
 之后直接运行：
