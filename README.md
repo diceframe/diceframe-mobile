@@ -29,7 +29,8 @@ login/join 为全屏流程页。
 前置：Node ≥ 20；PC 上运行 DiceFrame 服务端（`python web_server.py`，默认端口 18000）。
 
 ```bash
-cd mobile
+git clone https://github.com/diceframe/diceframe-mobile.git
+cd diceframe-mobile
 npm install
 npx expo start        # 手机装 Expo Go 扫码，或 Android 调试构建
 ```
@@ -37,7 +38,7 @@ npx expo start        # 手机装 Expo Go 扫码，或 Android 调试构建
 如果使用内网穿透把 Expo 暴露给外部设备，隧道应配置为：本地 `127.0.0.1:8081`，远程端口例如
 `32218`。本机 Metro 仍然固定监听 `8081`，不要把本地端口改成 `32218`。
 
-把隧道公网地址写进本机专用的 `mobile/.env.local`：
+把隧道公网地址写进本机专用的 `.env.local`：
 
 ```env
 DICEFRAME_EXPO_PROXY_URL=http://43.248.188.28:32218
@@ -50,7 +51,7 @@ npm run start:tunnel
 ```
 
 这个命令会自动把本机配置转换为 Expo 的对外地址，只覆盖二维码/开发服务器地址，不改变本机
-Metro 的 `8081` 端口。`mobile/.env.local` 已被 Git 忽略，不会提交个人隧道地址。
+Metro 的 `8081` 端口。`.env.local` 已被 Git 忽略，不会提交个人隧道地址。
 
 1. App 内"服务器地址"填 PC 的局域网地址（如 `192.168.1.5:18000`）
 2. Owner 输入访问密码登录；玩家从 Web 端复制分享链接，在 App「通过分享链接加入」粘贴
@@ -75,10 +76,11 @@ Expo Web 页面与后端不同源，浏览器会按 CORS 拦截 API/SSE 请求�
   若部署在后端同一域下，登录页同样留空直连，部署在其他域则填地址并配合后端
   `TRPG_WEB_CORS_ORIGINS` 白名单
 
-## 与 Web 端（frontend-v2）的关系
+## 与 DiceFrame 主仓库的关系
 
-- 后端零改动，REST + SSE 契约完全一致
-- **类型契约**：`src/api/types.ts` 是 `frontend-v2/src/api/types.ts` 的 v1 子集副本，
+- 服务端与 Web 端位于 [diceframe/diceframe](https://github.com/diceframe/diceframe)
+- 后端零改动，移动端通过 REST + SSE 契约连接 DiceFrame 服务端
+- **类型契约**：`src/api/types.ts` 是主仓库 `frontend-v2/src/api/types.ts` 的 v1 子集副本，
   后端字段变更时两处同步
 - v1 不含：创建向导、AI 服务商设置、世界书/记忆/规则编辑、角色卡库、P2P 直连、
   插件市场、swipes、地图节点图——这些继续用 Web 端

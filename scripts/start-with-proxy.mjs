@@ -27,7 +27,7 @@ const proxyUrl =
   localEnv.DICEFRAME_EXPO_PROXY_URL
 
 if (!proxyUrl) {
-  console.error('缺少 DICEFRAME_EXPO_PROXY_URL，请写入 mobile/.env.local。')
+  console.error('缺少 DICEFRAME_EXPO_PROXY_URL，请写入 .env.local。')
   process.exit(1)
 }
 
