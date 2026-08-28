@@ -43,7 +43,8 @@
       ],
       "expo-audio",
       "expo-image",
-      "./plugins/withCleartextTraffic"
+      "./plugins/withCleartextTraffic",
+      "./plugins/withAndroidReleaseSigning"
     ],
     "experiments": {
       "typedRoutes": true,
