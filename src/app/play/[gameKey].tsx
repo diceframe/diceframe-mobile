@@ -41,9 +41,11 @@ import { WorldSwitchModal } from '@/features/play/WorldSwitchModal'
 import { useSpeaker } from '@/features/play/useSpeaker'
 import { useVoiceInput } from '@/features/play/useVoiceInput'
 import { appendActionText } from '@/lib/action-text'
+import { confirmDestructive } from '@/lib/confirm'
 import { gameStateLabel } from '@/lib/game-state'
 import { appLayoutForWidth } from '@/lib/layout'
 import { buildShareLink } from '@/lib/share-link'
+import { shareExportBlob } from '@/lib/share-export'
 import { strings } from '@/lib/strings'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import { selectGmThinking, useGameStore } from '@/stores/game'
@@ -218,12 +220,13 @@ export default function PlayScreen() {
   async function handleInvite() {
     if (!gameKey) return
     try {
+      const settings = useSettingsStore.getState()
       const config = await fetchAppConfig()
       const link = buildShareLink(
         gameKey,
-        config.public_base_url || undefined,
+        config.public_base_url || settings.baseUrl,
         undefined,
-        undefined,
+        settings.baseUrl,
       )
       await copyToClipboard(link)
     } catch {
@@ -235,16 +238,12 @@ export default function PlayScreen() {
     if (!gameKey) return
     try {
       const blob = await exportGame(gameKey)
-      // 使用 RN 的 Share API 分享文件
-      const reader = new FileReader()
-      reader.onload = async () => {
-        try {
-          await Share.share({ message: `DiceFrame 存档: ${detail?.world_name || gameKey}` })
-        } catch {
-          // 用户取消分享
-        }
-      }
-      reader.readAsDataURL(blob)
+      const safeKey = gameKey.replace(/[^a-z0-9._-]+/gi, '_').slice(0, 80) || 'game'
+      await shareExportBlob(
+        blob,
+        `diceframe-${safeKey}-${Date.now()}.zip`,
+        strings.play.exportDialogTitle,
+      )
     } catch {
       // 错误由 store 处理
     }
@@ -322,6 +321,13 @@ export default function PlayScreen() {
   }
 
   async function handleReset() {
+    const confirmed = await confirmDestructive({
+      title: strings.play.resetTitle,
+      message: strings.play.resetMessage,
+      confirmText: strings.common.confirm,
+      cancelText: strings.common.cancel,
+    })
+    if (!confirmed) return
     try {
       await useGameStore.getState().resetGame()
     } catch {
@@ -330,6 +336,13 @@ export default function PlayScreen() {
   }
 
   async function handleRestart() {
+    const confirmed = await confirmDestructive({
+      title: strings.play.restartTitle,
+      message: strings.play.restartMessage,
+      confirmText: strings.common.confirm,
+      cancelText: strings.common.cancel,
+    })
+    if (!confirmed) return
     try {
       await useGameStore.getState().restartGame()
     } catch {
@@ -338,6 +351,13 @@ export default function PlayScreen() {
   }
 
   async function handleKick(uid: string) {
+    const confirmed = await confirmDestructive({
+      title: strings.play.kickTitle,
+      message: strings.play.kickMessage,
+      confirmText: strings.common.confirm,
+      cancelText: strings.common.cancel,
+    })
+    if (!confirmed) return
     try {
       await useGameStore.getState().kick(uid)
     } catch {
@@ -356,12 +376,13 @@ export default function PlayScreen() {
   async function handleCopyLink(uid: string) {
     if (!gameKey) return
     try {
+      const settings = useSettingsStore.getState()
       const config = await fetchAppConfig()
       const link = buildShareLink(
         gameKey,
-        config.public_base_url || undefined,
+        config.public_base_url || settings.baseUrl,
         uid,
-        undefined,
+        settings.baseUrl,
       )
       await copyToClipboard(link)
     } catch {
