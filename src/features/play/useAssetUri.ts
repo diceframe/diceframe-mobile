@@ -14,17 +14,17 @@ function sourceKey(source: AssetSource | null): string {
 export function useAssetUri(source: AssetSource | null): string | null {
   const key = sourceKey(source)
   const [loaded, setLoaded] = React.useState<{ key: string; uri: string } | null>(null)
-  const stableSource = React.useMemo(() => source, [key])
 
+  // effect 只依赖 key：source 每次渲染都是新对象，键控内容不变时不重新加载
   React.useEffect(() => {
     let cancelled = false
-    if (!stableSource) return () => {
+    if (!source) return () => {
       cancelled = true
     }
 
-    const load = stableSource.apiPath
-      ? apiAssetDataUri(stableSource.apiPath).catch(() => null)
-      : Promise.resolve(stableSource.uri)
+    const load = source.apiPath
+      ? apiAssetDataUri(source.apiPath).catch(() => null)
+      : Promise.resolve(source.uri)
 
     void load.then((value) => {
       if (!cancelled && value) setLoaded({ key, uri: value })
@@ -33,7 +33,7 @@ export function useAssetUri(source: AssetSource | null): string | null {
     return () => {
       cancelled = true
     }
-  }, [key, stableSource])
+  }, [key])
 
   return loaded?.key === key ? loaded.uri : null
 }

@@ -31,7 +31,7 @@ export function useLogs(gameKey: string) {
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState('')
 
-  const refreshLogs = React.useCallback(async () => {
+  async function refreshLogs() {
     if (!gameKey) { setLogs([]); return }
     setLoading(true)
     try {
@@ -59,9 +59,9 @@ export function useLogs(gameKey: string) {
       setError('')
     } catch (cause) { setError(errorMessage(cause)) }
     finally { setLoading(false) }
-  }, [gameKey])
+  }
 
-  React.useEffect(() => { queueMicrotask(() => void refreshLogs()) }, [refreshLogs])
+  React.useEffect(() => { queueMicrotask(() => void refreshLogs()) }, [gameKey])
 
   return { logs, loading, error, refreshLogs }
 }

@@ -416,6 +416,8 @@ export interface RuleMeta {
   currency?: string
   auto_hp?: boolean
   max_skills?: number
+  skill_point_total?: number
+  max_skill_value?: number
   skill_pool?: SkillSpec[]
   skills?: SkillSpec[]
   rule_special_stats?: SpecialStatSpec[]
@@ -429,6 +431,17 @@ export interface CharacterListResponse {
   rule_attrs_total?: number
   rule_meta?: RuleMeta
   rule_special_stats?: SpecialStatSpec[]
+  [key: string]: unknown
+}
+
+/** 规则角色模式（GET /rules/{id}/character-schema），编辑角色卡时取技能池 */
+export interface CharacterSchemaResponse {
+  ok?: boolean
+  error?: string
+  rule_attrs?: RuleAttribute[]
+  rule_attrs_total?: number
+  rule_meta?: RuleMeta
+  skill_pool?: (string | SkillSpec)[]
   [key: string]: unknown
 }
 
@@ -535,6 +548,14 @@ export interface PlayerContextResponse {
 
 // ---------- 世界观模板 / 规则（创建对局选择器） ----------
 
+/** GM 叙事风格（仅用户自建世界可编辑，对齐 Web GmStyle） */
+export interface GmStyle {
+  tone?: string
+  verbosity?: 'brief' | 'normal' | 'detailed'
+  custom_instructions?: string
+  [key: string]: unknown
+}
+
 export interface WorldTemplateSummary {
   id?: string
   world_id?: string
@@ -545,11 +566,49 @@ export interface WorldTemplateSummary {
   recommended_rules?: string[]
   scene_image?: SceneImageRef
   language?: string
+  active_locale?: string
+  lorebook_count?: number
+  source?: 'builtin' | 'user' | 'plugin'
+  /** 对局临时模板（*_copy_* / *_blank_*），图鉴中应跳过 */
+  game_scoped?: boolean
+  plugin_id?: string
+  plugin_name?: string
+  gm_style?: GmStyle | null
   [key: string]: unknown
 }
 
 export interface WorldTemplatesResponse {
   templates?: WorldTemplateSummary[]
+}
+
+/** GET /worlds 的用户世界行（lore store + gm_style 附加字段） */
+export interface WorldSummary {
+  id?: string
+  world_id?: string
+  name?: string
+  world_name?: string
+  description?: string
+  entry_count?: number
+  language?: string
+  scene_image?: SceneImageRef
+  gm_style?: GmStyle | null
+  [key: string]: unknown
+}
+
+export interface WorldCloneResponse {
+  ok?: boolean
+  error?: string
+  world_id?: string
+  name?: string
+  language?: string
+}
+
+/** GET /adventures 的冒险包摘要（图鉴徽章只用 name + recommended_world_id） */
+export interface AdventureSummary {
+  adventure_id?: string
+  name?: string
+  recommended_world_id?: string
+  [key: string]: unknown
 }
 
 export interface RuleSummary {

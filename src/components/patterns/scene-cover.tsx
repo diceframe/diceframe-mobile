@@ -32,13 +32,13 @@ export function SceneCover({
   const [image, setImage] = React.useState<ImageRef | null>(null)
   const [failed, setFailed] = React.useState(false)
   const key = sourceKey(source)
-  const stableSource = React.useMemo(() => source, [key])
 
+  // effect 只依赖 key：source 每次渲染都是新对象，键控内容不变时不重新加载
   React.useEffect(() => {
     let cancelled = false
-    if (!stableSource) return () => { cancelled = true }
+    if (!source) return () => { cancelled = true }
 
-    void loadSourceUri(stableSource)
+    void loadSourceUri(source)
       .then((uri) => Image.loadAsync({ uri }))
       .then((loaded) => {
         if (!cancelled) {
@@ -53,9 +53,9 @@ export function SceneCover({
     return () => {
       cancelled = true
     }
-  }, [key, stableSource])
+  }, [key])
 
-  if (!stableSource || failed || !image) {
+  if (!source || failed || !image) {
     // 加载中/失败：占位底色，保持卡片布局稳定
     return <View className={cn('bg-muted', className)} accessibilityLabel={accessibilityLabel} />
   }

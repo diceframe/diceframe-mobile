@@ -30,13 +30,13 @@ export function RemoteAvatar({
   const [image, setImage] = React.useState<ImageRef | null>(null)
   const [failed, setFailed] = React.useState(false)
   const key = sourceKey(source)
-  const stableSource = React.useMemo(() => source, [key])
 
+  // effect 只依赖 key：source 每次渲染都是新对象，键控内容不变时不重新加载
   React.useEffect(() => {
     let cancelled = false
-    if (!stableSource) return () => { cancelled = true }
+    if (!source) return () => { cancelled = true }
 
-    void loadSourceUri(stableSource)
+    void loadSourceUri(source)
       .then((uri) => Image.loadAsync({ uri }))
       .then((loaded) => {
         if (!cancelled) {
@@ -51,9 +51,9 @@ export function RemoteAvatar({
     return () => {
       cancelled = true
     }
-  }, [key, stableSource])
+  }, [key])
 
-  if (!stableSource || failed || !image) {
+  if (!source || failed || !image) {
     const initial = name.trim().charAt(0).toUpperCase() || '?'
     return (
       <Avatar alt={name} className={className}>

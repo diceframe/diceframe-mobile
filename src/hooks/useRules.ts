@@ -9,14 +9,14 @@ export function useRules() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
 
-  const load = React.useCallback(async () => {
+  async function load() {
     setLoading(true)
     try { const result = await fetchRuleLibrary(); setRules(result.rules ?? []); setError('') }
     catch (cause) { setError(errorMessage(cause)) }
     finally { setLoading(false) }
-  }, [])
+  }
 
-  React.useEffect(() => { queueMicrotask(() => void load()) }, [load])
+  React.useEffect(() => { queueMicrotask(() => void load()) }, [])
 
   async function addRule(payload: { source_rule_id: string; rule_id: string; rule_name: string; description: string }) {
     const result = await createCustomRule(payload)

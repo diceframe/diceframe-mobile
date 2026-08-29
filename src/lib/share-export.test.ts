@@ -49,7 +49,7 @@ describe('shareExportBlob', () => {
   })
 
   it('writes the archive bytes and shares the resulting file URI', async () => {
-    await shareExportBlob(new Blob([new Uint8Array([1, 2, 3])]), 'diceframe-game.zip', '分享存档')
+    await shareExportBlob(new Uint8Array([1, 2, 3]), 'diceframe-game.zip', '分享存档')
 
     expect(mocks.files).toHaveLength(1)
     expect(Array.from(mocks.files[0].chunks[0])).toEqual([1, 2, 3])
@@ -64,7 +64,7 @@ describe('shareExportBlob', () => {
     mocks.available.mockResolvedValue(false)
 
     await expect(
-      shareExportBlob(new Blob(['archive']), 'diceframe-game.zip', '分享存档'),
+      shareExportBlob(new TextEncoder().encode('archive'), 'diceframe-game.zip', '分享存档'),
     ).rejects.toThrow('当前设备不支持分享文件')
     expect(mocks.shareAsync).not.toHaveBeenCalled()
     expect(mocks.files[0].deleted).toBe(true)

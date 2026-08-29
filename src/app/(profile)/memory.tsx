@@ -39,7 +39,7 @@ export default function MemoryScreen() {
     }).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))
   }, [])
 
-  const load = React.useCallback(async (targetGameKey: string, keyword = '') => {
+  async function load(targetGameKey: string, keyword = '') {
     if (!targetGameKey) { setMemories([]); setLoading(false); return }
     setLoading(true)
     try {
@@ -48,9 +48,9 @@ export default function MemoryScreen() {
       setError('')
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
     finally { setLoading(false) }
-  }, [])
+  }
 
-  React.useEffect(() => { queueMicrotask(() => void load(gameKey)) }, [gameKey, load])
+  React.useEffect(() => { queueMicrotask(() => void load(gameKey)) }, [gameKey])
 
   async function remove(id: number) {
     const result = await deleteMemory(gameKey, id)

@@ -3,6 +3,7 @@
  */
 import type {
   ActionSubmitResponse,
+  AdventureSummary,
   BotBindTokenResponse,
   CharacterCard,
   CharacterCardsResponse,
@@ -25,7 +26,6 @@ import type {
   WorldCandidate,
   WorldTemplatesResponse,
 } from './types'
-
 import { api, apiBlob } from './client'
 
 function gamePath(gameKey: string, suffix = ''): string {
@@ -144,8 +144,14 @@ export async function requestSseTicket(gameKey: string): Promise<string> {
 
 // ---------- 世界观 / 规则（创建对局选择器） ----------
 
-export function fetchWorldTemplates(): Promise<WorldTemplatesResponse> {
-  return api<WorldTemplatesResponse>('/world-templates')
+/** 世界模板列表（language 决定后端 locale overlay，桌面端同样默认传当前语言） */
+export function fetchWorldTemplates(language = 'zh-CN'): Promise<WorldTemplatesResponse> {
+  return api<WorldTemplatesResponse>(`/world-templates?language=${encodeURIComponent(language)}`)
+}
+
+/** 冒险包列表（世界图鉴徽章用它映射 recommended_world_id → 冒险包名） */
+export function fetchAdventures(language = 'zh-CN'): Promise<{ adventures?: AdventureSummary[] }> {
+  return api<{ adventures?: AdventureSummary[] }>(`/adventures?language=${encodeURIComponent(language)}`)
 }
 
 export function fetchRules(): Promise<RulesResponse> {
@@ -178,10 +184,10 @@ export async function batchDeleteGames(gameKeys: string[]): Promise<{ deleted: s
   return { deleted: result.deleted ?? [], failed: result.failed ?? [] }
 }
 
-/** 导出存档 zip（返回 blob 字节） */
-export async function exportGame(gameKey: string): Promise<Blob> {
+/** 导出存档 zip（arrayBuffer 原生直读字节，避免 response.blob() 的 native blob store 往返） */
+export async function exportGame(gameKey: string): Promise<Uint8Array> {
   const response = await apiBlob(gamePath(gameKey, '/export'))
-  return response.blob()
+  return new Uint8Array(await response.arrayBuffer())
 }
 
 /** 导入存档 zip（multipart/form-data） */

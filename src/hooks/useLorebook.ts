@@ -14,7 +14,7 @@ export function useLorebook() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
 
-  const loadWorlds = React.useCallback(async () => {
+  async function loadWorlds() {
     try {
       const result = await fetchWorlds()
       const next = result.worlds ?? []
@@ -22,9 +22,9 @@ export function useLorebook() {
       setWorldId((current) => current || String(next[0]?.id || next[0]?.world_id || ''))
       setError('')
     } catch (cause) { setError(errorMessage(cause)) } finally { setLoading(false) }
-  }, [])
+  }
 
-  const loadEntries = React.useCallback(async (targetWorldId: string) => {
+  async function loadEntries(targetWorldId: string) {
     if (!targetWorldId) { setEntries([]); return }
     setLoading(true)
     try {
@@ -40,10 +40,10 @@ export function useLorebook() {
       })).filter((entry) => entry.id))
       setError('')
     } catch (cause) { setError(errorMessage(cause)) } finally { setLoading(false) }
-  }, [])
+  }
 
-  React.useEffect(() => { queueMicrotask(() => void loadWorlds()) }, [loadWorlds])
-  React.useEffect(() => { queueMicrotask(() => void loadEntries(worldId)) }, [loadEntries, worldId])
+  React.useEffect(() => { queueMicrotask(() => void loadWorlds()) }, [])
+  React.useEffect(() => { queueMicrotask(() => void loadEntries(worldId)) }, [worldId])
 
   async function addEntry(data: { title: string; content: string; category: string; isPublic: boolean }) {
     if (!worldId) throw new Error('请先创建世界书')
