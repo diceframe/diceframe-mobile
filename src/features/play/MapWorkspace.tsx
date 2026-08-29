@@ -32,7 +32,7 @@ function sourceLabel(location: MapLocation): string {
  * 搜索时详情区临时显示结果列表，选中地点后立即回到详情。
  */
 export function MapWorkspace({ map, currentScene }: MapWorkspaceProps) {
-  const locations = React.useMemo(() => map?.locations ?? [], [map])
+  const locations = map?.locations ?? []
 
   const [query, setQuery] = React.useState('')
   // 选中地点按地图身份键控：打开/地图变化时默认选中当前地点，
@@ -40,19 +40,18 @@ export function MapWorkspace({ map, currentScene }: MapWorkspaceProps) {
   const [selection, setSelection] = React.useState<{ key: string; id: string } | null>(null)
   const mapIdentity = `${map?.active_map?.id || ''}:${map?.current_location_id || ''}:${locations.length}`
   const normalizedQuery = query.trim().toLocaleLowerCase()
-  const filteredLocations = React.useMemo(() => {
-    if (!normalizedQuery) return locations
-    return locations.filter((location) => {
-      const haystack = [
-        location.name,
-        location.content,
-        ...(location.keywords || []),
-      ]
-        .join(' ')
-        .toLocaleLowerCase()
-      return haystack.includes(normalizedQuery)
-    })
-  }, [locations, normalizedQuery])
+  const filteredLocations = normalizedQuery
+    ? locations.filter((location) => {
+        const haystack = [
+          location.name,
+          location.content,
+          ...(location.keywords || []),
+        ]
+          .join(' ')
+          .toLocaleLowerCase()
+        return haystack.includes(normalizedQuery)
+      })
+    : locations
 
   const selectedId = selection?.key === mapIdentity ? selection.id : ''
   const selectedLocation =
@@ -61,17 +60,14 @@ export function MapWorkspace({ map, currentScene }: MapWorkspaceProps) {
     locations.find((location) => locationId(location) === String(map?.current_location_id || '')) ??
     locations[0] ??
     null
-  const connectedLocations = React.useMemo(() => {
-    const refs = selectedLocation?.connected_to || []
-    return refs
-      .map((reference) =>
-        locations.find(
-          (location) =>
-            locationId(location) === String(reference) || location.name === String(reference),
-        ),
-      )
-      .filter((location): location is MapLocation => Boolean(location))
-  }, [selectedLocation, locations])
+  const connectedLocations = (selectedLocation?.connected_to || [])
+    .map((reference) =>
+      locations.find(
+        (location) =>
+          locationId(location) === String(reference) || location.name === String(reference),
+      ),
+    )
+    .filter((location): location is MapLocation => Boolean(location))
 
   function selectLocation(location: MapLocation) {
     setSelection({ key: mapIdentity, id: locationId(location) })

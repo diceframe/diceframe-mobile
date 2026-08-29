@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { appLayoutForWidth } from '@/lib/layout'
@@ -42,37 +43,41 @@ export function Sheet({
       statusBarTranslucent
       navigationBarTranslucent
     >
-      <View className={cn('flex-1', isTablet ? 'items-center justify-center px-6' : 'justify-end')}>
-        <Pressable className="absolute inset-0 bg-black/60" onPress={onClose} />
-        <View
-          className={cn(
-            'max-h-[90%] border-border bg-card px-5 pt-2',
-            isTablet ? 'w-full rounded-xl border' : 'rounded-t-xl border-t',
-            className,
-          )}
-          style={{
-            maxWidth: isTablet ? 680 : undefined,
-            paddingBottom: (isTablet ? 16 : insets.bottom + 16) + keyboardHeight,
-          }}
-        >
-          {!noHandle && (
-            <View className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-muted-foreground/30" />
-          )}
-          {scrollable ? (
-            <ScrollView
-              style={{ flexShrink: 1 }}
-              showsVerticalScrollIndicator={false}
-              bounces={false}
-              keyboardShouldPersistTaps="handled"
-              stickyHeaderIndices={stickyHeaderIndices}
-            >
-              {children}
-            </ScrollView>
-          ) : (
-            <View className="min-h-0 flex-1">{children}</View>
-          )}
+      {/* Modal 是独立窗口，应用根部的 GestureHandlerRootView 管不到这里；
+          不补一层的话 Modal 内的 RNGH 手势（如地图拖拽/捏合）在 Android 上不挂载 */}
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <View className={cn('flex-1', isTablet ? 'items-center justify-center px-6' : 'justify-end')}>
+          <Pressable className="absolute inset-0 bg-black/60" onPress={onClose} />
+          <View
+            className={cn(
+              'max-h-[90%] border-border bg-card px-5 pt-2',
+              isTablet ? 'w-full rounded-xl border' : 'rounded-t-xl border-t',
+              className,
+            )}
+            style={{
+              maxWidth: isTablet ? 680 : undefined,
+              paddingBottom: (isTablet ? 16 : insets.bottom + 16) + keyboardHeight,
+            }}
+          >
+            {!noHandle && (
+              <View className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-muted-foreground/30" />
+            )}
+            {scrollable ? (
+              <ScrollView
+                style={{ flexShrink: 1 }}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+                keyboardShouldPersistTaps="handled"
+                stickyHeaderIndices={stickyHeaderIndices}
+              >
+                {children}
+              </ScrollView>
+            ) : (
+              <View className="min-h-0 flex-1">{children}</View>
+            )}
+          </View>
         </View>
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   )
 }

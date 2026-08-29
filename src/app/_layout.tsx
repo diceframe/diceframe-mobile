@@ -8,6 +8,7 @@ import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { cssInterop, useColorScheme as useNativeWindColorScheme } from 'nativewind'
 import { PortalHost } from '@rn-primitives/portal'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
 import { ErrorBoundary } from '@/components/error-boundary'
 import { configureApiClient } from '@/api/client'
@@ -51,16 +52,19 @@ export default function RootLayout() {
 
   return (
     <ErrorBoundary>
-      <ThemeProvider value={theme === 'dark' ? DarkTheme : DefaultTheme}>
-        <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: background },
-          }}
-        />
-        <PortalHost />
-      </ThemeProvider>
+      {/* RNGH 手势（地图拖拽/捏合）必须挂在 RootView 内才能命中 */}
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <ThemeProvider value={theme === 'dark' ? DarkTheme : DefaultTheme}>
+          <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: background },
+            }}
+          />
+          <PortalHost />
+        </ThemeProvider>
+      </GestureHandlerRootView>
     </ErrorBoundary>
   )
 }
