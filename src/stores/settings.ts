@@ -42,6 +42,8 @@ interface SettingsState {
   share: ShareIdentity | null
   /** TTS 播放速率（对齐 Web localStorage trpg_tts_rate） */
   ttsRate: number
+  /** 对局触觉反馈（受伤/骰子等事件震动）；纯移动端体验，Web 无对应概念 */
+  hapticsEnabled: boolean
   /** 主题偏好；system 表示跟随设备主题 */
   themeMode: ThemeMode
   /** 设备当前主题，用于解析 system 偏好 */
@@ -51,6 +53,7 @@ interface SettingsState {
   setToken: (token: string | null) => void
   setShare: (share: ShareIdentity | null) => void
   setTtsRate: (rate: number) => void
+  setHapticsEnabled: (enabled: boolean) => void
   setThemeMode: (mode: ThemeMode) => void
   setSystemTheme: (theme: ResolvedTheme) => void
   markHydrated: () => void
@@ -71,6 +74,7 @@ export const useSettingsStore = create<SettingsState>()(
       token: null,
       share: null,
       ttsRate: 1,
+      hapticsEnabled: true,
       themeMode: 'system',
       systemTheme: systemTheme(),
       hydrated: false,
@@ -87,6 +91,7 @@ export const useSettingsStore = create<SettingsState>()(
         syncApiClient(get())
       },
       setTtsRate: (rate) => set({ ttsRate: rate }),
+      setHapticsEnabled: (hapticsEnabled) => set({ hapticsEnabled }),
       setThemeMode: (themeMode) => set({ themeMode }),
       setSystemTheme: (systemTheme) => set({ systemTheme }),
       markHydrated: () => set({ hydrated: true }),
@@ -99,6 +104,7 @@ export const useSettingsStore = create<SettingsState>()(
         token: state.token,
         share: state.share,
         ttsRate: state.ttsRate,
+        hapticsEnabled: state.hapticsEnabled,
         themeMode: state.themeMode,
       }),
       onRehydrateStorage: () => (state) => {

@@ -39,6 +39,7 @@ import { RuleHelpModal } from '@/features/play/RuleHelpModal'
 import { SceneGalleryModal } from '@/features/play/SceneGalleryModal'
 import { WorldSwitchModal } from '@/features/play/WorldSwitchModal'
 import { useSpeaker } from '@/features/play/useSpeaker'
+import { useGameHaptics, playGameHaptic } from '@/features/play/useHaptics'
 import { useVoiceInput } from '@/features/play/useVoiceInput'
 import { appendActionText } from '@/lib/action-text'
 import { confirmDestructive } from '@/lib/confirm'
@@ -125,6 +126,8 @@ export default function PlayScreen() {
     setDraft((current) => appendActionText(current, text))
   })
   const speaker = useSpeaker(gameKey)
+  // 叙事落地/检定结果/私密感知的震动反馈（开关在设置页，默认开启）
+  useGameHaptics()
   const keyboardHeight = useKeyboardHeight()
   const insets = useSafeAreaInsets()
 
@@ -173,6 +176,7 @@ export default function PlayScreen() {
     try {
       await useGameStore.getState().submit(text)
       setDraft('')
+      void playGameHaptic('submit')
     } catch {
       // 弱网失败时保留草稿，错误由 game store 显示在顶部横幅。
     }
@@ -460,6 +464,7 @@ export default function PlayScreen() {
     </Tabs>
   )
 
+  // GM 回合流程常驻输入区上方；桌面管理入口只保留情境行一处，避免同屏重复。
   const gmRoundControls = isGm ? (
     <View className="flex-row gap-2 border-t border-border px-3 pt-2">
       <Button
@@ -478,10 +483,6 @@ export default function PlayScreen() {
         onPress={() => void runGm(() => useGameStore.getState().rollback())}
       >
         <Text>{strings.play.rollback}</Text>
-      </Button>
-      <Button size="sm" variant="ghost" onPress={() => openGmPanel()}>
-        <Icon as={Menu} size={16} />
-        <Text>管理</Text>
       </Button>
     </View>
   ) : null
@@ -718,20 +719,10 @@ export default function PlayScreen() {
         </Tabs>
       </Sheet>
 
-      {/* 低频页面工具 */}
+      {/* 低频页面工具：与情境行重复的入口（角色/感知/桌面管理）不在这里重复出现 */}
       <Sheet open={utilityOpen} onClose={() => setUtilityOpen(false)} className="h-auto">
         <View className="gap-2 pt-1">
           <Text variant="h4">更多操作</Text>
-          <Button
-            variant="outline"
-            onPress={() => {
-              setUtilityOpen(false)
-              setCharacterOpen(true)
-            }}
-          >
-            <Icon as={User} size={17} />
-            <Text>角色详情</Text>
-          </Button>
           <Button
             variant="outline"
             onPress={() => {
@@ -752,29 +743,6 @@ export default function PlayScreen() {
             >
               <Icon as={ImageIcon} size={17} />
               <Text>{strings.play.sceneGallery}</Text>
-            </Button>
-          )}
-          {privateMessages.length > 0 && (
-            <Button
-              variant="outline"
-              onPress={() => {
-                setUtilityOpen(false)
-                setPrivateMessageOpen(true)
-              }}
-            >
-              <Icon as={Mail} size={17} />
-              <Text>私密感知（{privateMessages.length}）</Text>
-            </Button>
-          )}
-          {isGm && (
-            <Button
-              onPress={() => {
-                setUtilityOpen(false)
-                openGmPanel()
-              }}
-            >
-              <Icon as={Menu} size={17} />
-              <Text>桌面管理</Text>
             </Button>
           )}
         </View>

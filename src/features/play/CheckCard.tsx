@@ -4,16 +4,8 @@ import { StatusBadge, type StatusTone } from '@/components/patterns/status-badge
 import { Card } from '@/components/ui/card'
 import { Text } from '@/components/ui/text'
 import type { CheckResult } from '@/api/types'
+import { checkStatusOf, type CheckStatus } from '@/lib/check-status'
 import { cn } from '@/lib/utils'
-
-type CheckStatus = 'critical' | 'fumble' | 'success' | 'failure'
-
-function statusOf(check: CheckResult): CheckStatus {
-  if (check.is_critical) return 'critical'
-  if (check.is_fumble) return 'fumble'
-  const verdict = String(check.verdict || '').toLowerCase()
-  return verdict.includes('成功') || verdict.includes('success') ? 'success' : 'failure'
-}
 
 const STATUS_LABEL: Record<CheckStatus, string> = {
   critical: '大成功',
@@ -24,7 +16,7 @@ const STATUS_LABEL: Record<CheckStatus, string> = {
 
 /** 检定结果卡（对齐 Web CheckRevealCard：大成功=鎏金，成功/失败走语义令牌） */
 export function CheckCard({ check, className }: { check: CheckResult; className?: string }) {
-  const status = statusOf(check)
+  const status = checkStatusOf(check)
   const statusTone: StatusTone =
     status === 'critical' ? 'gold' : status === 'success' ? 'success' : 'destructive'
 
