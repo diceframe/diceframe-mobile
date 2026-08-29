@@ -51,12 +51,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          source_apk="android/app/build/outputs/apk/release/app-release.apk"
-          test -s "$source_apk"
+          out="android/app/build/outputs/apk/release"
+          # universal 是「检查更新」的固定下载项；两个拆分包供 Release 页按架构挑选
+          declare -A apks=(
+            ["DiceFrame-android.apk"]="$out/app-universal-release.apk"
+            ["DiceFrame-android-arm64-v8a.apk"]="$out/app-arm64-v8a-release.apk"
+            ["DiceFrame-android-armeabi-v7a.apk"]="$out/app-armeabi-v7a-release.apk"
+          )
           mkdir -p artifacts
-          cp "$source_apk" artifacts/DiceFrame-android.apk
-          cd artifacts
-          sha256sum DiceFrame-android.apk > DiceFrame-android.apk.sha256
+          for name in "${!apks[@]}"; do
+            test -s "${apks[$name]}"
+            cp "${apks[$name]}" "artifacts/$name"
+            sha256sum "artifacts/$name" > "artifacts/$name.sha256"
+          done
 
       - name: Upload APK
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -67,3 +74,7 @@ jobs:
           path: |
             artifacts/DiceFrame-android.apk
             artifacts/DiceFrame-android.apk.sha256
+            artifacts/DiceFrame-android-arm64-v8a.apk
+            artifacts/DiceFrame-android-arm64-v8a.apk.sha256
+            artifacts/DiceFrame-android-armeabi-v7a.apk
+            artifacts/DiceFrame-android-armeabi-v7a.apk.sha256

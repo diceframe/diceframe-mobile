@@ -98,10 +98,29 @@ npx expo export --platform android --output-dir dist  # 本地整包冒烟
 
 仓库提供手动触发的 GitHub Actions 工作流 `Build Android APK`。在 GitHub 仓库的
 **Actions** 页面选择该工作流，点击 **Run workflow**；构建完成后，从运行页面底部的
-Artifacts 下载 `diceframe-android-apk`。压缩包内包含可直接安装的
-`DiceFrame-android.apk` 及其 SHA-256 校验文件。
+Artifacts 下载 `diceframe-android-apk`。压缩包内包含三个可直接安装的 APK 及各自的
+SHA-256 校验文件：
 
-该工作流使用测试签名，适合自用和内测，不用于 Google Play 正式发布。Artifact 保留 14 天。
+- `DiceFrame-android-arm64-v8a.apk`：armv8 瘦身包（2016 年后的主流机型）；
+- `DiceFrame-android-armeabi-v7a.apk`：armv7 瘦身包（较旧机型）；
+- `DiceFrame-android.apk`：universal 全量包（体积最大，作为兜底/通用下载项）。
+
+拆分配置由 `plugins/withAbiSplits.js` 在 prebuild 时注入。该工作流使用测试签名，
+适合自用和内测，不用于 Google Play 正式发布。Artifact 保留 14 天。
+
+### 发新版与客户端「检查更新」
+
+客户端在 **我的 → 检查更新** 里读取本仓库 GitHub Releases 的 latest release，
+与 `app.json` 的 `expo.version` 比较后提示下载 release 里的 `.apk` asset
+（读取手机架构自动匹配拆分包，匹配不到时回退 `DiceFrame-android.apk`）。
+因此发新版时必须保持三者同步：
+
+1. 升级 `app.json` 的 `expo.version` 与 `android.versionCode`（如 `0.1.0` → `0.2.0`）；
+2. 打同版本号的 tag（如 `v0.2.0`）并创建 Release；
+3. 把构建产物（至少 `DiceFrame-android.apk`）作为 Release asset 上传（Actions Artifact 不算，
+   客户端找不到 APK asset 会报「最新发布没有可下载的 APK」）。
+
+任何一步漏掉，已安装的客户端都会误判「已经是最新版本」。
 
 ## 目录导览
 
