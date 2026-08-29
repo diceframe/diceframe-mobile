@@ -90,10 +90,16 @@ export default function LoginScreen() {
   }
 
   async function login() {
+    // 输入框地址可能与 client 内存 baseUrl 脱同步（改了地址但没按“连接”就直接登录），
+    // validateAccessToken 读的是内存态，所以校验前先对齐；settings 只在校验通过后落盘，
+    // 失败时不改动已保存的服务器连接
+    const normalized = normalizeBaseUrl(serverUrl)
     setBusy('login')
     setError('')
     try {
+      configureApiClient({ baseUrl: normalized })
       await validateAccessToken(password)
+      settings.setBaseUrl(normalized)
       settings.setToken(password)
       settings.setShare(null)
       router.replace('/overview')
