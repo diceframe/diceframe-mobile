@@ -1,0 +1,95 @@
+import { describe, expect, it } from 'vitest'
+
+import { compareVersions, getGitHubLatestReleaseUrl, parseGitHubRelease, recommendApk } from './updates'
+
+describe('GitHub APK 更新检查', () => {
+  it('按语义版本判断新版', () => {
+    expect(compareVersions('1.2.0', '1.1.9')).toBe(1)
+    expect(compareVersions('v1.2.0', '1.2')).toBe(0)
+    expect(compareVersions('1.2.0', '1.2.1')).toBe(-1)
+  })
+
+  it('非数字段按 0 处理：rc/beta 后缀与正式版视为相等（latest 端点不返回预发布版）', () => {
+    expect(compareVersions('1.2.0-rc1', '1.2.0')).toBe(0)
+    expect(compareVersions('1.2.0-beta', '1.2.0')).toBe(0)
+  })
+
+  it('从 GitHub Release 中提取 APK 下载信息', () => {
+    const result = parseGitHubRelease({
+      tag_name: 'v0.2.0',
+      name: 'DiceFrame Android 0.2.0',
+      body: '更新说明',
+      html_url: 'https://github.com/diceframe/diceframe-mobile/releases/tag/v0.2.0',
+      assets: [
+        { name: 'DiceFrame-android.apk.sha256', browser_download_url: 'https://example.com/DiceFrame-android.apk.sha256' },
+        { name: 'DiceFrame-android.apk', browser_download_url: 'https://example.com/DiceFrame-android.apk' },
+      ],
+    }, { version: '0.1.0' })
+
+    expect(result).toMatchObject({
+      latestVersion: '0.2.0',
+      releaseName: 'DiceFrame Android 0.2.0',
+      releaseNotes: '更新说明',
+      apkUrl: 'https://example.com/DiceFrame-android.apk',
+      apkName: 'DiceFrame-android.apk',
+      isNewer: true,
+    })
+  })
+
+  it('多 APK 时按设备 ABI 优先序匹配拆分包，而不是下载 universal', () => {
+    const apks = [
+      { name: 'DiceFrame-android.apk', url: 'https://example.com/universal.apk' },
+      { name: 'DiceFrame-android-arm64-v8a.apk', url: 'https://example.com/armv8.apk' },
+      { name: 'DiceFrame-android-armeabi-v7a.apk', url: 'https://example.com/armv7.apk' },
+    ]
+
+    // Build.SUPPORTED_ABIS 按优先级排序：arm64 设备的列表靠后也含 armeabi-v7a
+    expect(recommendApk(apks, ['arm64-v8a', 'armeabi-v7a', 'armeabi'])?.url).toBe('https://example.com/armv8.apk')
+    expect(recommendApk(apks, ['armeabi-v7a', 'armeabi'])?.url).toBe('https://example.com/armv7.apk')
+    expect(recommendApk(apks, null)?.url).toBe('https://example.com/universal.apk')
+    expect(recommendApk(apks, ['x86_64'])?.url).toBe('https://example.com/universal.apk')
+  })
+
+  it('缺 canonical 包时回退首个 .apk（兼容手工上传的历史 Release）', () => {
+    const result = parseGitHubRelease({
+      tag_name: 'v0.1.0',
+      assets: [
+        { name: 'notes.txt', browser_download_url: 'https://example.com/notes.txt' },
+        { name: 'DiceFrame-0.1.0-armeabi-v7a-release.apk', browser_download_url: 'https://example.com/armv7.apk' },
+        { name: 'diceframe-arm64-v8a.apk', browser_download_url: 'https://example.com/armv8.apk' },
+      ],
+    }, { version: '0.1.0' })
+
+    expect(result.apkName).toBe('DiceFrame-0.1.0-armeabi-v7a-release.apk')
+    expect(result.apkUrl).toBe('https://example.com/armv7.apk')
+  })
+
+  it('parseGitHubRelease 透传设备 ABI 并携带全部 APK 列表', () => {
+    const result = parseGitHubRelease({
+      tag_name: 'v0.2.0',
+      assets: [
+        { name: 'DiceFrame-android.apk', browser_download_url: 'https://example.com/universal.apk' },
+        { name: 'DiceFrame-android-arm64-v8a.apk', browser_download_url: 'https://example.com/armv8.apk' },
+      ],
+    }, { version: '0.1.0' }, { supportedAbis: ['arm64-v8a'] })
+
+    expect(result.apkUrl).toBe('https://example.com/armv8.apk')
+    expect(result.apkName).toBe('DiceFrame-android-arm64-v8a.apk')
+    expect(result.apks).toHaveLength(2)
+  })
+
+  it('没有 APK 时给出明确错误', () => {
+    expect(() => parseGitHubRelease({ tag_name: 'v0.2.0', assets: [] }, { version: '0.1.0' })).toThrow('最新发布没有可下载的 APK')
+  })
+
+  // /releases/latest 正常不会返回草稿或预览版；保留防御分支并在测试中固定契约
+  it('拒绝草稿与预览版', () => {
+    const apk = { name: 'DiceFrame-android.apk', browser_download_url: 'https://example.com/a.apk' }
+    expect(() => parseGitHubRelease({ tag_name: 'v0.2.0', draft: true, assets: [apk] }, { version: '0.1.0' })).toThrow('最新发布仍是草稿')
+    expect(() => parseGitHubRelease({ tag_name: 'v0.2.0', prerelease: true, assets: [apk] }, { version: '0.1.0' })).toThrow('最新发布是预览版')
+  })
+
+  it('生成 GitHub latest release API 地址', () => {
+    expect(getGitHubLatestReleaseUrl('diceframe/diceframe-mobile')).toBe('https://api.github.com/repos/diceframe/diceframe-mobile/releases/latest')
+  })
+})

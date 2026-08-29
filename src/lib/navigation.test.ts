@@ -47,7 +47,8 @@ describe('mobile information architecture', () => {
       expect(profile).toContain(`openSetting('${section}')`)
       expect(settings).toContain(`section === '${section}'`)
     }
-    expect(profile).toContain("router.push('/legal/index')")
+    // typedRoutes 开启后 legal/index.tsx 的规范 href 是 /legal（/legal/index 不在类型联合里）
+    expect(profile).toContain("router.push('/legal')")
     expect(profile).not.toContain("router.push('/legal/terms')")
     expect(profile).not.toContain("router.push('/legal/privacy')")
     expect(profile).not.toContain('<Slider')
