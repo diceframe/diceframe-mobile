@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { Pressable, RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { GlassView } from 'expo-glass-effect'
-import { useNavigation, useRouter } from 'expo-router'
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
 import { Plus, Trash2 } from 'lucide-react-native'
 
@@ -231,7 +231,25 @@ export default function OverviewScreen() {
   const [sort, setSort] = React.useState<SortMode>('recent')
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [createOpen, setCreateOpen] = React.useState(false)
+  // 递增 token 作为 CreateGameSheet 的 key：每次打开都重挂载，表单状态全新
+  const [createToken, setCreateToken] = React.useState(0)
+  const [preselectWorld, setPreselectWorld] = React.useState('')
   const [busy, setBusy] = React.useState(false)
+
+  function openCreate(worldId = '') {
+    setPreselectWorld(worldId)
+    setCreateToken((t) => t + 1)
+    setCreateOpen(true)
+  }
+
+  // 世界图鉴「用它开团」：带 world 参数进入时打开创建抽屉并预选该世界
+  const params = useLocalSearchParams<{ world?: string; create?: string }>()
+  React.useEffect(() => {
+    if (!params.create || !params.world) return
+    const world = String(params.world)
+    router.setParams({ world: undefined, create: undefined })
+    queueMicrotask(() => openCreate(world))
+  }, [params.create, params.world])
 
   React.useEffect(() => {
     let active = true
@@ -347,13 +365,9 @@ export default function OverviewScreen() {
         title={strings.overview.title}
         className="px-0"
         right={
-          <Button
-            variant="ghost"
-            size="icon"
-            onPress={() => setCreateOpen(true)}
-            accessibilityLabel="创建对局"
-          >
-            <Icon as={Plus} size={22} />
+          <Button size="sm" onPress={() => openCreate()} accessibilityLabel="创建对局">
+            <Icon as={Plus} size={16} />
+            <Text>新对局</Text>
           </Button>
         }
       />
@@ -441,11 +455,17 @@ export default function OverviewScreen() {
         onRefresh={refresh}
         onSelect={toggleSelect}
         onRemove={(key) => void removeGame(key)}
-        onCreate={() => setCreateOpen(true)}
+        onCreate={() => openCreate()}
         onOpen={(key) => router.push({ pathname: '/play/[gameKey]', params: { gameKey: key } })}
       />
 
-      <CreateGameSheet open={createOpen} onClose={() => setCreateOpen(false)} onCreated={onCreated} />
+      <CreateGameSheet
+        key={createToken}
+        open={createOpen}
+        preselectedWorldId={preselectWorld}
+        onClose={() => setCreateOpen(false)}
+        onCreated={onCreated}
+      />
     </Screen>
   )
 }

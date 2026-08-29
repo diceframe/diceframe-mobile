@@ -21,10 +21,13 @@ export function CreateGameSheet({
   open,
   onClose,
   onCreated,
+  preselectedWorldId,
 }: {
   open: boolean
   onClose: () => void
   onCreated: (gameKey: string) => void
+  /** 世界图鉴「用它开团」带入选中的世界 id */
+  preselectedWorldId?: string | null
 }) {
   const [worlds, setWorlds] = React.useState<WorldTemplateSummary[]>([])
   const [rules, setRules] = React.useState<RuleSummary[]>([])
@@ -36,7 +39,7 @@ export function CreateGameSheet({
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
 
-  // 加载模板 + 规则列表（仅一次）
+  // 加载模板 + 规则列表（组件由父级用 key 在每次打开时重挂载，表单状态天然全新）
   React.useEffect(() => {
     if (!open) return
     let active = true
@@ -46,11 +49,12 @@ export function CreateGameSheet({
         if (!active) return
         setWorlds(wt.templates ?? [])
         setRules(rl.rules ?? [])
-        // 默认选中第一个世界模板及其默认规则
-        const firstWorld = wt.templates?.[0]
-        if (firstWorld && !worldId) {
-          setWorldId(worldIdOf(firstWorld))
-          if (firstWorld.default_rule && !ruleId) setRuleId(firstWorld.default_rule)
+        // 世界图鉴「用它开团」的预选世界优先，否则默认选第一个模板及其默认规则
+        const preferred =
+          wt.templates?.find((w) => worldIdOf(w) === preselectedWorldId) ?? wt.templates?.[0]
+        if (preferred) {
+          setWorldId(worldIdOf(preferred))
+          if (preferred.default_rule) setRuleId(preferred.default_rule)
         }
       } catch {
         // 列表拉不到时保持空列表，用户仍可手动填写
@@ -59,17 +63,15 @@ export function CreateGameSheet({
     return () => {
       active = false
     }
-  }, [open])
+  }, [open, preselectedWorldId])
 
   // 切换世界模板时，若其默认规则存在则自动跟随（派生到渲染中完成，避免 effect 内 setState）
   const currentWorld = worlds.find((w) => worldIdOf(w) === worldId)
-  const effectiveRuleId = React.useMemo(() => {
-    if (ruleId) return ruleId
-    if (currentWorld?.default_rule && rules.some((r) => r.rule_id === currentWorld.default_rule)) {
-      return currentWorld.default_rule
-    }
-    return ruleId
-  }, [ruleId, currentWorld, rules])
+  const effectiveRuleId =
+    ruleId ||
+    (currentWorld?.default_rule && rules.some((r) => r.rule_id === currentWorld.default_rule)
+      ? currentWorld.default_rule
+      : '')
 
   const worldOptions = worlds.map((w) => ({ value: worldIdOf(w), label: w.name || w.world_name || w.id || '未命名' }))
   const ruleOptions = rules.map((r) => ({ value: r.rule_id, label: r.rule_name || r.rule_id }))
