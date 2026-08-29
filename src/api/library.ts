@@ -1,15 +1,17 @@
 import { api } from './client'
-import type { CharacterCard, CharacterCardsResponse, RuleSummary, RulesResponse } from './types'
+import type {
+  CharacterCard,
+  CharacterCardsResponse,
+  CharacterSchemaResponse,
+  GmStyle,
+  RuleSummary,
+  RulesResponse,
+  WorldCloneResponse,
+  WorldSummary,
+} from './types'
 
-export interface WorldRecord {
-  id?: string
-  world_id?: string
-  name?: string
-  world_name?: string
-  description?: string
-  entry_count?: number
-  language?: string
-}
+/** 用户世界行（GET /worlds，含 GM 风格与场景图附加字段）；旧名保留为别名 */
+export type WorldRecord = WorldSummary
 
 export interface LoreRecord {
   id?: string
@@ -85,6 +87,28 @@ export function createWorld(name: string, description = '') {
   })
 }
 
+/** 从模板克隆为「我的世界」（内置/插件世界也能克隆；自建世界无需再克隆） */
+export function cloneWorldFromTemplate(templateId: string, name?: string): Promise<WorldCloneResponse> {
+  return api<WorldCloneResponse>('/worlds/clone-from-template', {
+    method: 'POST',
+    body: JSON.stringify(name ? { template_id: templateId, name } : { template_id: templateId }),
+  })
+}
+
+/** 更新用户自建世界的 GM 叙事风格（内置/插件世界服务端会拒绝） */
+export function updateWorldGmStyle(worldId: string, gmStyle: GmStyle) {
+  return api<{ ok?: boolean; error?: string; gm_style?: GmStyle }>(
+    `/worlds/${encodeURIComponent(worldId)}/gm-style`,
+    { method: 'PUT', body: JSON.stringify({ gm_style: gmStyle }) },
+  )
+}
+
+export function deleteWorld(worldId: string) {
+  return api<{ ok?: boolean; error?: string }>(`/worlds/${encodeURIComponent(worldId)}`, {
+    method: 'DELETE',
+  })
+}
+
 export function fetchLoreEntries(worldId: string) {
   return api<{ entries?: LoreRecord[]; total?: number }>(`/lorebook/${encodeURIComponent(worldId)}`)
 }
@@ -129,6 +153,13 @@ export function uninstallPlugin(pluginId: string) {
 
 export function fetchRuleLibrary(): Promise<RulesResponse> {
   return api<RulesResponse>('/rules?language=zh-CN')
+}
+
+/** 规则角色模式：技能池 / 技能上限 / 规则元数据（编辑角色卡时用） */
+export function fetchCharacterSchema(ruleId: string, language = 'zh-CN'): Promise<CharacterSchemaResponse> {
+  return api<CharacterSchemaResponse>(
+    `/rules/${encodeURIComponent(ruleId)}/character-schema?language=${encodeURIComponent(language)}`,
+  )
 }
 
 export function createCustomRule(payload: { source_rule_id: string; rule_id: string; rule_name: string; description: string }) {

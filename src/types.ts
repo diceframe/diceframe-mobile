@@ -1,14 +1,3 @@
-import type { CharacterPortrait } from '@/api/types';
-
-export interface Character {
-  id: string;
-  name: string;
-  description?: string;
-  portrait?: CharacterPortrait | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface Npc {
   id: string;
   name: string;

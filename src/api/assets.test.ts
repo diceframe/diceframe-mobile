@@ -8,18 +8,6 @@ vi.mock('./client', async (importOriginal) => {
   return { ...actual, apiBlob: vi.fn() }
 })
 
-class FileReaderStub {
-  result: string | ArrayBuffer | null = null
-  onload: (() => void) | null = null
-  onerror: (() => void) | null = null
-  readAsDataURL(_blob: Blob) {
-    this.result = 'data:image/webp;base64,eA=='
-    this.onload?.()
-  }
-}
-
-;(globalThis as { FileReader?: unknown }).FileReader = FileReaderStub
-
 describe('avatarSource', () => {
   beforeEach(() => {
     configureApiClient({ baseUrl: 'http://h:18000', token: null, share: null })
@@ -109,16 +97,25 @@ describe('apiAssetDataUri', () => {
 
   it('经 apiBlob 下载并按 apiPath 缓存 data URI', async () => {
     vi.mocked(apiBlob).mockResolvedValue({
-      blob: async () => new Blob([new Uint8Array([1, 2])], { type: 'image/webp' }),
+      arrayBuffer: async () => new Uint8Array([1, 2]).buffer,
       headers: { get: () => 'image/webp' },
     } as unknown as Response)
 
     const first = await apiAssetDataUri('/games/g/avatars/cached-1')
     const second = await apiAssetDataUri('/games/g/avatars/cached-1')
 
-    expect(first).toBe('data:image/webp;base64,eA==')
+    expect(first).toBe('data:image/webp;base64,AQI=')
     expect(second).toBe(first)
     expect(apiBlob).toHaveBeenCalledTimes(1)
+  })
+
+  it('缺 Content-Type 时 data URI 不带媒体类型', async () => {
+    vi.mocked(apiBlob).mockResolvedValue({
+      arrayBuffer: async () => new Uint8Array([0x66, 0x6f, 0x6f]).buffer,
+      headers: { get: () => null },
+    } as unknown as Response)
+
+    await expect(apiAssetDataUri('/games/g/avatars/no-type')).resolves.toBe('data:;base64,Zm9v')
   })
 
   it('下载失败时抛出错误且不写入缓存', async () => {

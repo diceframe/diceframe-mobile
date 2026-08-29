@@ -3,57 +3,60 @@ import { FlatList, View } from 'react-native'
 import { Plus, RefreshCw, Swords, UserRound } from 'lucide-react-native'
 
 import { libraryAvatarSource } from '@/api/assets'
+import type { CharacterCard } from '@/api/types'
 import { PageHeader } from '@/components/page-header'
 import { RemoteAvatar } from '@/components/patterns/remote-avatar'
 import { Sheet } from '@/components/patterns/sheet'
 import { Screen } from '@/components/screen'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Icon } from '@/components/ui/icon'
-import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
-import { Textarea } from '@/components/ui/textarea'
+import { CharacterCardEditor } from '@/features/characters/CharacterCardEditor'
 import { useCharacters } from '@/hooks/useCharacters'
-import type { Character } from '@/types'
+import type { CharacterCardPatch } from '@/lib/character-card'
+import { confirmDestructive } from '@/lib/confirm'
+
+function cardId(card: CharacterCard): string {
+  return String(card.card_id || card.id || '')
+}
 
 export default function CharactersScreen() {
-  const { characters, loading, error, refresh, addCharacter, updateCharacter, deleteCharacter } = useCharacters()
+  const { cards, loading, error, refresh, addCard, updateCard, deleteCard } = useCharacters()
   const [sheetOpen, setSheetOpen] = React.useState(false)
-  const [editing, setEditing] = React.useState<Character | null>(null)
-  const [name, setName] = React.useState('')
-  const [description, setDescription] = React.useState('')
-  const [busy, setBusy] = React.useState(false)
+  const [editing, setEditing] = React.useState<CharacterCard | null>(null)
+
+  function openEditor(card?: CharacterCard) {
+    setEditing(card ?? null)
+    setSheetOpen(true)
+  }
 
   function closeEditor() {
     setSheetOpen(false)
     setEditing(null)
-    setName('')
-    setDescription('')
   }
 
-  function openEditor(character?: Character) {
-    setEditing(character ?? null)
-    setName(character?.name ?? '')
-    setDescription(character?.description ?? '')
-    setSheetOpen(true)
+  async function submitCard(payload: CharacterCardPatch) {
+    if (editing) await updateCard(cardId(editing), payload)
+    else await addCard(payload)
   }
 
-  async function save() {
-    if (!name.trim()) return
-    setBusy(true)
-    try {
-      const payload = { name: name.trim(), description: description.trim() }
-      if (editing) await updateCharacter(editing.id, payload)
-      else await addCharacter(payload)
-      closeEditor()
-    } finally { setBusy(false) }
+  async function removeCard(card: CharacterCard) {
+    const ok = await confirmDestructive({
+      title: '删除角色卡？',
+      message: `将删除「${card.character_name || '未命名角色'}」，此操作无法撤销。`,
+      confirmText: '删除',
+      cancelText: '取消',
+    })
+    if (ok) await deleteCard(cardId(card))
   }
 
   return (
     <Screen className="px-4" style={{ width: '100%', maxWidth: 840, alignSelf: 'center' }}>
       <PageHeader
         title="角色名册"
-        subtitle={loading ? '正在同步角色卡库' : `${characters.length} 张共享角色卡`}
+        subtitle={loading ? '正在同步角色卡库' : `${cards.length} 张共享角色卡`}
         className="px-0"
         right={<Button size="sm" onPress={() => openEditor()}><Icon as={Plus} size={16} /><Text>新角色</Text></Button>}
       />
@@ -63,19 +66,49 @@ export default function CharactersScreen() {
         <View className="flex-1"><Text className="font-semibold">跨对局角色卡</Text><Text variant="small">这里的角色来自服务器角色卡库，可在加入或替换角色时直接使用。</Text></View>
       </View>
       <FlatList
-        data={characters}
-        keyExtractor={(item) => item.id}
+        data={cards}
+        keyExtractor={(item) => cardId(item)}
         className="flex-1"
         contentContainerClassName="gap-2 pb-8"
         refreshing={loading}
         onRefresh={() => void refresh()}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
-          <Card className="gap-3 py-4"><CardContent className="flex-row items-center gap-3 px-4"><RemoteAvatar source={libraryAvatarSource(item.portrait)} name={item.name} className="h-11 w-11 rounded-full border border-border bg-muted" /><View className="min-w-0 flex-1"><Text className="font-semibold" numberOfLines={1}>{item.name}</Text><Text variant="small" numberOfLines={2}>{item.description || '还没有补充角色背景'}</Text></View><View className="gap-1"><Button size="sm" variant="ghost" onPress={() => openEditor(item)}><Text>编辑</Text></Button><Button size="sm" variant="ghost" onPress={() => void deleteCharacter(item.id)}><Text className="text-destructive">删除</Text></Button></View></CardContent></Card>
+          <Card className="gap-3 py-4">
+            <CardContent className="flex-row items-center gap-3 px-4">
+              <RemoteAvatar source={libraryAvatarSource(item.portrait)} name={String(item.character_name || '?')} className="h-11 w-11 rounded-full border border-border bg-muted" />
+              <View className="min-w-0 flex-1 gap-0.5">
+                <Text className="font-semibold" numberOfLines={1}>{item.character_name || '未命名角色'}</Text>
+                {/* RN 里 Text 默认 flexShrink:0，不放 wrap/shrink 会在徽章过长时溢出到右侧按钮列下方 */}
+                <View className="flex-row flex-wrap items-center gap-x-1.5 gap-y-1">
+                  <Badge variant="outline" className="max-w-full px-1.5 py-0"><Text className="shrink text-[10px]" numberOfLines={1}>{String(item.rule_name || item.rule_id || '未绑定规则')}</Text></Badge>
+                  {[item.race, item.class].filter(Boolean).length ? (
+                    <Text variant="small" className="shrink text-muted-foreground" numberOfLines={1}>
+                      {[item.race, item.class].filter(Boolean).join(' · ')}
+                    </Text>
+                  ) : null}
+                </View>
+                {item.background ? <Text variant="small" numberOfLines={2}>{String(item.background)}</Text> : null}
+              </View>
+              <View className="gap-1">
+                <Button size="sm" variant="ghost" onPress={() => openEditor(item)}><Text>编辑</Text></Button>
+                <Button size="sm" variant="ghost" onPress={() => void removeCard(item)}><Text className="text-destructive">删除</Text></Button>
+              </View>
+            </CardContent>
+          </Card>
         )}
         ListEmptyComponent={!loading ? <View className="items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12"><Icon as={UserRound} size={28} className="text-muted-foreground" /><Text className="font-semibold">角色卡库还是空的</Text><Text variant="small">创建第一张角色卡，之后可以在不同对局复用。</Text></View> : null}
       />
-      <Sheet open={sheetOpen} onClose={closeEditor} className="h-auto"><View className="gap-4 pt-1"><View><Text variant="h3">{editing ? '编辑角色卡' : '创建角色卡'}</Text><Text variant="small">先记录名称和背景；规则属性会在具体对局中生成。</Text></View><View className="gap-1.5"><Text variant="small" className="font-semibold">角色名称</Text><Input value={name} onChangeText={setName} placeholder="角色名称" autoFocus /></View><View className="gap-1.5"><Text variant="small" className="font-semibold">角色背景</Text><Textarea value={description} onChangeText={setDescription} placeholder="身份、经历、性格或目标" className="min-h-28" /></View><View className="flex-row gap-2"><Button variant="outline" className="flex-1" onPress={closeEditor}><Text>取消</Text></Button><Button className="flex-1" disabled={busy || !name.trim()} onPress={() => void save()}><Text>{busy ? '保存中' : '保存'}</Text></Button></View></View></Sheet>
+      {sheetOpen ? (
+        // 内容长（规则/头像/技能/背景/金钱），固定 85% 高并交给 Sheet 内部滚动，保证底部按钮可达
+        <Sheet open onClose={closeEditor} className="h-[85%]">
+          <CharacterCardEditor
+            card={editing}
+            onSubmit={submitCard}
+            onClose={closeEditor}
+          />
+        </Sheet>
+      ) : null}
     </Screen>
   )
 }

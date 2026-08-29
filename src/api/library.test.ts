@@ -6,13 +6,16 @@ import {
   createCharacterCard,
   createCustomRule,
   createLoreEntry,
+  deleteCharacterCard,
   deleteMemory,
   fetchCharacterCards,
+  fetchCharacterSchema,
   fetchLoreEntries,
   fetchMemories,
   fetchRuleLibrary,
   fetchWorlds,
   installMarketplacePlugin,
+  updateCharacterCard,
   updateLoreEntry,
 } from './library'
 
@@ -29,12 +32,21 @@ describe('library API contracts', () => {
   it('uses the server character-card routes and write method', async () => {
     await fetchCharacterCards()
     await createCharacterCard({ character_name: '莱拉' })
+    await updateCharacterCard('card/a', { gold: 50 })
+    await deleteCharacterCard('card/a')
+    await fetchCharacterSchema('dnd5e')
 
     expect(mockedApi).toHaveBeenNthCalledWith(1, '/character-cards')
     expect(mockedApi).toHaveBeenNthCalledWith(2, '/character-cards', {
       method: 'POST',
       body: JSON.stringify({ character_name: '莱拉' }),
     })
+    expect(mockedApi).toHaveBeenNthCalledWith(3, '/character-cards/card%2Fa', {
+      method: 'PUT',
+      body: JSON.stringify({ gold: 50 }),
+    })
+    expect(mockedApi).toHaveBeenNthCalledWith(4, '/character-cards/card%2Fa', { method: 'DELETE' })
+    expect(mockedApi).toHaveBeenNthCalledWith(5, '/rules/dnd5e/character-schema?language=zh-CN')
   })
 
   it('keeps canonical world and lore entry IDs in route parameters', async () => {

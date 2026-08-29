@@ -4,6 +4,8 @@
  * 而是经 apiBlob 下载字节后转 data URI 本地渲染；内置头像等静态资源才用直链。
  */
 import { apiBlob, buildStaticAssetUrl, buildUrl, shareQuery } from './client'
+import { bytesToBase64 } from '@/lib/base64'
+import { builtinPortraitAssetPath } from '@/lib/portraits'
 import type { CharacterPortrait, SceneImageRef } from './types'
 
 export interface AssetSource {
@@ -37,13 +39,12 @@ export function mapAssetSource(url?: string | null): AssetSource | null {
 const dataUriCache = new Map<string, string>()
 const inflightDownloads = new Map<string, Promise<string>>()
 
-function blobToDataUri(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result || ''))
-    reader.onerror = () => reject(reader.error ?? new Error('读取资源数据失败'))
-    reader.readAsDataURL(blob)
-  })
+/**
+ * 走 response.arrayBuffer() 原生直读字节，不经 response.blob()：后者会进 RN 的
+ * native blob store（base64 往返拷贝，大图明显变慢，Expo fetch 也会告警）。
+ */
+function bytesToDataUri(bytes: Uint8Array, contentType: string): string {
+  return `data:${contentType};base64,${bytesToBase64(bytes)}`
 }
 
 /**
@@ -59,7 +60,8 @@ export async function apiAssetDataUri(apiPath: string): Promise<string> {
   const download = (async () => {
     try {
       const response = await apiBlob(apiPath)
-      const dataUri = await blobToDataUri(await response.blob())
+      const bytes = new Uint8Array(await response.arrayBuffer())
+      const dataUri = bytesToDataUri(bytes, response.headers.get('content-type') ?? '')
       dataUriCache.set(apiPath, dataUri)
       return dataUri
     } finally {
@@ -97,20 +99,8 @@ export function gameSceneCoverSource(gameKey: string, ruleId?: string | null): A
 }
 
 function builtinAvatarSource(portrait: CharacterPortrait): AssetSource | null {
-  const [rawRule, rawIndex] = String(portrait.id || '').split(':')
-  const rule = rawRule.replace(/_en$/, '')
-  const index = Number(rawIndex)
-  const supportedRules = new Set([
-    'dnd5e',
-    'freeform_coc',
-    'freeform_cyberpunk',
-    'freeform_fantasy',
-    'freeform_wuxia',
-    'tavern_free',
-  ])
-  if (!supportedRules.has(rule) || !Number.isInteger(index) || index < 0 || index > 7) return null
-  const fileName = index < 4 ? `realistic-${index + 1}.jpg` : `anime-${index - 3}.jpg`
-  return { uri: buildStaticAssetUrl(`/avatars/v3/${rule}/${fileName}`) }
+  const path = builtinPortraitAssetPath(portrait.id)
+  return path ? { uri: buildStaticAssetUrl(path) } : null
 }
 
 function pluginAvatarSource(portrait: CharacterPortrait): AssetSource | null {
@@ -169,4 +159,29 @@ export function sceneImageSource(
     return assetSource(`/generated-images/${assetId}`)
   }
   return null
+}
+
+/**
+ * 世界卡片封面（对齐 Web WorldsView 的 resolveSceneImageUrl）：
+ * builtin 走规则内置场景静态图；upload/generated/plugin 是鉴权 /api 资源，
+ * 经 apiAssetDataUri 下载（SceneCover 失败时回退 uri 的静态场景图）。
+ */
+export function worldCoverSource(
+  sceneImage?: SceneImageRef | null,
+  fallbackRuleId?: string | null,
+): AssetSource {
+  if (sceneImage?.kind === 'builtin') {
+    return { uri: buildStaticAssetUrl(ruleSceneAssetPath(sceneImage.id || fallbackRuleId)) }
+  }
+  if (sceneImage?.kind === 'upload' && sceneImage.asset_id) {
+    return assetSource(`/scene-images/${encodeURIComponent(sceneImage.asset_id)}`)
+  }
+  if ((sceneImage?.kind === 'generated' || sceneImage?.kind === 'asset') && sceneImage.asset_id) {
+    return assetSource(`/generated-images/${encodeURIComponent(sceneImage.asset_id)}`)
+  }
+  if (sceneImage?.kind === 'plugin' && sceneImage.plugin_id && sceneImage.path) {
+    const path = sceneImage.path.replace(/\\/g, '/').split('/').map(encodeURIComponent).join('/')
+    return assetSource(`/plugins/assets/${encodeURIComponent(sceneImage.plugin_id)}/${path}`)
+  }
+  return { uri: buildStaticAssetUrl(ruleSceneAssetPath(fallbackRuleId)) }
 }
