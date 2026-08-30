@@ -9,8 +9,9 @@ DiceFrame（AI 跑团引擎）的 React Native 客户端。**v1 聚焦核心游�
 | 项 | 选择 |
 |---|---|
 | 框架 | Expo SDK 57（React Native 0.86 / React 19.2 / New Architecture） |
-| 路由 | expo-router（文件式；一级双 Tab + 二级对局页） |
-| 主题 | 与 Web 端统一：`--df-*` 令牌移植（暗=midnight / 亮=light，跟随系统），鎏金 + 青蓝 |
+| 路由 | expo-router（文件式；一级 Tab + 二级对局页） |
+| 主题 | 与 Web 端统一：令牌移植（暗=midnight / 亮=light，跟随系统），鎏金 + 青蓝 |
+| 多语言 | react-i18next + expo-localization（zh-CN / en / ja，默认跟随系统；文案资源同步自主仓库） |
 | 性能 | React Compiler（`experiments.reactCompiler`；**全库不手写 `useMemo`/`useCallback`/`React.memo`**） |
 | UI | NativeWind v4（≥4.2.6）+ 手写 shadcn 风格组件（`src/components/ui`） |
 | 状态 | zustand（`settings` 持久化 + `game` 对局态） |
@@ -127,14 +128,17 @@ SHA-256 校验文件：
 ```
 src/
 ├── app/                 # expo-router：index 分流、login/join 流程页、
-│   │                    # (tabs)/ 一级双 Tab（overview + profile）、play/ 二级对局页
+│   │                    # (tabs)/ 一级 Tab（overview/characters/lorebook/profile）、play/ 二级对局页
 │   └── (tabs)/
-│       ├── overview/    # Tab1 对局列表
-│       └── profile.tsx  # Tab2 我的（服务器切换/身份/语速/关于）
+│       ├── overview.tsx     # 对局列表
+│       ├── characters.tsx   # 跨对局角色名册
+│       ├── lorebook.tsx     # 世界书（世界选择 + 词条）
+│       └── profile.tsx      # 我的（设置菜单/身份/关于）
 ├── api/                 # client（鉴权+分享参数+自管理会话）、games、speech、assets、types
+├── i18n/                # react-i18next：messages/web = 上游翻译镜像，messages/mobile = df 前缀功能簇
 ├── stream/gameStream.ts # SSE 通道（ticket/游标/重连/降级轮询）
-├── stores/              # settings（持久化）、game（对局态，镜像 Web useGame.ts）
+├── stores/              # settings（持久化，含 themeMode/language）、game（对局态）
 ├── features/play/       # 时间线、GM 叙事解析渲染、行动输入、语音输入、TTS、角色面板、GM 工具
-├── lib/                 # 主题令牌 JS 侧（theme-colors）、文案、链接解析
+├── lib/                 # 主题令牌 JS 侧（theme.ts）、locale 解析、链接解析
 └── components/ui/       # shadcn 风格基础组件（button/card/badge/icon-button/…）
 ```

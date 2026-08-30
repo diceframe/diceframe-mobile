@@ -2,7 +2,7 @@
   "expo": {
     "name": "DiceFrame",
     "slug": "diceframe",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "diceframe",
@@ -24,8 +24,12 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.diceframe.mobile",
-      "versionCode": 2,
-      "permissions": ["RECORD_AUDIO", "READ_MEDIA_IMAGES", "READ_EXTERNAL_STORAGE"],
+      "versionCode": 3,
+      "permissions": [
+        "RECORD_AUDIO",
+        "READ_MEDIA_IMAGES",
+        "READ_EXTERNAL_STORAGE"
+      ],
       "usesCleartextTraffic": true
     },
     "web": {
@@ -52,7 +56,8 @@
       ],
       "./plugins/withCleartextTraffic",
       "./plugins/withAndroidReleaseSigning",
-      "./plugins/withAbiSplits"
+      "./plugins/withAbiSplits",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true,
