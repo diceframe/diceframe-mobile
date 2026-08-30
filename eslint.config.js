@@ -17,5 +17,16 @@ module.exports = defineConfig([
       'react-hooks/exhaustive-deps': 'off',
     },
   },
+  {
+    name: 'api/types.ts 上游镜像特例',
+    files: ['src/api/types.ts'],
+    rules: {
+      // 镜像段与移动端扩展段靠 declaration merging 合并同名接口，
+      // import/export 规则不识别合法合并会误报；本文件须与上游逐字一致，
+      // 上游的 Array<T> 写法也不改，否则每次同步都会产生无意义 diff。
+      'import/export': 'off',
+      '@typescript-eslint/array-type': 'off',
+    },
+  },
   globalIgnores(['dist/*', '.expo/*']),
 ])

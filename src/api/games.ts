@@ -316,9 +316,9 @@ export async function fetchWorldCandidates(gameKey: string, language = 'zh-CN'):
     candidates.push({
       id,
       name: template.name || template.world_name || id,
-      description: template.description,
+      description: template.description ?? '',
       source: '模板',
-      default_rule: template.default_rule,
+      default_rule: template.default_rule ?? '',
     })
   }
   for (const world of worldData.worlds ?? []) {
@@ -328,8 +328,9 @@ export async function fetchWorldCandidates(gameKey: string, language = 'zh-CN'):
     candidates.push({
       id,
       name: world.name || world.world_name || id,
-      description: world.description,
+      description: world.description ?? '',
       source: '世界书',
+      default_rule: '',
       entry_count: world.entry_count,
     })
   }

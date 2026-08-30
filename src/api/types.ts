@@ -1,47 +1,36 @@
 /**
- * DiceFrame 移动端 API 契约（v1 子集）。
+ * DiceFrame 移动端 API 契约 —— 上游全量镜像 + 移动端扩展段。
  *
- * 来源：frontend-v2/src/api/types.ts（该文件本身是后端 API 的手写镜像，
- * 后端无 OpenAPI/代码生成）。两端以 Web 端为准做同步：
- * 修改本文件前先核对 Web 端同名接口，反之在后端改字段时两处都要更新。
- * 仅收录移动端 v1 用到的接口；未收录的（插件市场、更新器、P2P 等）后续按需补充。
+ * 从文件开头到「移动端扩展段」分隔线为止，逐字拷贝自主仓库
+ * frontend-v2/src/api/types.ts（该文件是后端 API 的手写镜像，后端无 OpenAPI/代码生成）。
+ * 同步方式：整文件重拷上游版本后，还原文末「移动端扩展段」。
+ * 不要在镜像段手改字段；移动端新增契约一律写进扩展段，
+ * 与上游同名接口靠 declaration merging 合并（同名成员类型必须一致）。
  */
 
 export type JsonObject = Record<string, unknown>
 
-export interface SecretField {
-  configured: boolean
-  masked: string
-}
+export interface CharacterResource { current?: number; max?: number; min?: number }
 
-// ---------- 角色 ----------
+export interface CharacterIdentity { [key: string]: string | number | undefined }
 
-export interface CharacterResource {
-  current?: number
-  max?: number
-  min?: number
-}
+export interface CharacterSkill { name: string; value?: number }
 
-export interface CharacterIdentity {
-  [key: string]: string | number | undefined
-}
+export interface CharacterItem { name?: string; type?: string; damage?: number; slot?: string; quality?: string; qty?: number; effect?: string; category?: string; note?: string; [key: string]: unknown }
 
-export interface CharacterSkill {
-  name: string
-  value?: number
-}
+export type GeneratedImagePurpose = 'scene' | 'avatar' | 'item' | 'map' | 'freeform'
 
-export interface CharacterItem {
-  name?: string
-  type?: string
-  damage?: number
-  slot?: string
-  quality?: string
-  qty?: number
-  effect?: string
-  category?: string
-  note?: string
-  [key: string]: unknown
+export interface GeneratedImageRecord {
+  generation_id: string
+  asset_id: string
+  purpose: GeneratedImagePurpose
+  prompt?: string
+  revised_prompt?: string
+  provider?: string
+  model?: string
+  created_at?: string
+  context?: Record<string, unknown>
+  round?: number
 }
 
 export interface CharacterPortrait {
@@ -67,6 +56,16 @@ export interface MapBackgroundSelection {
   map_id?: string
 }
 
+export interface MapBackgroundOption {
+  id: string
+  kind: MapBackgroundSelection['kind']
+  name: string
+  description?: string
+  plugin_name?: string
+  url?: string
+  selection?: MapBackgroundSelection
+}
+
 export interface CharacterSheet {
   character_name?: string
   race?: string
@@ -82,12 +81,28 @@ export interface CharacterSheet {
   max_hp?: number
   gold?: number
   attributes?: Record<string, number>
-  skills?: (string | CharacterSkill)[]
+  skills?: Array<string | CharacterSkill>
   equipment?: CharacterItem[]
   inventory?: CharacterItem[]
   key_items?: CharacterItem[]
   portrait?: CharacterPortrait | null
   [key: string]: unknown
+}
+
+export interface CharacterCard extends CharacterSheet {
+  id?: string
+  card_id?: string
+  source?: string
+  schema_version?: number
+  rule_id?: string
+  rule_name?: string
+  rule_version?: string
+  mechanics?: string
+  language?: string
+  active_locale?: string
+  character_name: string
+  race?: string
+  class?: string
 }
 
 export interface Player {
@@ -96,8 +111,6 @@ export interface Player {
   character_sheet?: CharacterSheet
   [key: string]: unknown
 }
-
-// ---------- 检定 ----------
 
 export interface CheckRequest {
   check_id?: string
@@ -174,8 +187,6 @@ export interface PublicAction {
   check_request?: CheckRequest
 }
 
-// ---------- 游戏 ----------
-
 export interface Multiplayer {
   state?: string
   ready_count?: number
@@ -195,7 +206,7 @@ export interface PendingPayment {
   uid?: string
   amount?: number
   recipient_uid?: string
-  rewards?: { name: string; category?: string }[]
+  rewards?: Array<{ name:string; category?:string }>
   round?: number
   item?: string
   description?: string
@@ -225,7 +236,134 @@ export interface GameDetail {
   pending_luck_decisions?: CheckResult[]
   round_check_results?: CheckResult[]
   total_tokens?: number
-  plot_tracker?: PlotTracker
+  token_budget_bump?: TokenBudgetBump | null
+  [key: string]: unknown
+}
+
+export interface TokenBudgetBump {
+  kind: 'narrative' | string
+  from: number
+  to: number
+}
+
+export interface StoryRecap {
+  id?: string
+  text: string
+  from_round?: number
+  to_round?: number
+  created_at?: string
+}
+
+export interface RoundSceneImage {
+  reference?: SceneImageRef
+  prompt?: string
+  revised_prompt?: string
+  status?: 'ready' | 'failed' | string
+  swipe_index?: number
+}
+
+export type SceneGalleryItem = GeneratedImageRecord
+
+export interface LogEntry {
+  round?: number
+  gm_response?: string
+  player_actions?: unknown
+  actions?: unknown
+  swipes?: unknown[]
+  current_swipe?: number
+  tags_summary?: LogTagsSummary
+  check_results?: CheckResult[]
+  story_recaps?: StoryRecap[]
+  scene_image?: RoundSceneImage
+  [key: string]: unknown
+}
+
+export interface PrivateMessage {
+  text?: string
+  user_id?: string
+  round?: number
+  character_name?: string
+  [key: string]: unknown
+}
+
+export interface MapLocation {
+  id?: string
+  name: string
+  connected_to?: string[]
+  content?: string
+  keywords?: string[]
+  source?: 'lorebook' | 'plugin' | string
+  plugin_id?: string
+  plugin_name?: string
+  x?: number
+  y?: number
+  icon_url?: string
+  image_url?: string
+  [key: string]: unknown
+}
+
+export interface MapAsset {
+  id: string
+  ref?: string
+  name?: string
+  description?: string
+  plugin_id?: string
+  plugin_name?: string
+  path?: string
+  url?: string
+}
+
+export interface MapDefinition {
+  id: string
+  source_id?: string
+  name: string
+  description?: string
+  mode: 'graph' | string
+  plugin_id?: string
+  plugin_name?: string
+  background?: MapAsset | null
+  default_view?: { x?: number; y?: number; zoom?: number }
+}
+
+export interface MapData {
+  schema_version?: number
+  map_mode?: 'graph' | string
+  locations: MapLocation[]
+  current_scene?: string
+  current_location_id?: string
+  active_map?: MapDefinition | null
+  background_selection?: MapBackgroundSelection
+  background_options?: MapBackgroundOption[]
+  assets?: {
+    icons?: MapAsset[]
+    scenes?: MapAsset[]
+  }
+  capabilities?: {
+    can_expand?: boolean
+    can_edit?: boolean
+    has_background?: boolean
+    has_plugin_assets?: boolean
+  }
+  [key: string]: unknown
+}
+
+export interface LoreEntry {
+  id?: string
+  world_id?: string
+  name: string
+  type?: string
+  tier?: string
+  content?: string
+  summary?: string
+  description?: string
+  keywords?: string[]
+  is_constant?: boolean
+  unreliable?: boolean
+  [key: string]: unknown
+}
+
+export interface LorebookResponse {
+  entries?: LoreEntry[]
   [key: string]: unknown
 }
 
@@ -256,6 +394,53 @@ export interface GamesResponse {
   games?: GameSummary[]
 }
 
+export interface GameMutationResponse {
+  ok?: boolean
+  error?: string
+  game_key?: string
+  world_id?: string
+  world_name?: string
+  narration?: string
+  players?: Player[]
+  round_number?: number
+  state?: string
+  seed_code?: string
+  language?: string
+  generated_password?: string
+  [key: string]: unknown
+}
+
+export interface BatchDeleteGamesResponse {
+  deleted?: string[]
+  failed?: Array<{ game_key?: string; error?: string }>
+  [key: string]: unknown
+}
+
+export interface GeneratedCharacterResponse {
+  ok?: boolean
+  error?: string
+  character?: CharacterSheet
+}
+export interface GeneratedWorldResponse {
+  ok?: boolean
+  error?: string
+  world_id: string
+  world_name?: string
+  language?: string
+  [key: string]: unknown
+}
+
+export interface GeneratedRuleResponse {
+  ok?: boolean
+  error?: string
+  rule_id?: string
+  rule_name?: string
+  description?: string
+  source_rule_id?: string
+  rule?: RuleTemplate
+  [key: string]: unknown
+}
+
 export interface PlayerCreateResponse {
   ok?: boolean
   error?: string
@@ -263,22 +448,74 @@ export interface PlayerCreateResponse {
   [key: string]: unknown
 }
 
-// ---------- 日志 ----------
-
-export interface StoryRecap {
-  id?: string
-  text: string
-  from_round?: number
-  to_round?: number
-  created_at?: string
+export interface CharacterImportResponse {
+  ok?: boolean
+  error?: string
+  card?: CharacterCard
+  imported_as?: 'character_card' | 'npc'
+  npc_name?: string
+  world_id?: string
+  lorebook_entries?: number
+  nsfw_warning?: boolean
 }
 
-export interface RoundSceneImage {
-  reference?: SceneImageRef
-  prompt?: string
-  revised_prompt?: string
-  status?: 'ready' | 'failed' | string
-  swipe_index?: number
+export interface RuleAttribute {
+  key: string
+  min: number
+  max: number
+  name?: string
+  name_en?: string
+  display_name?: string
+  [key: string]: unknown
+}
+
+export interface SkillSpec {
+  key?: string
+  name?: string
+  value?: number
+  [key: string]: unknown
+}
+
+export interface IdentityFieldSpec {
+  key: string
+  label?: string | { zh?: string; en?: string }
+  type?: string
+  legacy_field?: keyof CharacterSheet | string
+  [key: string]: unknown
+}
+
+export interface ResourceSpec {
+  key: string
+  label?: string | { zh?: string; en?: string }
+  max?: number
+  [key: string]: unknown
+}
+
+export interface SpecialStatSpec {
+  key: string
+  name?: string
+  max?: number
+  [key: string]: unknown
+}
+export interface CharacterListResponse {
+  players?: Player[]
+  npcs?: CharacterCard[]
+  rule_attrs?: RuleAttribute[]
+  rule_attrs_total?: number
+  rule_meta?: RuleMeta
+  rule_special_stats?: SpecialStatSpec[]
+  [key: string]: unknown
+}
+
+export interface CharacterCardsResponse {
+  cards?: CharacterCard[]
+}
+
+export interface LogActionRecord {
+  user_id?: string
+  text?: string
+  action?: string
+  [key: string]: unknown
 }
 
 export interface LogTagsSummary {
@@ -288,33 +525,46 @@ export interface LogTagsSummary {
   [key: string]: unknown
 }
 
-export interface LogEntry {
-  round?: number
-  gm_response?: string
-  player_actions?: unknown
-  actions?: unknown
-  swipes?: unknown[]
-  current_swipe?: number
-  tags_summary?: LogTagsSummary
-  check_results?: CheckResult[]
-  story_recaps?: StoryRecap[]
-  scene_image?: RoundSceneImage
+export interface MemoryEntry {
+  id?: string
+  entity?: string
+  title?: string
+  type?: string
+  relation?: string
+  value?: string
+  content?: string
+  text?: string
+  summary?: string
+  confidence?: number
   [key: string]: unknown
 }
 
+export interface MemoriesResponse {
+  memories?: MemoryEntry[]
+  entries?: MemoryEntry[]
+  total?: number
+  [key: string]: unknown
+}
+
+export interface LoreGenerateResponse {
+  ok?: boolean
+  error?: string
+  count?: number
+  entries?: LoreEntry[]
+}
+
+export interface WorldCreateResponse {
+  ok?: boolean
+  error?: string
+  world_id?: string
+  id?: string
+  [key: string]: unknown
+}
 export interface GameLogResponse {
   log?: LogEntry[]
   total?: number
   total_pages?: number
   page?: number
-}
-
-export interface PrivateMessage {
-  text?: string
-  user_id?: string
-  round?: number
-  character_name?: string
-  [key: string]: unknown
 }
 
 export interface PrivateLogResponse {
@@ -340,7 +590,41 @@ export interface HealthResponse {
   [key: string]: unknown
 }
 
-// ---------- 行动 / GM ----------
+export interface PlayerContextResponse {
+  preview?: boolean
+  [key: string]: unknown
+}
+
+export interface RuleMeta {
+  rule_id?: string
+  rule_name?: string
+  rule_version?: string
+  dice_system?: string
+  attr_hint?: string
+  attr_hint_en?: string
+  skill_hint?: string
+  skill_hint_en?: string
+  hp_formula?: string
+  mechanics?: string
+  currency?: string
+  auto_hp?: boolean
+  attribute_points?: number
+  attributes?: RuleAttribute[]
+  max_skills?: number
+  skill_mode?: string
+  skill_point_total?: number
+  max_skill_value?: number
+  skill_point_spend_mode?: string
+  skill_base_values?: Record<string, number>
+  skill_pools?: Record<string, string[]>
+  skill_pool?: SkillSpec[]
+  skills?: SkillSpec[]
+  identity_schema?: IdentityFieldSpec[]
+  resource_schema?: ResourceSpec[]
+  ui_schema?: { currency_label?: string | { zh?: string; en?: string }; [key: string]: unknown }
+  rule_special_stats?: SpecialStatSpec[]
+  [key: string]: unknown
+}
 
 export interface CommandResponse {
   ok?: boolean
@@ -377,182 +661,8 @@ export interface LuckDecisionResponse extends ActionSubmitResponse {
   ready_to_resolve?: boolean
   already_resolved?: boolean
 }
-
-// ---------- 角色面板规则元数据 ----------
-
-export interface RuleAttribute {
-  key: string
-  min: number
-  max: number
-  name?: string
-  name_en?: string
-  display_name?: string
-  [key: string]: unknown
-}
-
-export interface SkillSpec {
-  key?: string
-  name?: string
-  value?: number
-  [key: string]: unknown
-}
-
-export interface SpecialStatSpec {
-  key: string
-  name?: string
-  max?: number
-  [key: string]: unknown
-}
-
-export interface RuleMeta {
-  rule_id?: string
-  rule_name?: string
-  rule_version?: string
-  dice_system?: string
-  skill_hint?: string
-  skill_hint_en?: string
-  hp_formula?: string
-  mechanics?: string
-  currency?: string
-  auto_hp?: boolean
-  max_skills?: number
-  skill_point_total?: number
-  max_skill_value?: number
-  skill_pool?: SkillSpec[]
-  skills?: SkillSpec[]
-  rule_special_stats?: SpecialStatSpec[]
-  [key: string]: unknown
-}
-
-export interface CharacterListResponse {
-  players?: Player[]
-  npcs?: CharacterCardSummary[]
-  rule_attrs?: RuleAttribute[]
-  rule_attrs_total?: number
-  rule_meta?: RuleMeta
-  rule_special_stats?: SpecialStatSpec[]
-  [key: string]: unknown
-}
-
-/** 规则角色模式（GET /rules/{id}/character-schema），编辑角色卡时取技能池 */
-export interface CharacterSchemaResponse {
-  ok?: boolean
-  error?: string
-  rule_attrs?: RuleAttribute[]
-  rule_attrs_total?: number
-  rule_meta?: RuleMeta
-  skill_pool?: (string | SkillSpec)[]
-  [key: string]: unknown
-}
-
-/** 移动端只读 NPC 列表时需要的卡面字段（完整 CharacterCard 不引入） */
-export interface CharacterCardSummary extends CharacterSheet {
-  id?: string
-  card_id?: string
-  source?: string
-  rule_id?: string
-  rule_name?: string
-  [key: string]: unknown
-}
-
-// ---------- 地图 ----------
-
-export interface MapLocation {
-  id?: string
-  name: string
-  connected_to?: string[]
-  content?: string
-  keywords?: string[]
-  source?: 'lorebook' | 'plugin' | string
-  plugin_id?: string
-  plugin_name?: string
-  x?: number
-  y?: number
-  icon_url?: string
-  image_url?: string
-  [key: string]: unknown
-}
-
-export interface MapAsset {
-  id: string
-  ref?: string
-  name?: string
-  description?: string
-  plugin_id?: string
-  plugin_name?: string
-  path?: string
-  url?: string
-  [key: string]: unknown
-}
-
-export interface MapDefinition {
-  id: string
-  source_id?: string
-  name: string
-  description?: string
-  mode: 'graph' | string
-  plugin_id?: string
-  plugin_name?: string
-  background?: MapAsset | null
-  default_view?: { x?: number; y?: number; zoom?: number }
-  [key: string]: unknown
-}
-
-export interface MapData {
-  schema_version?: number
-  map_mode?: 'graph' | string
-  locations: MapLocation[]
-  current_scene?: string
-  current_location_id?: string
-  active_map?: MapDefinition | null
-  assets?: {
-    icons?: MapAsset[]
-    scenes?: MapAsset[]
-  }
-  [key: string]: unknown
-}
-
-// ---------- 配置 / 语音 ----------
-
-export interface AppConfig {
-  public_base_url?: string
-  access_password?: SecretField
-  tts_provider?: 'browser' | 'openai-compatible' | 'gpt-sovits' | 'edge-tts'
-  tts_default_voice?: string
-  tts_gm_voice?: string
-  tts_player_voice?: string
-  asr_provider?: 'disabled' | 'openai-compatible'
-  asr_base_url?: string
-  asr_model?: string
-  [key: string]: unknown
-}
-
-export interface TtsSpeechRequest {
-  text: string
-  voice?: string
-  language?: string
-  speed?: number
-}
-
-export interface TranscriptionResponse {
-  ok?: boolean
-  text?: string
-  error?: string
-  [key: string]: unknown
-}
-
-export interface PlayerContextResponse {
-  preview?: boolean
-  [key: string]: unknown
-}
-
-// ---------- 世界观模板 / 规则（创建对局选择器） ----------
-
-/** GM 叙事风格（仅用户自建世界可编辑，对齐 Web GmStyle） */
-export interface GmStyle {
-  tone?: string
-  verbosity?: 'brief' | 'normal' | 'detailed'
-  custom_instructions?: string
+export interface BotBindTokenResponse {
+  bind_token: string
   [key: string]: unknown
 }
 
@@ -566,22 +676,9 @@ export interface WorldTemplateSummary {
   recommended_rules?: string[]
   scene_image?: SceneImageRef
   language?: string
-  active_locale?: string
-  lorebook_count?: number
-  source?: 'builtin' | 'user' | 'plugin'
-  /** 对局临时模板（*_copy_* / *_blank_*），图鉴中应跳过 */
-  game_scoped?: boolean
-  plugin_id?: string
-  plugin_name?: string
-  gm_style?: GmStyle | null
   [key: string]: unknown
 }
 
-export interface WorldTemplatesResponse {
-  templates?: WorldTemplateSummary[]
-}
-
-/** GET /worlds 的用户世界行（lore store + gm_style 附加字段） */
 export interface WorldSummary {
   id?: string
   world_id?: string
@@ -591,24 +688,32 @@ export interface WorldSummary {
   entry_count?: number
   language?: string
   scene_image?: SceneImageRef
-  gm_style?: GmStyle | null
   [key: string]: unknown
 }
 
-export interface WorldCloneResponse {
-  ok?: boolean
-  error?: string
-  world_id?: string
-  name?: string
-  language?: string
+export interface WorldTemplatesResponse {
+  templates?: WorldTemplateSummary[]
 }
 
-/** GET /adventures 的冒险包摘要（图鉴徽章只用 name + recommended_world_id） */
-export interface AdventureSummary {
-  adventure_id?: string
-  name?: string
-  recommended_world_id?: string
-  [key: string]: unknown
+export interface WorldListResponse {
+  worlds?: WorldSummary[]
+}
+
+export interface WorldCandidate {
+  id: string
+  name: string
+  description: string
+  source: string
+  default_rule: string
+  scene_image?: SceneImageRef
+  entry_count?: number
+}
+
+export interface RuleAttributeEdit {
+  key: string
+  name: string
+  min: number
+  max: number
 }
 
 export interface RuleSummary {
@@ -631,7 +736,764 @@ export interface RulesResponse {
   total?: number
 }
 
-// ---------- 剧情追踪（GameDetail.plot_tracker） ----------
+export interface CharacterSchemaResponse {
+  ok?: boolean
+  error?: string
+  rule_attrs?: RuleAttribute[]
+  rule_attrs_total?: number
+  rule_classes?: string[]
+  rule_special_stats?: SpecialStatSpec[]
+  rule_meta?: RuleMeta
+  skill_pool?: Array<string | SkillSpec>
+}
+
+export interface RuleTemplate extends JsonObject {
+  rule_id?: string
+  rule_name?: string
+  source_rule_id?: string
+  scene_image?: SceneImageRef
+  description?: string
+  dice_system?: string
+  combat_model?: string
+  mechanics?: string
+  ruleset_level?: string
+  attribute_points?: number
+  max_skills?: number
+  skill_point_total?: number
+  currency?: string
+  hp_formula?: string
+  gm_prompt_appendix?: string
+  attributes?: RuleAttributeEdit[]
+  skill_pool?: SkillSpec[]
+  skills?: SkillSpec[]
+  custom?: boolean
+}
+
+export interface RuleDetailResponse {
+  ok?: boolean
+  rule?: RuleTemplate
+  error?: string
+}
+
+export interface RuleForm {
+  rule_id: string
+  rule_name: string
+  description: string
+  dice_system: string
+  combat_model: string
+  mechanics: string
+  ruleset_level: string
+  attribute_points: number
+  max_skills: number
+  skill_point_total: number
+  currency: string
+  hp_formula: string
+  gm_prompt_appendix: string
+  attributes: RuleAttributeEdit[]
+}
+
+export type RuleEditorState =
+  | { mode: 'new'; source_rule_id: string; id: string; name: string }
+  | { mode: 'copy'; source_rule_id: string; id: string; name: string }
+  | { mode: 'edit'; id: string; name: string }
+export interface PluginField {
+  type: string
+  title?: string
+  description?: string
+  default?: unknown
+  enum?: string[]
+  minimum?: number
+  maximum?: number
+  exclusiveMinimum?: number
+  exclusiveMaximum?: number
+  minLength?: number
+  maxLength?: number
+  ui?: {
+    control?: string
+    group?: string
+    sensitive?: boolean
+    order?: number
+    generate?: boolean
+    env?: string
+    options_source?: string
+    api_format?: string
+    provider_ref_field?: string
+    provider_base_url_env?: string
+    provider_api_key_env?: string
+    provider_api_format_env?: string
+  }
+}
+
+export interface PluginInfo {
+  id: string
+  name: string
+  version?: string
+  description?: string
+  plugin_type?: string
+  support?: { level: 'supported' | 'partial' | 'reserved' | 'unsupported'; summary: string }
+  has_entrypoint?: boolean
+  enabled: boolean
+  running: boolean
+  status: string
+  schema?: { properties?: Record<string, PluginField> }
+  config?: Record<string, unknown>
+  error?: string
+  capabilities?: string[]
+  permissions?: string[]
+  permission_details?: Array<{ id: string; description?: string }>
+  min_app_version?: string
+  needs_core_update?: boolean
+  tool_ui?: string
+  tools?: PluginToolDescriptor[]
+  contributions?: PluginContribution[]
+  docs?: string
+}
+
+export interface PluginToolDescriptor {
+  plugin_id: string
+  plugin_name: string
+  name: string
+  title?: string
+  description?: string
+  input_schema: JsonObject
+  tool_ui?: string
+}
+
+export interface PluginToolsResponse {
+  ok: boolean
+  error?: string
+  tools: PluginToolDescriptor[]
+  total?: number
+}
+
+export interface PluginToolInvokeResponse {
+  ok: boolean
+  error?: string
+  plugin_id?: string
+  tool_name?: string
+  result?: JsonObject
+}
+
+export interface PluginContribution {
+  plugin_id: string
+  plugin_name: string
+  plugin_type: string
+  kind: string
+  key: string
+  path: string
+  title?: string
+  description?: string
+}
+
+export interface PluginTheme {
+  schema_version: 2
+  id: string
+  name: string
+  description?: string
+  plugin_id: string
+  plugin_name?: string
+  tokens?: {
+    base?: Record<string, string>
+    dark?: Record<string, string>
+    light?: Record<string, string>
+  }
+}
+
+export interface PluginThemesResponse {
+  ok: boolean
+  error?: string
+  themes: PluginTheme[]
+  total?: number
+}
+
+export interface PluginContentResource {
+  id?: string
+  name?: string
+  character_name?: string
+  description?: string
+  plugin_id?: string
+  plugin_name?: string
+  source?: string
+  readonly?: boolean
+  [key: string]: unknown
+}
+
+export interface PluginContentResponse {
+  ok: boolean
+  error?: string
+  resources: Record<string, PluginContentResource[]>
+  total?: number
+}
+
+export interface PluginContentImportResponse {
+  ok?: boolean
+  error?: string
+  imported_as?: 'character_card' | 'lorebook_entry' | string
+  card?: CharacterCard
+  entry?: LoreEntry
+  source_plugin_id?: string
+  [key: string]: unknown
+}
+
+export interface PluginMarketplaceItem {
+  id: string
+  name: string
+  version?: string
+  description?: string
+  plugin_type?: string
+  support?: { level: 'supported' | 'partial' | 'reserved' | 'unsupported'; summary: string }
+  repository_url?: string
+  archive_url?: string
+  release_tag?: string
+  release_url?: string
+  branch?: string
+  stars?: number
+  distribution?: 'repository' | 'bundled' | string
+  risk_level?: 'declarative' | 'unrestricted-process' | 'bundled' | 'unknown' | string
+  update_policy?: 'automatic' | 'notify' | 'application' | 'approval-required' | 'blocked' | string
+  author?: unknown
+  license?: string
+  tags?: string[]
+  capabilities?: string[]
+  permissions?: string[]
+  tool_ui?: string
+  min_app_version?: string
+  needs_core_update?: boolean
+  docs?: string
+  homepage?: string
+  installed?: boolean
+  installed_version?: string
+  installed_commit_sha?: string
+  installed_update_policy?: string
+  trust_level?: 'official' | 'verified' | 'community' | string
+  commit_sha?: string
+  approved_permissions?: string[]
+  permission_changes?: string[]
+  verified?: boolean
+  installable?: boolean
+  verification_error?: string
+  latest?: {
+    version?: string
+    release_tag?: string
+    release_url?: string
+    commit_sha?: string
+    published_at?: string
+    requires_approval?: boolean
+  }
+  manifest?: Record<string, unknown>
+  stats?: {
+    downloads_total?: number
+    downloads_30d?: number
+    installs_total?: number
+    likes?: number
+    rating_count?: number
+    rating_average?: number
+    rating_score?: number
+  }
+  security?: {
+    install_allowed?: boolean
+    blocking_reasons?: string[]
+    warning_reasons?: string[]
+    [key: string]: unknown
+  }
+  readme?: {
+    available?: boolean
+    status?: string
+    content_hash?: string | null
+    synced_at?: string | null
+  }
+  liked?: boolean
+  own_rating?: { stars: number; tags: string[] } | null
+  // Hub 详情把"当前安装实例是否已点赞/已评分"放在 viewer 里（installation 维度）
+  viewer?: {
+    liked?: boolean
+    rating?: { stars: number; tags: string[] } | null
+  }
+  generated_at?: string
+}
+
+export interface PluginMarketplaceResponse {
+  ok: boolean
+  error?: string
+  plugins: PluginMarketplaceItem[]
+  total?: number
+  source?: {
+    mirror_name?: string
+    mirror_id?: string
+    mirror_index?: number
+    total_mirrors?: number
+    elapsed_ms?: number
+    url?: string
+    error?: string
+    hub?: boolean
+    stale?: boolean
+  }
+}
+
+export interface HubPreferences {
+  ok: boolean
+  available: boolean
+  telemetry_enabled: boolean
+  choice_made: boolean
+  identity_created: boolean
+  legal_version: string
+  legal_accepted: boolean
+  legal_documents: Record<'terms' | 'privacy', {
+    version: string
+    updated_at: string
+    language: 'zh' | 'en'
+    sha256: string
+  }>
+}
+
+export interface HubPluginReadmeResponse {
+  ok: boolean
+  plugin_id: string
+  html: string
+  markdown?: string
+  content_hash?: string
+  synced_at?: string
+  source?: {
+    hub?: boolean
+    github?: boolean
+    cached?: boolean
+    stale?: boolean
+    error?: string
+  }
+}
+
+export interface HubRatingSummary {
+  ok: boolean
+  count: number
+  average: number
+  bayesian_score: number
+  distribution: Record<'1' | '2' | '3' | '4' | '5', number>
+}
+
+export interface PluginMirror {
+  id: string
+  name: string
+  raw_prefix: string
+  clone_prefix: string
+  enabled: boolean
+  priority: number
+}
+
+export interface PluginMirrorsResponse {
+  ok: boolean
+  error?: string
+  mirrors: PluginMirror[]
+}
+
+export interface PluginMirrorTestResult {
+  ok: boolean
+  error?: string
+  mirror_id?: string
+  mirror_name?: string
+  mirror_index?: number
+  total_mirrors?: number
+  elapsed_ms?: number
+  status?: number
+  url?: string
+}
+
+export interface PluginMirrorTestResponse {
+  ok: boolean
+  error?: string
+  results: PluginMirrorTestResult[]
+}
+
+export interface SecretField {
+  configured: boolean
+  masked: string
+}
+
+export interface AiProvider {
+  id: string
+  name: string
+  base_url: string
+  api_format: 'openai' | 'anthropic' | string
+  models?: string[]
+  api_key?: SecretField
+}
+
+export interface BotTokenResponse {
+  ok: boolean
+  token: string
+  masked: string
+  regenerated: boolean
+}
+
+export interface AppConfig {
+  base_url?: string
+  model?: string
+  api_format?: string
+  api_key?: SecretField
+  ai_providers?: AiProvider[]
+  llm_provider_ref?: string
+  fallback1_provider_ref?: string
+  fallback2_provider_ref?: string
+  embedding_provider_ref?: string
+  tts_provider_ref?: string
+  asr_provider_ref?: string
+  imagegen_provider_ref?: string
+  fallback1_enabled?: boolean
+  fallback1_base_url?: string
+  fallback1_api_key?: SecretField
+  fallback1_model?: string
+  fallback1_api_format?: string
+  fallback2_enabled?: boolean
+  fallback2_base_url?: string
+  fallback2_api_key?: SecretField
+  fallback2_model?: string
+  fallback2_api_format?: string
+  embedding_enabled?: boolean
+  embedding_base_url?: string
+  embedding_api_key?: SecretField
+  embedding_model?: string
+  embedding_max_input?: number
+  narrative_max_tokens?: number
+  character_gen_max_tokens?: number
+  summary_max_tokens?: number
+  brief_max_tokens?: number
+  analysis_max_tokens?: number
+  text_gen_max_tokens?: number
+  proxy_enabled?: boolean
+  proxy_url?: string
+  proxy_source?: string
+  proxy_supported?: boolean
+  public_base_url?: string
+  web_cors_origins?: string
+  web_cors_origins_source?: 'env' | 'config' | string
+  access_password?: SecretField
+  bot_token?: SecretField
+  bot_token_source?: 'env' | 'generated'
+  update_channel?: 'stable' | 'preview'
+  tts_provider?: 'browser' | 'openai-compatible' | 'gpt-sovits' | 'edge-tts'
+  tts_base_url?: string
+  tts_api_key?: SecretField
+  tts_model?: string
+  tts_audio_format?: 'mp3' | 'opus' | 'aac' | 'flac' | 'wav' | 'pcm'
+  tts_default_voice?: string
+  tts_gm_voice?: string
+  tts_player_voice?: string
+  tts_timeout_seconds?: number
+  tts_cache_mb?: number
+  asr_provider?: 'disabled' | 'openai-compatible'
+  asr_base_url?: string
+  asr_api_key?: SecretField
+  asr_model?: string
+  asr_timeout_seconds?: number
+  imagegen_enabled?: boolean
+  imagegen_auto_scene?: boolean
+  imagegen_provider?: 'openai-compatible'
+  imagegen_base_url?: string
+  imagegen_api_key?: SecretField
+  imagegen_model?: string
+  imagegen_square_size?: string
+  imagegen_landscape_size?: string
+  imagegen_quality?: string
+  imagegen_style_prefix?: string
+  imagegen_timeout_seconds?: number
+  test_timeout_seconds?: number
+  [key: string]: unknown
+}
+
+export interface TtsVoiceProfile {
+  id: string
+  name: string
+  engine: 'openai-compatible' | 'gpt-sovits' | 'edge-tts' | string
+  voice_id?: string
+  language?: string
+  description?: string
+  plugin_id?: string
+  plugin_name?: string
+  preview_url?: string
+  license?: string
+  source?: 'personal' | 'plugin' | 'provider' | string
+}
+
+export interface TtsPersonalVoiceProfile {
+  id: string
+  name: string
+  engine: 'openai-compatible' | 'gpt-sovits' | 'edge-tts'
+  voice_id?: string
+  language?: string
+  description?: string
+  prompt_text?: string
+  prompt_language?: string
+  server_reference_path?: string
+  has_reference_audio?: boolean
+  source: 'personal'
+}
+
+export interface TtsPersonalVoiceProfileInput {
+  name: string
+  engine: 'openai-compatible' | 'gpt-sovits' | 'edge-tts'
+  voice_id?: string
+  language?: string
+  description?: string
+  prompt_text?: string
+  prompt_language?: string
+  server_reference_path?: string
+  file_data?: string
+  file_name?: string
+}
+
+export interface TtsPersonalVoiceProfilesResponse {
+  ok: boolean
+  profiles: TtsPersonalVoiceProfile[]
+  total: number
+}
+
+export interface TtsVoiceCatalog {
+  ok: boolean
+  provider: 'browser' | 'openai-compatible' | 'gpt-sovits' | 'edge-tts'
+  backend_enabled: boolean
+  model?: string
+  audio_format?: string
+  default_voice?: string
+  gm_voice?: string
+  player_voice?: string
+  max_text_chars?: number
+  voices: TtsVoiceProfile[]
+}
+
+export interface TtsSpeechRequest {
+  text: string
+  voice?: string
+  language?: string
+  speed?: number
+}
+
+export interface TestResult {
+  ok: boolean
+  error?: string
+  response?: string
+  elapsed?: number
+  tokens?: number
+  dimension?: number
+  status?: number
+}
+
+export interface LoginAuditEntry {
+  at: string
+  ip: string
+  success: boolean
+}
+
+export interface LoginAuditResponse {
+  entries: LoginAuditEntry[]
+  max_entries: number
+}
+
+export interface UpdateAsset {
+  name: string
+  download_url: string
+  size?: number
+}
+export interface UpdateRelease {
+  version:string
+  tag_name?:string
+  name?:string
+  body?:string
+  html_url?:string
+  published_at?:string
+  prerelease?:boolean
+  assets?:UpdateAsset[]
+}
+export interface UpdateCheckResponse {
+  ok:boolean
+  error?:string
+  message?:string
+  current_version:string
+  repository?:string
+  update_available:boolean
+  no_release?:boolean
+  channel?:string
+  latest?:UpdateRelease
+  release_url?:string
+  releases_url?:string
+  source_url?:string
+  install_hint?:Record<string,string>
+}
+export interface UpdateSelfUpdateInfo {
+  supported:boolean
+  mode?:'portable' | 'source' | 'development' | 'docker'
+  reason:string
+  hint:string
+}
+export interface UpdateStatusResponse {
+  state:'idle' | 'downloading' | 'verifying' | 'staged' | 'applying' | 'restarting' | 'done' | 'rolled-back' | 'failed'
+  version?:string
+  kind?:'source' | 'portable'
+  asset?:string
+  downloaded_bytes?:number
+  total_bytes?:number
+  mirror_used?:string
+  error?:string
+  path?:string
+  sha256?:string
+  downloaded_at?:number
+  restart_needed?:boolean
+  candidate_dir?:string
+  backup_dir?:string
+  current_version:string
+  self_update:UpdateSelfUpdateInfo
+}
+export interface UpdateDownloadResponse {
+  ok:boolean
+  error?:string
+  state?:string
+  version?:string
+  asset?:string
+  no_release?:boolean
+}
+
+export interface TunnelProvider {
+  plugin_id: string
+  name: string
+  running: boolean
+  min_app_version?: string
+  needs_core_update?: boolean
+}
+
+export interface TunnelStatus {
+  ok: boolean
+  active: boolean
+  url?: string
+  published_at?: number
+  public_base_url?: string
+  providers: TunnelProvider[]
+  error?: string
+}
+
+export interface RendezvousPeerInvitation {
+  peer_id: string
+  token: string
+}
+
+export interface RendezvousRoomResponse {
+  ok: boolean
+  protocol_version: 2
+  topology: 'host-star'
+  room_code: string
+  host_peer_id: string
+  host_token: string
+  invitations: RendezvousPeerInvitation[]
+  expires_at: string
+  websocket_url: string
+}
+
+export interface RendezvousConfigResponse {
+  ok: boolean
+  enabled: boolean
+  entry_visible: boolean
+  load_level: 'normal' | 'busy' | 'nearly_full'
+  max_peers_per_room: number
+  retry_after: number
+  message: string
+}
+
+export interface UpdateApplyResponse {
+  ok:boolean
+  error?:string
+  state?:string
+  version?:string
+}
+export interface ApplicationRestartResponse {
+  ok:boolean
+  error?:string
+  restarting?:boolean
+  boot_id:string
+}
+export interface ApplicationHealthResponse {
+  ok:boolean
+  version:string
+  pid:number
+  boot_id:string
+}
+
+// ===========================================================================
+// 移动端扩展段（上游 frontend-v2/src/api/types.ts 没有的契约）。
+//
+// 上方镜像段保持与上游逐字一致（同步 = 整文件重拷后还原本段）；
+// 移动端独有字段一律写在这里，与上游同名接口靠 declaration merging 合并，
+// 同名成员的类型必须与镜像段完全一致，否则合并报错。
+// ===========================================================================
+
+/** GM 叙事风格（用户自建世界的编辑项） */
+export interface GmStyle {
+  tone?: string
+  verbosity?: 'brief' | 'normal' | 'detailed'
+  custom_instructions?: string
+  [key: string]: unknown
+}
+
+// ---- 与上游同名接口的字段合并：服务端已返回、上游尚未类型化的字段 ----
+
+/** 服务端 game_lifecycle / round_effects 已返回 plot_tracker，Web 端未类型化 */
+export interface GameDetail {
+  plot_tracker?: PlotTracker
+}
+
+/** 服务端 worlds 服务已返回的模板附加字段；gm_style 来源待实机核对 */
+export interface WorldTemplateSummary {
+  active_locale?: string
+  lorebook_count?: number
+  source?: 'builtin' | 'user' | 'plugin'
+  /** 对局临时模板（*_copy_* / *_blank_*），图鉴中应跳过 */
+  game_scoped?: boolean
+  plugin_id?: string
+  plugin_name?: string
+  gm_style?: GmStyle | null
+}
+
+/** GET /worlds 用户世界行附加字段；gm_style 来源待实机核对 */
+export interface WorldSummary {
+  gm_style?: GmStyle | null
+}
+
+/** 绑定接口在 bind_token 外还返回 ok/error（上游未类型化，待实机核对） */
+export interface BotBindTokenResponse {
+  ok?: boolean
+  error?: string
+}
+
+// ---- 移动端独有接口 ----
+
+/** GET /adventures 冒险包摘要（图鉴徽章只用 name + recommended_world_id） */
+export interface AdventureSummary {
+  adventure_id?: string
+  name?: string
+  recommended_world_id?: string
+  [key: string]: unknown
+}
+
+/** 世界克隆接口响应 */
+export interface WorldCloneResponse {
+  ok?: boolean
+  error?: string
+  world_id?: string
+  name?: string
+  language?: string
+}
+
+/** ASR 语音转写响应 */
+export interface TranscriptionResponse {
+  ok?: boolean
+  text?: string
+  error?: string
+  [key: string]: unknown
+}
+
+/** 支付决议响应 */
+export interface PaymentResolveResponse {
+  ok?: boolean
+  error?: string
+}
+
+// ---- 剧情追踪（GameDetail.plot_tracker，服务端 round_effects 生成） ----
 
 export interface PlotQuest {
   title?: string
@@ -657,7 +1519,8 @@ export interface PlotTracker {
   decisions?: (PlotDecision | string)[]
 }
 
-// ---------- 生成图 ----------
+// ---- 生成图（对局图集）。上游 GeneratedImageRecord 缺 status 字段，
+// 暂保留移动端形状；上游补齐后可改为 type GeneratedImageItem = GeneratedImageRecord ----
 
 export interface GeneratedImageItem {
   asset_id: string
@@ -666,61 +1529,4 @@ export interface GeneratedImageItem {
   revised_prompt?: string
   round?: number
   status?: string
-}
-
-// ---------- 角色卡（character-cards 接口） ----------
-
-// ---------- 角色卡（character-cards 接口） ----------
-
-export interface CharacterCard {
-  card_id?: string
-  id?: string
-  character_name?: string
-  race?: string
-  class?: string
-  level?: number
-  background?: string
-  gold?: number
-  skills?: (string | CharacterSkill)[]
-  portrait?: CharacterPortrait | null
-  rule_id?: string
-  rule_name?: string
-  rule_version?: string
-  mechanics?: string
-  language?: string
-  source?: string
-  [key: string]: unknown
-}
-
-export interface CharacterCardsResponse {
-  cards?: CharacterCard[]
-  [key: string]: unknown
-}
-
-// ---------- 世界观切换 ----------
-
-export interface WorldCandidate {
-  id: string
-  name: string
-  description?: string
-  source?: string
-  default_rule?: string
-  entry_count?: number
-}
-
-// ---------- 机器人绑定 ----------
-
-export interface BotBindTokenResponse {
-  bind_token?: string
-  ok?: boolean
-  error?: string
-  [key: string]: unknown
-}
-
-// ---------- 支付决议 ----------
-
-export interface PaymentResolveResponse {
-  ok?: boolean
-  error?: string
-  [key: string]: unknown
 }
