@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Icon } from '@/components/ui/icon'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Text } from '@/components/ui/text'
 import { CharacterCardEditor } from '@/features/characters/CharacterCardEditor'
 import { useCharacters } from '@/hooks/useCharacters'
@@ -99,7 +100,22 @@ export default function CharactersScreen() {
             </CardContent>
           </Card>
         )}
-        ListEmptyComponent={!loading ? <View className="items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12"><Icon as={UserRound} size={28} className="text-muted-foreground" /><Text className="font-semibold">{t('dfCharacterEmptyTitle')}</Text><Text variant="small">{t('dfCharacterEmptyDesc')}</Text></View> : null}
+        ListEmptyComponent={
+          loading ? (
+            // 首拉骨架：消除「空白跳变 → 列表突现」
+            <View className="gap-2">
+              <Skeleton className="h-20 w-full rounded-xl" />
+              <Skeleton className="h-20 w-full rounded-xl" />
+              <Skeleton className="h-20 w-full rounded-xl" />
+            </View>
+          ) : (
+            <View className="items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12">
+              <Icon as={UserRound} size={28} className="text-muted-foreground" />
+              <Text className="font-semibold">{t('dfCharacterEmptyTitle')}</Text>
+              <Text variant="small">{t('dfCharacterEmptyDesc')}</Text>
+            </View>
+          )
+        }
       />
       {sheetOpen ? (
         // 内容长（规则/头像/技能/背景/金钱），固定 85% 高并交给 Sheet 内部滚动，保证底部按钮可达

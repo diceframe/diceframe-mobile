@@ -1,5 +1,5 @@
 import { ScrollText, UserRound, Users, BookOpen } from 'lucide-react-native'
-import { useWindowDimensions, View, type ColorValue } from 'react-native'
+import { Pressable, useWindowDimensions, View, type ColorValue } from 'react-native'
 import { Tabs } from 'expo-router'
 
 
@@ -60,6 +60,16 @@ export default function TabsLayout() {
         tabBarItemStyle: isTablet ? { minHeight: 52 } : undefined,
         tabBarLabelStyle: { fontSize: isTablet ? 14 : 11 },
         sceneStyle: { backgroundColor: card },
+        // 按压缩放反馈：默认高亮在深色药丸上不明显
+        tabBarButton: (props) => (
+          <Pressable
+            {...(props as React.ComponentProps<typeof Pressable>)}
+            style={({ pressed }) => [
+              props.style,
+              pressed ? { opacity: 0.65, transform: [{ scale: 0.96 }] } : null,
+            ]}
+          />
+        ),
       }}
     >
       <Tabs.Screen

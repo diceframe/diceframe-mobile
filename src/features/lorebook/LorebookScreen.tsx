@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Icon } from '@/components/ui/icon'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
 import { LORE_CATEGORIES, useLorebook, type LoreCategory } from '@/hooks/useLorebook'
@@ -125,11 +126,25 @@ export default function LorebookScreen() {
         <Button variant="outline" onPress={() => setWorldEditorOpen(true)}><Text>{t('dfLorebookNewWorld')}</Text></Button>
       </View>
       <ScrollView horizontal className="mb-3 max-h-10" contentContainerClassName="gap-2" showsHorizontalScrollIndicator={false}>
-        {(['all', ...LORE_CATEGORIES] as const).map((item) => (
-          <Button key={item} size="sm" variant={category === item ? 'default' : 'outline'} onPress={() => setCategory(item)}>
-            <Text>{item === 'all' ? t('dfLorebookAll') : t(CATEGORY_LABEL_KEYS[item])}</Text>
-          </Button>
-        ))}
+        {/* badge 风格轻量 pill：Button 按钮组在筛选位视觉过重 */}
+        {(['all', ...LORE_CATEGORIES] as const).map((item) => {
+          const active = category === item
+          return (
+            <Pressable
+              key={item}
+              onPress={() => setCategory(item)}
+              className={cn(
+                'rounded-full border px-3 py-1.5 active:opacity-70',
+                active ? 'border-primary bg-primary/15' : 'border-border bg-transparent',
+              )}
+              accessibilityState={{ selected: active }}
+            >
+              <Text variant="small" className={active ? 'font-semibold text-primary' : 'text-muted-foreground'}>
+                {item === 'all' ? t('dfLorebookAll') : t(CATEGORY_LABEL_KEYS[item])}
+              </Text>
+            </Pressable>
+          )
+        })}
       </ScrollView>
 
       <FlatList
@@ -168,13 +183,19 @@ export default function LorebookScreen() {
         )}
         refreshing={loading}
         onRefresh={() => void refresh()}
-        ListEmptyComponent={!loading ? (
+        ListEmptyComponent={loading ? (
+          <View className="gap-2">
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-24 w-full rounded-xl" />
+          </View>
+        ) : (
           <View className="items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12">
             <Icon as={BookMarked} size={28} className="text-muted-foreground" />
             <Text className="font-semibold">{t('dfLorebookEmptyTitle')}</Text>
             <Text variant="small">{t('dfLorebookEmptyDesc')}</Text>
           </View>
-        ) : null}
+        )}
       />
 
       <Sheet open={worldEditorOpen} onClose={() => setWorldEditorOpen(false)} className="h-auto">

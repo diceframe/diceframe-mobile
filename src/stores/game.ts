@@ -86,6 +86,8 @@ interface GameStore {
   ttsEnabled: boolean
   actionBusy: boolean
   gmBusy: boolean
+  /** 翻页加载更早回合的加载态（时间线页脚转圈用） */
+  loadingOlderLog: boolean
   health: HealthResponse | null
 
   enter: (gameKey: string) => void
@@ -134,7 +136,8 @@ const initial = {
   ruleMeta: null,
   ruleAttrs: [],
   log: [],
-  logPage: 1,
+      logPage: 1,
+      loadingOlderLog: false,
   logTotalPages: 1,
   privateMessages: [],
   map: null,
@@ -328,8 +331,9 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     async loadOlderLog() {
       const { gameKey, logPage, logTotalPages } = get()
-      if (!gameKey || logPage >= logTotalPages) return
+      if (!gameKey || logPage >= logTotalPages || get().loadingOlderLog) return
       const nextPage = logPage + 1
+      set({ loadingOlderLog: true })
       try {
         const result = await fetchLog(gameKey, nextPage)
         if (get().gameKey !== gameKey || get().logPage !== logPage) return
@@ -340,6 +344,8 @@ export const useGameStore = create<GameStore>((set, get) => {
         })
       } catch (error) {
         if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+      } finally {
+        if (get().gameKey === gameKey) set({ loadingOlderLog: false })
       }
     },
 

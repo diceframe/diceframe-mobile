@@ -56,8 +56,8 @@ export function SceneCover({
   }, [key])
 
   if (!source || failed || !image) {
-    // 加载中/失败：占位底色，保持卡片布局稳定
-    return <View className={cn('bg-muted', className)} accessibilityLabel={accessibilityLabel} />
+    // 加载中/失败：脉动占位底色（Skeleton 同款），保持卡片布局稳定
+    return <View className={cn('animate-pulse bg-muted', className)} accessibilityLabel={accessibilityLabel} />
   }
 
   return (

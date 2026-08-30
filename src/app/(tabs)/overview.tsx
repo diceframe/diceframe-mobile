@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, StyleSheet, useWindowDimensions, View } from
 import { GlassView } from 'expo-glass-effect'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
-import { Plus, Trash2 } from 'lucide-react-native'
+import { Plus, ScrollText, Trash2, Dices, Flame, Users } from 'lucide-react-native'
 
 import { PageHeader } from '@/components/page-header'
 import { SceneCover } from '@/components/patterns/scene-cover'
@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
     gap: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
+    // borderColor 由 useThemeToken('border') 注入：硬编码白描边在浅色主题下不可读
     padding: 14,
     overflow: 'hidden',
   },
@@ -103,12 +103,13 @@ function OverviewContent({
   onOpen: (key: string) => void
 }) {
   const t = useT()
+  const border = useThemeToken('border')
 
   if (error) {
     return (
-      <View className="gap-3">
+      <View className="gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4">
         <Text className="text-destructive">{error}</Text>
-        <Button onPress={onRetry} className="self-start">
+        <Button onPress={onRetry} className="self-start" variant="outline" size="sm">
           <Text>{t('dfCommonRetry')}</Text>
         </Button>
       </View>
@@ -127,7 +128,10 @@ function OverviewContent({
 
   if (sorted.length === 0) {
     return (
-      <View className="mt-8 items-center gap-4">
+      <View className="mt-10 items-center gap-4">
+        <View className="h-20 w-20 items-center justify-center rounded-full border border-dashed border-border bg-muted/50">
+          <Icon as={ScrollText} size={30} className="text-muted-foreground" />
+        </View>
         <Text variant="muted" className="text-center">
           {t('dfOverviewEmpty')}
         </Text>
@@ -178,7 +182,7 @@ function OverviewContent({
                   glassEffectStyle="regular"
                   tintColor={coverBase}
                   pointerEvents="box-none"
-                  style={[styles.infoPanel, { backgroundColor: `${coverBase}E6` }]}
+                  style={[styles.infoPanel, { backgroundColor: `${coverBase}E6`, borderColor: border }]}
                 >
                   <CardHeader className="flex-row items-start justify-between">
                     <CardTitle className="flex-1">
@@ -379,20 +383,32 @@ export default function OverviewScreen() {
       {games !== null && totalGames > 0 && (
         <View className="mb-3 flex-row gap-2">
           <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <Text variant="small">{t('dfOverviewStatTotal')}</Text>
-            <Text className="font-mono text-lg font-semibold">{totalGames}</Text>
+            <View className="flex-row items-center gap-1.5">
+              <Icon as={ScrollText} size={13} className="text-muted-foreground" />
+              <Text variant="small">{t('dfOverviewStatTotal')}</Text>
+            </View>
+            <Text className="font-mono text-lg font-semibold text-primary">{totalGames}</Text>
           </View>
           <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <Text variant="small">{t('activeGames')}</Text>
-            <Text className="font-mono text-lg font-semibold">{activeGames}</Text>
+            <View className="flex-row items-center gap-1.5">
+              <Icon as={Flame} size={13} className="text-muted-foreground" />
+              <Text variant="small">{t('activeGames')}</Text>
+            </View>
+            <Text className="font-mono text-lg font-semibold text-primary">{activeGames}</Text>
           </View>
           <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <Text variant="small">{t('players')}</Text>
-            <Text className="font-mono text-lg font-semibold">{totalPlayers}</Text>
+            <View className="flex-row items-center gap-1.5">
+              <Icon as={Users} size={13} className="text-muted-foreground" />
+              <Text variant="small">{t('players')}</Text>
+            </View>
+            <Text className="font-mono text-lg font-semibold text-primary">{totalPlayers}</Text>
           </View>
           <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <Text variant="small">{t('dfOverviewRound')}</Text>
-            <Text className="font-mono text-lg font-semibold">{totalRounds}</Text>
+            <View className="flex-row items-center gap-1.5">
+              <Icon as={Dices} size={13} className="text-muted-foreground" />
+              <Text variant="small">{t('dfOverviewRound')}</Text>
+            </View>
+            <Text className="font-mono text-lg font-semibold text-primary">{totalRounds}</Text>
           </View>
         </View>
       )}

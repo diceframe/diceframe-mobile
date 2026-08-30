@@ -1,5 +1,7 @@
 import * as React from 'react'
 import { ActivityIndicator, Platform, Pressable, ScrollView, View } from 'react-native'
+import { Dices } from 'lucide-react-native'
+import { LinearGradient } from 'expo-linear-gradient'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useT } from '@/i18n/t'
 
@@ -16,6 +18,7 @@ import {
   validateAccessToken,
 } from '@/api/client'
 import { useSettingsStore } from '@/stores/settings'
+import { useThemeToken } from '@/lib/theme'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 
 /** 服务器连接 + Owner 登录；已连接时进入即“换服务器”流程 */
@@ -27,6 +30,8 @@ export default function LoginScreen() {
 
   const [serverUrl, setServerUrl] = React.useState(settings.baseUrl)
   const keyboardHeight = useKeyboardHeight()
+  const primary = useThemeToken('primary')
+  const gold = useThemeToken('gold')
   const [passwordNeeded, setPasswordNeeded] = React.useState<boolean | null>(null)
   const [password, setPassword] = React.useState('')
   const [busy, setBusy] = React.useState<'server' | 'login' | null>(null)
@@ -131,9 +136,25 @@ export default function LoginScreen() {
           contentContainerClassName="flex-grow justify-center gap-6 px-6"
           keyboardShouldPersistTaps="handled"
         >
-        <View className="items-center gap-2">
-          <Text variant="h1">DiceFrame</Text>
-          <Text variant="muted">{t('dfLoginTitle')}</Text>
+        {/* 品牌区：顶部主题色渐变 + 金色骰子徽标 + 衬线字标，给首启第一屏一点仪式感 */}
+        <LinearGradient
+          colors={[`${primary}26`, 'transparent']}
+          style={{ position: 'absolute', top: -40, left: 0, right: 0, height: 300 }}
+          pointerEvents="none"
+        />
+        <View className="items-center gap-3">
+          <View
+            className="h-20 w-20 items-center justify-center rounded-3xl"
+            style={{ backgroundColor: `${primary}1A`, borderWidth: 1, borderColor: `${gold}66` }}
+          >
+            <Dices size={38} color={gold} />
+          </View>
+          <View className="items-center gap-1">
+            <Text variant="h1" className="font-display">
+              DiceFrame
+            </Text>
+            <Text variant="muted">{t('dfLoginTitle')}</Text>
+          </View>
         </View>
 
         <View className="gap-3">

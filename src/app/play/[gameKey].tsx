@@ -96,6 +96,7 @@ export default function PlayScreen() {
   const error = useGameStore((s) => s.error)
   const log = useGameStore((s) => s.log)
   const logPage = useGameStore((s) => s.logPage)
+  const loadingOlder = useGameStore((s) => s.loadingOlderLog)
   const logTotalPages = useGameStore((s) => s.logTotalPages)
   const liveNarration = useGameStore((s) => s.liveNarration)
   const streamStatus = useGameStore((s) => s.streamStatus)
@@ -613,6 +614,7 @@ export default function PlayScreen() {
                 players={players}
                 currentUserId={userId}
                 loading={loading}
+                loadingOlder={loadingOlder}
                 logPage={logPage}
                 logTotalPages={logTotalPages}
                 pendingLuck={pendingLuck}
