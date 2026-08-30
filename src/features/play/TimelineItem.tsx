@@ -1,6 +1,6 @@
 import * as React from 'react'
-import { Pressable, View } from 'react-native'
-import { Image } from 'expo-image'
+import { ActivityIndicator, Pressable, View } from 'react-native'
+import { Image as ExpoImage } from 'expo-image'
 import { Volume2 } from 'lucide-react-native'
 
 import { Card } from '@/components/ui/card'
@@ -8,11 +8,15 @@ import { Text } from '@/components/ui/text'
 import { RemoteAvatar } from '@/components/patterns/remote-avatar'
 import { Icon } from '@/components/ui/icon'
 import type { CharacterSheet, LogEntry, Player } from '@/api/types'
-import { avatarSource, sceneImageSource } from '@/api/assets'
+import type { AssetSource } from '@/api/assets'
+import { avatarSource } from '@/api/assets'
+import { useT } from '@/i18n/t'
+import { useAssetUri } from './useAssetUri'
 
 import { CheckCard } from './CheckCard'
 import { GmNarration } from './GmNarration'
 import { playerColor, playerColorSoft } from './playerColor'
+import { roundSceneImageSource } from './sceneImage'
 
 /** 玩家专属气泡色（uid 稳定散列取色，与 Web playerColor 同算法） */
 
@@ -49,6 +53,30 @@ function nameOf(players: Player[], uid: string): string {
   return players.find((player) => player.user_id === uid)?.character_name || uid
 }
 
+/**
+ * 回合场景图（16:9）：生成图是鉴权 /api 资源，必须经 apiBlob 转 data URI 渲染，
+ * 直链交给原生图片加载器带不上会话 Cookie，会静默加载失败。
+ */
+function SceneImageFigure({ source, prompt }: { source: AssetSource; prompt?: string }) {
+  const t = useT()
+  const uri = useAssetUri(source)
+  if (!uri) {
+    return (
+      <View className="aspect-video w-full items-center justify-center rounded-lg border border-border bg-muted">
+        <ActivityIndicator />
+      </View>
+    )
+  }
+  return (
+    <ExpoImage
+      source={{ uri }}
+      className="aspect-video w-full rounded-lg border border-border"
+      contentFit="cover"
+      accessibilityLabel={prompt || t('dfPlaySceneImageA11y')}
+    />
+  )
+}
+
 export function TimelineItem({
   entry,
   players,
@@ -64,10 +92,10 @@ export function TimelineItem({
   ttsEnabled: boolean
   onSpeak: (text: string) => void
 }) {
+  const t = useT()
   const actions = actionsOf(entry)
   const checks = Array.isArray(entry.check_results) ? entry.check_results : []
-  const scene = sceneImageSource(gameKey, entry.scene_image?.reference)
-  const sceneReady = entry.scene_image?.status === 'ready'
+  const scene = roundSceneImageSource(gameKey, entry.scene_image)
 
   return (
     <View className="gap-3 px-4 py-3">
@@ -110,34 +138,38 @@ export function TimelineItem({
         <CheckCard key={check.check_id ?? index} check={check} />
       ))}
 
-      {scene && sceneReady ? (
-        <Image source={scene} className="h-44 w-full rounded-lg" contentFit="cover" />
-      ) : null}
-
       {entry.gm_response ? (
         <Card className="gap-0 p-4">
           <View className="mb-1.5 flex-row items-center gap-2">
             <Text variant="small" className="flex-1 text-muted-foreground">
-              GM · 第 {entry.round ?? '?'} 回合
+              {t('dfPlayGmRoundLabel', { round: entry.round ?? '?' })}
             </Text>
             {ttsEnabled ? (
               <Pressable
                 onPress={() => onSpeak(String(entry.gm_response ?? ''))}
                 className="h-7 w-7 items-center justify-center rounded-md active:bg-accent"
-                accessibilityLabel="朗读本回合"
+                accessibilityLabel={t('dfPlayReadAloud')}
               >
                 <Icon as={Volume2} size={15} className="text-muted-foreground" />
               </Pressable>
             ) : null}
           </View>
-          <GmNarration text={entry.gm_response} />
+          {/* 场景图嵌在叙事段与状态卡之间（对齐 Web SceneImageBlock 的位置） */}
+          <GmNarration
+            text={entry.gm_response}
+            image={
+              scene ? (
+                <SceneImageFigure source={scene} prompt={entry.scene_image?.prompt} />
+              ) : undefined
+            }
+          />
         </Card>
       ) : null}
 
       {(entry.story_recaps ?? []).map((recap, index) => (
         <Card key={index} className="border-dashed p-3">
           <Text variant="small" className="text-muted-foreground">
-            剧情回顾（{recap.from_round}-{recap.to_round}）
+            {t('dfPlayRecapRange', { from: recap.from_round, to: recap.to_round })}
           </Text>
           <GmNarration text={recap.text} className="mt-1" />
         </Card>

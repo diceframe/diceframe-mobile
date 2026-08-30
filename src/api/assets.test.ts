@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { apiAssetDataUri, avatarSource, gameSceneCoverSource, libraryAvatarSource, ruleSceneAssetPath } from './assets'
+import { apiAssetDataUri, avatarSource, gameSceneCoverSource, libraryAvatarSource, ruleSceneAssetPath, sceneImageSource } from './assets'
 import { apiBlob, configureApiClient } from './client'
 
 vi.mock('./client', async (importOriginal) => {
@@ -87,6 +87,33 @@ describe('gameSceneCoverSource', () => {
     expect(ruleSceneAssetPath('unknown_rule')).toBe('/ui/rules/rule-freeform-fantasy.webp')
     expect(ruleSceneAssetPath('')).toBe('/ui/rules/rule-freeform-fantasy.webp')
     expect(ruleSceneAssetPath(' freeform_wuxia ')).toBe('/ui/rules/rule-freeform-wuxia.webp')
+  })
+})
+
+describe('sceneImageSource', () => {
+  beforeEach(() => {
+    configureApiClient({ baseUrl: 'http://h:18000', token: null, share: null })
+  })
+
+  it('generated/asset 走全局生成图端点，upload 走场景图端点', () => {
+    expect(sceneImageSource('game-1', { kind: 'generated', asset_id: 'img1' })).toEqual({
+      uri: 'http://h:18000/api/generated-images/img1',
+      apiPath: '/generated-images/img1',
+    })
+    expect(sceneImageSource('game-1', { kind: 'asset', asset_id: 'img2' })).toEqual({
+      uri: 'http://h:18000/api/generated-images/img2',
+      apiPath: '/generated-images/img2',
+    })
+    expect(sceneImageSource('game-1', { kind: 'upload', asset_id: 'up1' })).toEqual({
+      uri: 'http://h:18000/api/scene-images/up1',
+      apiPath: '/scene-images/up1',
+    })
+  })
+
+  it('builtin 与缺 asset_id 的引用不解析为资源（对局背景回退素底）', () => {
+    expect(sceneImageSource('game-1', { kind: 'builtin', id: 'dnd5e' })).toBeNull()
+    expect(sceneImageSource('game-1', { kind: 'generated' })).toBeNull()
+    expect(sceneImageSource('game-1', null)).toBeNull()
   })
 })
 

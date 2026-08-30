@@ -5,11 +5,13 @@ import { PageHeader } from '@/components/page-header'
 import { Screen } from '@/components/screen'
 import { Card, CardContent } from '@/components/ui/card'
 import { Text } from '@/components/ui/text'
+import { useT } from '@/i18n/t'
 
 export type LegalSection = { title: string; content: string }
 
 export function LegalDocument({ title, subtitle, sections, updated }: { title: string; subtitle: string; sections: LegalSection[]; updated: string }) {
   const router = useRouter()
+  const t = useT()
   return (
     <Screen className="px-4" style={{ width: '100%', maxWidth: 760, alignSelf: 'center' }}>
       <PageHeader title={title} subtitle={subtitle} onBack={() => router.back()} className="px-0" />
@@ -22,7 +24,7 @@ export function LegalDocument({ title, subtitle, sections, updated }: { title: s
             </CardContent>
           </Card>
         ))}
-        <View className="items-center py-3"><Text variant="small">最后更新：{updated}</Text></View>
+        <View className="items-center py-3"><Text variant="small">{t('dfUiLastUpdated', { date: updated })}</Text></View>
       </ScrollView>
     </Screen>
   )

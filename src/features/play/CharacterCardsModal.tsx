@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Sheet } from '@/components/patterns/sheet'
 import { Text } from '@/components/ui/text'
 import type { CharacterCard } from '@/api/types'
-import { strings } from '@/lib/strings'
+import { useT } from '@/i18n/t'
 
 interface CharacterCardsModalProps {
   open: boolean
@@ -27,11 +27,12 @@ export function CharacterCardsModal({
   onClose,
   onSelect,
 }: CharacterCardsModalProps) {
+  const t = useT()
   return (
     <Sheet open={open} onClose={onClose} className="h-[75%]" scrollable={false}>
       <View className="flex-1 gap-4 pt-1">
-        <Text variant="h3">{strings.play.characterCards}</Text>
-        <Text variant="muted">选择一张角色卡应用到你当前的角色</Text>
+        <Text variant="h3">{t('dfCharacterCardsTitle')}</Text>
+        <Text variant="muted">{t('dfCharacterCardsHint')}</Text>
 
         <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-3 pb-6">
           {loading ? (
@@ -40,7 +41,7 @@ export function CharacterCardsModal({
             </View>
           ) : cards.length === 0 ? (
             <Text variant="muted" className="text-center">
-              暂无角色卡
+              {t('dfCharacterCardsEmpty')}
             </Text>
           ) : (
             cards.map((card) => {
@@ -55,10 +56,10 @@ export function CharacterCardsModal({
                 >
                   <View className="gap-1">
                     <Text className="font-medium">
-                      {card.character_name || '未命名'}
+                      {card.character_name || t('dfCharacterCardUnnamed')}
                     </Text>
                     <Text variant="small" className="text-muted-foreground">
-                      {[card.race, card.class].filter(Boolean).join(' · ') || '未设定身份'}
+                      {[card.race, card.class].filter(Boolean).join(' · ') || t('dfCharacterCardNoIdentity')}
                     </Text>
                     {card.background && (
                       <Text variant="small" numberOfLines={2} className="text-muted-foreground">

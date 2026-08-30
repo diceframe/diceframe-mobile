@@ -2,6 +2,7 @@ import * as React from 'react'
 
 import { errorMessage } from '@/api/client'
 import { createCustomRule, deleteCustomRule, fetchRuleLibrary } from '@/api/library'
+import { getT } from '@/i18n/t'
 import type { RuleSummary } from '@/api/types'
 
 export function useRules() {
@@ -20,13 +21,13 @@ export function useRules() {
 
   async function addRule(payload: { source_rule_id: string; rule_id: string; rule_name: string; description: string }) {
     const result = await createCustomRule(payload)
-    if (result.ok === false) throw new Error(result.error || '创建规则失败')
+    if (result.ok === false) throw new Error(result.error || getT()('dfRulesCreateFailed'))
     await load()
   }
 
   async function deleteRule(ruleId: string) {
     const result = await deleteCustomRule(ruleId)
-    if (result.ok === false) throw new Error(result.error || '删除规则失败')
+    if (result.ok === false) throw new Error(result.error || getT()('dfRulesDeleteFailed'))
     await load()
   }
 

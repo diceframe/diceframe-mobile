@@ -2,10 +2,18 @@ import * as React from 'react'
 
 import { errorMessage } from '@/api/client'
 import { createLoreEntry, createWorld, deleteLoreEntry, fetchLoreEntries, fetchWorlds, updateLoreEntry, type WorldRecord } from '@/api/library'
+import { getT } from '@/i18n/t'
 import type { LorebookEntry } from '@/types'
 
-const TYPE_TO_CATEGORY: Record<string, string> = { npc: '人物', location: '地点', item: '物品', faction: '组织', event: '事件', other: '其他' }
-const CATEGORY_TO_TYPE: Record<string, string> = { 人物: 'npc', 地点: 'location', 物品: 'item', 组织: 'faction', 事件: 'event', 其他: 'other' }
+// 条目 category 直接沿用服务端类型 key（npc/location/...），展示名由界面经 t() 翻译
+export type LoreCategory = 'npc' | 'location' | 'item' | 'faction' | 'event' | 'other'
+
+export const LORE_CATEGORIES: readonly LoreCategory[] = ['npc', 'location', 'item', 'faction', 'event', 'other']
+
+function toCategory(type?: string | null): LoreCategory {
+  const value = (type || 'other') as LoreCategory
+  return LORE_CATEGORIES.includes(value) ? value : 'other'
+}
 
 export function useLorebook() {
   const [worlds, setWorlds] = React.useState<WorldRecord[]>([])
@@ -33,7 +41,7 @@ export function useLorebook() {
         id: String(entry.id || ''),
         title: entry.name,
         content: entry.content || '',
-        category: TYPE_TO_CATEGORY[entry.type || 'other'] || '其他',
+        category: toCategory(entry.type),
         isPublic: entry.tier !== 'archived',
         createdAt: '',
         updatedAt: '',
@@ -46,27 +54,27 @@ export function useLorebook() {
   React.useEffect(() => { queueMicrotask(() => void loadEntries(worldId)) }, [worldId])
 
   async function addEntry(data: { title: string; content: string; category: string; isPublic: boolean }) {
-    if (!worldId) throw new Error('请先创建世界书')
-    const result = await createLoreEntry({ world_id: worldId, name: data.title, content: data.content, type: CATEGORY_TO_TYPE[data.category] || 'other', tier: data.isPublic ? 'background' : 'archived' })
-    if (result.ok === false) throw new Error(result.error || '保存设定失败')
+    if (!worldId) throw new Error(getT()('dfLoreCreateWorldFirst'))
+    const result = await createLoreEntry({ world_id: worldId, name: data.title, content: data.content, type: toCategory(data.category), tier: data.isPublic ? 'background' : 'archived' })
+    if (result.ok === false) throw new Error(result.error || getT()('dfLoreSaveEntryFailed'))
     await loadEntries(worldId)
   }
 
   async function editEntry(id: string, data: { title: string; content: string; category: string; isPublic: boolean }) {
-    const result = await updateLoreEntry(id, { name: data.title, content: data.content, type: CATEGORY_TO_TYPE[data.category] || 'other', tier: data.isPublic ? 'background' : 'archived' })
-    if (result.ok === false) throw new Error(result.error || '更新设定失败')
+    const result = await updateLoreEntry(id, { name: data.title, content: data.content, type: toCategory(data.category), tier: data.isPublic ? 'background' : 'archived' })
+    if (result.ok === false) throw new Error(result.error || getT()('dfLoreUpdateEntryFailed'))
     await loadEntries(worldId)
   }
 
   async function removeEntry(id: string) {
     const result = await deleteLoreEntry(id)
-    if (result.ok === false) throw new Error(result.error || '删除设定失败')
+    if (result.ok === false) throw new Error(result.error || getT()('dfLoreDeleteEntryFailed'))
     await loadEntries(worldId)
   }
 
   async function addWorld(name: string) {
     const result = await createWorld(name)
-    if (result.ok === false || !result.world_id) throw new Error(result.error || '创建世界书失败')
+    if (result.ok === false || !result.world_id) throw new Error(result.error || getT()('dfLoreCreateWorldFailed'))
     await loadWorlds()
     setWorldId(result.world_id)
   }

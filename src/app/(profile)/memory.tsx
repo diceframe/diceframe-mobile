@@ -14,6 +14,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Icon } from '@/components/ui/icon'
 import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
+import { useT } from '@/i18n/t'
 
 function memoryText(item: MemoryRecord) {
   const entity = String(item.entity || '')
@@ -24,6 +25,7 @@ function memoryText(item: MemoryRecord) {
 
 export default function MemoryScreen() {
   const router = useRouter()
+  const t = useT()
   const [games, setGames] = React.useState<GameSummary[]>([])
   const [gameKey, setGameKey] = React.useState('')
   const [memories, setMemories] = React.useState<MemoryRecord[]>([])
@@ -54,16 +56,16 @@ export default function MemoryScreen() {
 
   async function remove(id: number) {
     const result = await deleteMemory(gameKey, id)
-    if (result.ok === false) throw new Error(result.error || '删除记忆失败')
+    if (result.ok === false) throw new Error(result.error || t('dfMemoryDeleteFailed'))
     await load(gameKey, query)
   }
 
   return (
     <Screen className="px-4" style={{ width: '100%', maxWidth: 840, alignSelf: 'center' }}>
-      <PageHeader title="叙事记忆" subtitle="按对局管理服务器生成的长期事实" onBack={() => router.back()} className="px-0" />
+      <PageHeader title={t('dfMemoryTitle')} subtitle={t('dfMemorySubtitle')} onBack={() => router.back()} className="px-0" />
       {error ? <View className="mb-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3"><Text className="text-destructive">{error}</Text></View> : null}
-      <View className="mb-3"><SheetSelect options={games.map((game) => ({ label: game.world_name || game.game_key, value: game.game_key }))} value={gameKey} onValueChange={setGameKey} placeholder="选择对局" /></View>
-      <View className="mb-3 flex-row gap-2"><View className="flex-1 flex-row items-center gap-2 rounded-xl border border-border bg-card px-3"><Icon as={Search} size={17} className="text-muted-foreground" /><Input value={query} onChangeText={setQuery} onSubmitEditing={() => void load(gameKey, query)} placeholder="按实体名称检索" className="flex-1 border-0 px-0" /></View>{query ? <Button size="icon" variant="outline" onPress={() => { setQuery(''); void load(gameKey) }}><Icon as={X} size={18} /></Button> : <Button size="sm" disabled={!gameKey} onPress={() => void load(gameKey, query)}><Text>搜索</Text></Button>}</View>
+      <View className="mb-3"><SheetSelect options={games.map((game) => ({ label: game.world_name || game.game_key, value: game.game_key }))} value={gameKey} onValueChange={setGameKey} placeholder={t('dfProfileSelectGame')} /></View>
+      <View className="mb-3 flex-row gap-2"><View className="flex-1 flex-row items-center gap-2 rounded-xl border border-border bg-card px-3"><Icon as={Search} size={17} className="text-muted-foreground" /><Input value={query} onChangeText={setQuery} onSubmitEditing={() => void load(gameKey, query)} placeholder={t('dfMemorySearchPlaceholder')} className="flex-1 border-0 px-0" /></View>{query ? <Button size="icon" variant="outline" onPress={() => { setQuery(''); void load(gameKey) }}><Icon as={X} size={18} /></Button> : <Button size="sm" disabled={!gameKey} onPress={() => void load(gameKey, query)}><Text>{t('search')}</Text></Button>}</View>
       <FlatList
         data={memories}
         keyExtractor={(item) => String(item.id)}
@@ -71,8 +73,8 @@ export default function MemoryScreen() {
         contentContainerClassName="gap-2 pb-8"
         refreshing={loading}
         onRefresh={() => void load(gameKey, query)}
-        renderItem={({ item }) => <Card className="gap-3 py-4"><CardContent className="gap-3 px-4"><View className="flex-row items-center gap-2"><View className="h-8 w-8 items-center justify-center rounded-full bg-primary/15"><Icon as={Brain} size={16} /></View><Text variant="small" className="flex-1">置信度 {Number(item.confidence ?? 1).toFixed(2)}{item.source_round ? ` · 第 ${item.source_round} 轮` : ''}</Text><Button size="sm" variant="ghost" onPress={() => void remove(item.id)}><Text className="text-destructive">遗忘</Text></Button></View><Text className="leading-6">{memoryText(item) || '空记忆'}</Text><Text variant="small">{String(item.updated_at || item.created_at || '')}</Text></CardContent></Card>}
-        ListEmptyComponent={!loading ? <View className="items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12"><Icon as={Brain} size={28} className="text-muted-foreground" /><Text className="font-semibold">{gameKey ? '这局还没有长期记忆' : '请先选择对局'}</Text><Text variant="small">记忆由对局推进时自动提取，不在这里手工伪造。</Text></View> : null}
+        renderItem={({ item }) => <Card className="gap-3 py-4"><CardContent className="gap-3 px-4"><View className="flex-row items-center gap-2"><View className="h-8 w-8 items-center justify-center rounded-full bg-primary/15"><Icon as={Brain} size={16} /></View><Text variant="small" className="flex-1">{t('dfMemoryConfidence', { score: Number(item.confidence ?? 1).toFixed(2) })}{item.source_round ? ` · ${t('roundLabel', { round: item.source_round })}` : ''}</Text><Button size="sm" variant="ghost" onPress={() => void remove(item.id)}><Text className="text-destructive">{t('forget')}</Text></Button></View><Text className="leading-6">{memoryText(item) || t('dfMemoryEmpty')}</Text><Text variant="small">{String(item.updated_at || item.created_at || '')}</Text></CardContent></Card>}
+        ListEmptyComponent={!loading ? <View className="items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12"><Icon as={Brain} size={28} className="text-muted-foreground" /><Text className="font-semibold">{gameKey ? t('dfMemoryEmptyForGame') : t('dfProfileSelectGameFirst')}</Text><Text variant="small">{t('dfMemoryEmptyHint')}</Text></View> : null}
       />
     </Screen>
   )

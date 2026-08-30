@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Sheet } from '@/components/patterns/sheet'
 import { Text } from '@/components/ui/text'
+import { useT } from '@/i18n/t'
 
 interface RoomPasswordModalProps {
   open: boolean
@@ -25,6 +26,7 @@ export function RoomPasswordModal({
   onSave,
 }: RoomPasswordModalProps) {
   const [password, setPassword] = React.useState('')
+  const t = useT()
 
   function close() {
     setPassword('')
@@ -39,20 +41,20 @@ export function RoomPasswordModal({
   return (
     <Sheet open={open} onClose={close}>
       <View className="gap-4 pb-4">
-        <Text variant="h3">{hasPassword ? '修改房间密码' : '设置房间密码'}</Text>
+        <Text variant="h3">{hasPassword ? t('dfPlayRoomPasswordEdit') : t('dfPlayRoomPasswordSet')}</Text>
         <Text variant="muted">
-          设置后玩家加入需要输入密码。留空保存则清除密码。
+          {t('dfPlayRoomPasswordHint')}
         </Text>
         <Input
           value={password}
           onChangeText={setPassword}
-          placeholder="新密码（留空清除）"
+          placeholder={t('dfPlayRoomPasswordPlaceholder')}
           secureTextEntry
           autoCapitalize="none"
           editable={!busy}
         />
         <Button disabled={busy} onPress={save}>
-          <Text>{busy ? '保存中…' : '保存'}</Text>
+          <Text>{busy ? t('dfCommonSaving') : t('dfCommonSave')}</Text>
         </Button>
       </View>
     </Sheet>

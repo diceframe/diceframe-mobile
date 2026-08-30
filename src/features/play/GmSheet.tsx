@@ -24,7 +24,7 @@ import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import type { GameDetail, Multiplayer } from '@/api/types'
-import { strings } from '@/lib/strings'
+import { useT } from '@/i18n/t'
 
 interface GmSheetProps {
   detail: GameDetail
@@ -76,6 +76,7 @@ export function GmSheet({
   const [commandText, setCommandText] = React.useState('')
   const [perceptionTarget, setPerceptionTarget] = React.useState('')
   const [perceptionText, setPerceptionText] = React.useState('')
+  const t = useT()
 
   const allPlayers = [
     ...(multiplayer?.ready_players ?? []),
@@ -104,16 +105,16 @@ export function GmSheet({
           {/* 流程控制 */}
           <View className="gap-2">
             <Text variant="small" className="font-semibold text-muted-foreground">
-              流程
+              {t('dfPlayFlow')}
             </Text>
             <View className="flex-row gap-2">
               <Button className="flex-1" disabled={busy} onPress={onAdvance}>
                 <Icon as={ChevronLast} size={16} />
-                <Text>{strings.play.advance}</Text>
+                <Text>{t('dfPlayAdvance')}</Text>
               </Button>
               <Button variant="outline" className="flex-1" disabled={busy} onPress={onRollback}>
                 <Icon as={ChevronFirst} size={16} />
-                <Text>{strings.play.rollback}</Text>
+                <Text>{t('dfPlayRollback')}</Text>
               </Button>
             </View>
           </View>
@@ -123,19 +124,19 @@ export function GmSheet({
 
       <Button variant="outline" disabled={busy} onPress={onRecap}>
         <Icon as={BookOpen} size={16} />
-        <Text>{strings.play.recap}</Text>
+        <Text>{t('dfPlayRecap')}</Text>
       </Button>
 
       {/* GM 指令 */}
       <View className="gap-2">
         <Text variant="small" className="font-semibold text-muted-foreground">
-          {strings.play.gmCommand}
+          {t('dfPlayGmCommand')}
         </Text>
         <View className="flex-row gap-2">
           <Input
             value={commandText}
             onChangeText={setCommandText}
-            placeholder={strings.play.gmCommandPlaceholder}
+            placeholder={t('dfPlayGmCommandPlaceholder')}
             className="flex-1"
             autoCapitalize="none"
             editable={!busy}
@@ -152,16 +153,16 @@ export function GmSheet({
       {/* 玩家 */}
       <View className="gap-2">
         <Text variant="small" className="font-semibold text-muted-foreground">
-          玩家
+          {t('players')}
         </Text>
         <View className="flex-row gap-2 flex-wrap">
           <Button variant="outline" className="flex-1" disabled={busy} onPress={onInvite}>
             <Icon as={Link} size={14} />
-            <Text>{strings.play.inviteLink}</Text>
+            <Text>{t('inviteLink')}</Text>
           </Button>
           <Button variant="outline" className="flex-1" disabled={busy} onPress={onBotBind}>
             <Icon as={ArrowUpFromLine} size={14} />
-            <Text>{strings.play.botBind}</Text>
+            <Text>{t('dfPlayBotBind')}</Text>
           </Button>
         </View>
       </View>
@@ -170,7 +171,10 @@ export function GmSheet({
       {showPlayerRoster && multiplayer?.player_count ? (
         <View className="gap-1.5">
           <Text variant="small" className="font-semibold text-muted-foreground">
-            {strings.play.playerList} · {multiplayer.ready_count ?? 0}/{multiplayer.player_count} 已就绪
+            {t('dfPlayPlayerListReady', {
+              ready: multiplayer.ready_count ?? 0,
+              total: multiplayer.player_count,
+            })}
           </Text>
           {allPlayers.map((player) => {
             const isAway = multiplayer.away_players?.some((p) => p.user_id === player.user_id)
@@ -182,7 +186,7 @@ export function GmSheet({
                 </Text>
                 {isAway && (
                   <Text variant="small" className="text-muted-foreground">
-                    {strings.play.awayFollowing}
+                    {t('dfPlayAwayFollowing')}
                   </Text>
                 )}
               </View>
@@ -196,23 +200,23 @@ export function GmSheet({
       {/* 模式 */}
       <View className="gap-2">
         <Text variant="small" className="font-semibold text-muted-foreground">
-          {strings.play.mode}
+          {t('mode')}
         </Text>
         <Button variant="outline" disabled={busy} onPress={onToggleMode}>
           <Icon as={detail.solo_mode ? Users : UserCircle} size={14} />
-          <Text>{detail.solo_mode ? '切换为多人' : '切换为单人'}</Text>
+          <Text>{detail.solo_mode ? t('dfPlaySwitchToMulti') : t('dfPlaySwitchToSolo')}</Text>
         </Button>
         <Button variant="outline" disabled={busy} onPress={onToggleAccess}>
           <Icon as={detail.player_access_open === false ? Shield : ShieldOff} size={14} />
-          <Text>{detail.player_access_open === false ? '开放玩家加入' : '关闭玩家加入'}</Text>
+          <Text>{detail.player_access_open === false ? t('dfPlayOpenAccess') : t('dfPlayCloseAccess')}</Text>
         </Button>
         <Button variant="outline" disabled={busy} onPress={onRoomPassword}>
           <Icon as={KeyRound} size={14} />
-          <Text>{detail.has_room_password ? '修改房间密码' : '设置房间密码'}</Text>
+          <Text>{detail.has_room_password ? t('dfPlayRoomPasswordEdit') : t('dfPlayRoomPasswordSet')}</Text>
         </Button>
         <Button variant="outline" disabled={busy} onPress={onWorldSwitch}>
           <Icon as={ArrowLeftRight} size={14} />
-          <Text>{strings.play.worldSwitch}</Text>
+          <Text>{t('dfPlayWorldSwitch')}</Text>
         </Button>
       </View>
 
@@ -221,20 +225,20 @@ export function GmSheet({
       {/* 存档 */}
       <View className="gap-2">
         <Text variant="small" className="font-semibold text-muted-foreground">
-          存档
+          {t('dfPlaySaveSection')}
         </Text>
         <Button variant="outline" disabled={busy} onPress={onExport}>
           <Icon as={Download} size={14} />
-          <Text>{strings.play.export}</Text>
+          <Text>{t('dfPlayExport')}</Text>
         </Button>
         <View className="flex-row gap-2">
           <Button variant="outline" className="flex-1" disabled={busy} onPress={onRestart}>
             <Icon as={RefreshCw} size={14} />
-            <Text>{strings.play.restart}</Text>
+            <Text>{t('dfPlayRestart')}</Text>
           </Button>
           <Button variant="destructive" className="flex-1" disabled={busy} onPress={onReset}>
             <Icon as={ListRestart} size={14} />
-            <Text>{strings.play.reset}</Text>
+            <Text>{t('dfPlayReset')}</Text>
           </Button>
         </View>
       </View>
@@ -244,7 +248,7 @@ export function GmSheet({
       {/* 私信 */}
       <View className="gap-2">
         <Text variant="small" className="font-semibold text-muted-foreground">
-          {strings.play.perception}
+          {t('dfPlayPerception')}
         </Text>
         {allPlayers.length > 0 ? (
           <>
@@ -267,7 +271,7 @@ export function GmSheet({
                 <Input
                   value={perceptionText}
                   onChangeText={setPerceptionText}
-                  placeholder={strings.play.perceptionPlaceholder}
+                  placeholder={t('dfPlayPerceptionPlaceholder')}
                   className="flex-1"
                   autoCapitalize="none"
                   editable={!busy}
@@ -284,7 +288,7 @@ export function GmSheet({
             )}
           </>
         ) : (
-          <Text variant="muted">暂无玩家</Text>
+          <Text variant="muted">{t('dfPlayNoPlayers')}</Text>
         )}
       </View>
     </ScrollView>

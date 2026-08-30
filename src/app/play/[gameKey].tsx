@@ -29,25 +29,27 @@ import { CharacterCardsModal } from '@/features/play/CharacterCardsModal'
 import { CharacterPanel } from '@/features/play/CharacterPanel'
 import { GameTimeline } from '@/features/play/GameTimeline'
 import { GmSheet } from '@/features/play/GmSheet'
-import { HealthPanel } from '@/features/play/HealthPanel'
+import { GAME_STATE_LABEL_KEYS, HealthPanel } from '@/features/play/HealthPanel'
 import { MapWorkspace } from '@/features/play/MapWorkspace'
 import { MultiplayerPanel } from '@/features/play/MultiplayerPanel'
 import { PlotTracker } from '@/features/play/PlotTracker'
 import { PrivateMessagePanel } from '@/features/play/PrivateMessagePanel'
 import { RoomPasswordModal } from '@/features/play/RoomPasswordModal'
 import { RuleHelpModal } from '@/features/play/RuleHelpModal'
+import { SceneBackdrop } from '@/features/play/SceneBackdrop'
 import { SceneGalleryModal } from '@/features/play/SceneGalleryModal'
+import { sceneImageSource } from '@/api/assets'
 import { WorldSwitchModal } from '@/features/play/WorldSwitchModal'
 import { useSpeaker } from '@/features/play/useSpeaker'
+import { useAutoSpeak } from '@/features/play/useAutoSpeak'
 import { useGameHaptics, playGameHaptic } from '@/features/play/useHaptics'
 import { useVoiceInput } from '@/features/play/useVoiceInput'
+import { useT, type T } from '@/i18n/t'
 import { appendActionText } from '@/lib/action-text'
 import { confirmDestructive } from '@/lib/confirm'
-import { gameStateLabel } from '@/lib/game-state'
 import { appLayoutForWidth } from '@/lib/layout'
 import { buildShareLink } from '@/lib/share-link'
 import { shareExportBlob } from '@/lib/share-export'
-import { strings } from '@/lib/strings'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import { selectGmThinking, useGameStore } from '@/stores/game'
 import { useSettingsStore } from '@/stores/settings'
@@ -71,7 +73,18 @@ async function copyToClipboard(text: string): Promise<void> {
   }
 }
 
+/**
+ * 顶栏对局状态文案：映射与 lib/game-state 的 gameStateLabel 一致，
+ * 但经 i18n 输出（lib 版本是中文硬编码，供非 UI 场景复用）。
+ */
+function stateLabelOf(state: string | undefined, t: T): string {
+  if (!state) return t('dfStateUnknownStatus')
+  const key = GAME_STATE_LABEL_KEYS[state]
+  return key ? t(key) : state
+}
+
 export default function PlayScreen() {
+  const t = useT()
   const router = useRouter()
   const { gameKey } = useLocalSearchParams<{ gameKey: string }>()
   const { width } = useWindowDimensions()
@@ -126,6 +139,8 @@ export default function PlayScreen() {
     setDraft((current) => appendActionText(current, text))
   })
   const speaker = useSpeaker(gameKey)
+  // 服务器开启语音合成（ttsEnabled）时，新 GM 叙事到达自动朗读；首次加载只记基线不回放历史
+  useAutoSpeak(ttsEnabled, log, (text) => void speaker.speak(text))
   // 叙事落地/检定结果/私密感知的震动反馈（开关在设置页，默认开启）
   useGameHaptics()
   const keyboardHeight = useKeyboardHeight()
@@ -246,7 +261,7 @@ export default function PlayScreen() {
       await shareExportBlob(
         blob,
         `diceframe-${safeKey}-${Date.now()}.zip`,
-        strings.play.exportDialogTitle,
+        t('dfPlayExportDialogTitle'),
       )
     } catch {
       // 错误由 store 处理
@@ -326,10 +341,10 @@ export default function PlayScreen() {
 
   async function handleReset() {
     const confirmed = await confirmDestructive({
-      title: strings.play.resetTitle,
-      message: strings.play.resetMessage,
-      confirmText: strings.common.confirm,
-      cancelText: strings.common.cancel,
+      title: t('dfPlayResetTitle'),
+      message: t('dfPlayResetMessage'),
+      confirmText: t('dfCommonConfirm'),
+      cancelText: t('dfCommonCancel'),
     })
     if (!confirmed) return
     try {
@@ -341,10 +356,10 @@ export default function PlayScreen() {
 
   async function handleRestart() {
     const confirmed = await confirmDestructive({
-      title: strings.play.restartTitle,
-      message: strings.play.restartMessage,
-      confirmText: strings.common.confirm,
-      cancelText: strings.common.cancel,
+      title: t('dfPlayRestartTitle'),
+      message: t('dfPlayRestartMessage'),
+      confirmText: t('dfCommonConfirm'),
+      cancelText: t('dfCommonCancel'),
     })
     if (!confirmed) return
     try {
@@ -356,10 +371,10 @@ export default function PlayScreen() {
 
   async function handleKick(uid: string) {
     const confirmed = await confirmDestructive({
-      title: strings.play.kickTitle,
-      message: strings.play.kickMessage,
-      confirmText: strings.common.confirm,
-      cancelText: strings.common.cancel,
+      title: t('dfPlayKickTitle'),
+      message: t('dfPlayKickMessage'),
+      confirmText: t('dfCommonConfirm'),
+      cancelText: t('dfCommonCancel'),
     })
     if (!confirmed) return
     try {
@@ -411,24 +426,24 @@ export default function PlayScreen() {
   }
 
   const stateLabel = pendingLuck.length
-    ? strings.play.luckDecisionPending
+    ? t('luckDecisionState')
     : gmThinking
-      ? strings.play.gmThinking
-      : gameStateLabel(detail?.state)
+      ? t('dfPlayGmThinking')
+      : stateLabelOf(detail?.state, t)
   const composerDisabled = pendingLuck.length > 0 || detail?.state === 'ended'
   const composerDisabledReason = pendingLuck.length
-    ? strings.play.resolveLuckFirst
+    ? t('dfPlayResolveLuckFirst')
     : detail?.state === 'ended'
-      ? strings.play.gameEnded
+      ? t('dfPlayGameEnded')
       : undefined
 
   const statusBadge =
     streamStatus === 'live' ? (
-      <StatusBadge tone="success">{strings.play.connected}</StatusBadge>
+      <StatusBadge tone="success">{t('dfPlayConnected')}</StatusBadge>
     ) : streamStatus === 'degraded' ? (
-      <StatusBadge tone="warning">{strings.play.polling}</StatusBadge>
+      <StatusBadge tone="warning">{t('dfPlayPolling')}</StatusBadge>
     ) : (
-      <StatusBadge tone="secondary">{strings.play.connecting}</StatusBadge>
+      <StatusBadge tone="secondary">{t('connecting')}</StatusBadge>
     )
 
   function openStoryTool(tab: 'plot' | 'map') {
@@ -449,10 +464,10 @@ export default function PlayScreen() {
     >
       <TabsList>
         <TabsTrigger value="plot">
-          <Text variant="small">剧情</Text>
+          <Text variant="small">{t('dfPlayTabPlot')}</Text>
         </TabsTrigger>
         <TabsTrigger value="map">
-          <Text variant="small">地图</Text>
+          <Text variant="small">{t('dfPlayTabMap')}</Text>
         </TabsTrigger>
       </TabsList>
       <TabsContent value="plot" className="min-h-0 flex-1 pt-1">
@@ -464,6 +479,10 @@ export default function PlayScreen() {
     </Tabs>
   )
 
+  // 对话背景跟随服务端最新场景图：自动生图完成后 detail.scene_image 更新，
+  // SSE 刷新到端上即自动换背景；无生成图（builtin/缺 asset_id）时保持素底。
+  const backdropSource = sceneImageSource(gameKey, detail?.scene_image)
+
   // GM 回合流程常驻输入区上方；桌面管理入口只保留情境行一处，避免同屏重复。
   const gmRoundControls = isGm ? (
     <View className="flex-row gap-2 border-t border-border px-3 pt-2">
@@ -473,7 +492,7 @@ export default function PlayScreen() {
         disabled={busy}
         onPress={() => void runGm(() => useGameStore.getState().advance())}
       >
-        <Text>{strings.play.advance}</Text>
+        <Text>{t('dfPlayAdvance')}</Text>
       </Button>
       <Button
         size="sm"
@@ -482,7 +501,7 @@ export default function PlayScreen() {
         disabled={busy}
         onPress={() => void runGm(() => useGameStore.getState().rollback())}
       >
-        <Text>{strings.play.rollback}</Text>
+        <Text>{t('dfPlayRollback')}</Text>
       </Button>
     </View>
   ) : null
@@ -498,7 +517,7 @@ export default function PlayScreen() {
             size="icon"
             className="h-9 w-9"
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/overview'))}
-            accessibilityLabel={strings.common.back}
+            accessibilityLabel={t('dfCommonBack')}
             hitSlop={8}
           >
             <Icon as={ChevronLeft} size={22} />
@@ -508,7 +527,7 @@ export default function PlayScreen() {
               {detail?.world_name || gameKey}
             </Text>
             <Text variant="small" numberOfLines={1}>
-              第 {detail?.round_number ?? '?'} 回合 · {stateLabel}
+              {t('dfPlayRoundState', { round: detail?.round_number ?? '?', state: stateLabel })}
             </Text>
           </View>
           {statusBadge}
@@ -517,7 +536,7 @@ export default function PlayScreen() {
             size="icon"
             className="h-9 w-9"
             onPress={() => setUtilityOpen(true)}
-            accessibilityLabel="更多操作"
+            accessibilityLabel={t('dfPlayMoreActions')}
           >
             <Icon as={MoreHorizontal} size={21} />
           </Button>
@@ -532,7 +551,7 @@ export default function PlayScreen() {
         >
           <Button size="sm" variant="ghost" onPress={() => setCharacterOpen(true)}>
             <Icon as={User} size={16} />
-            <Text>角色</Text>
+            <Text>{t('dfPlayTabCharacter')}</Text>
           </Button>
           {!isWideTablet && (
             <>
@@ -542,7 +561,7 @@ export default function PlayScreen() {
                 onPress={() => openStoryTool('plot')}
               >
                 <Icon as={Route} size={16} />
-                <Text>剧情</Text>
+                <Text>{t('dfPlayTabPlot')}</Text>
               </Button>
               <Button
                 size="sm"
@@ -550,7 +569,7 @@ export default function PlayScreen() {
                 onPress={() => openStoryTool('map')}
               >
                 <Icon as={Map} size={16} />
-                <Text>地图</Text>
+                <Text>{t('dfPlayTabMap')}</Text>
               </Button>
             </>
           )}
@@ -560,13 +579,13 @@ export default function PlayScreen() {
                 <Icon as={Mail} size={16} />
                 <View className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" />
               </View>
-              <Text>感知 {privateMessages.length}</Text>
+              <Text>{t('dfPlayTabPerception', { count: privateMessages.length })}</Text>
             </Button>
           )}
           {isGm && (
             <Button size="sm" variant="ghost" onPress={() => openGmPanel()}>
               <Icon as={Menu} size={16} />
-              <Text>桌面管理</Text>
+              <Text>{t('dfPlayTabGmPanel')}</Text>
             </Button>
           )}
         </ScrollView>
@@ -578,15 +597,16 @@ export default function PlayScreen() {
           >
             <View className="absolute inset-0 bg-destructive opacity-10" />
             <Text className="text-destructive" numberOfLines={1}>
-              {error} · 点击重试
+              {t('dfPlayErrorRetry', { error })}
             </Text>
           </Pressable>
         ) : null}
 
         <View className="min-h-0 flex-1 flex-row">
           <View className="min-w-0 flex-1">
-            {/* 时间线 */}
+            {/* 时间线（生图后以最新场景图作低亮度背景） */}
             <View className="flex-1">
+              <SceneBackdrop source={backdropSource} />
               <GameTimeline
                 gameKey={gameKey}
                 log={log}
@@ -650,7 +670,7 @@ export default function PlayScreen() {
           />
           {isGm && (
             <Button variant="outline" onPress={() => void openCards()}>
-              <Text>{strings.play.selectCard}</Text>
+              <Text>{t('dfCharacterCardSelect')}</Text>
             </Button>
           )}
         </View>
@@ -664,9 +684,9 @@ export default function PlayScreen() {
           className="min-h-0 flex-1"
         >
           <TabsList>
-            <TabsTrigger value="controls"><Text variant="small">管理</Text></TabsTrigger>
-            <TabsTrigger value="players"><Text variant="small">玩家</Text></TabsTrigger>
-            <TabsTrigger value="health"><Text variant="small">状态</Text></TabsTrigger>
+            <TabsTrigger value="controls"><Text variant="small">{t('dfPlayTabControls')}</Text></TabsTrigger>
+            <TabsTrigger value="players"><Text variant="small">{t('players')}</Text></TabsTrigger>
+            <TabsTrigger value="health"><Text variant="small">{t('dfPlayStatus')}</Text></TabsTrigger>
           </TabsList>
           <TabsContent value="controls" className="min-h-0 flex-1 pt-2">
             <GmSheet
@@ -722,7 +742,7 @@ export default function PlayScreen() {
       {/* 低频页面工具：与情境行重复的入口（角色/感知/桌面管理）不在这里重复出现 */}
       <Sheet open={utilityOpen} onClose={() => setUtilityOpen(false)} className="h-auto">
         <View className="gap-2 pt-1">
-          <Text variant="h4">更多操作</Text>
+          <Text variant="h4">{t('dfPlayMoreActions')}</Text>
           <Button
             variant="outline"
             onPress={() => {
@@ -731,7 +751,7 @@ export default function PlayScreen() {
             }}
           >
             <Icon as={HelpCircle} size={17} />
-            <Text>{strings.play.ruleHelp}</Text>
+            <Text>{t('ruleHelp')}</Text>
           </Button>
           {isGm && (
             <Button
@@ -742,7 +762,7 @@ export default function PlayScreen() {
               }}
             >
               <Icon as={ImageIcon} size={17} />
-              <Text>{strings.play.sceneGallery}</Text>
+              <Text>{t('sceneGallery')}</Text>
             </Button>
           )}
         </View>

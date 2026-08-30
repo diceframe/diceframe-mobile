@@ -7,18 +7,23 @@ import { Icon } from '@/components/ui/icon'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import type { GameDetail, HealthEvent, HealthResponse } from '@/api/types'
-import { strings } from '@/lib/strings'
+import { useT } from '@/i18n/t'
+import type { TKey } from '@/i18n/keyset'
 
-function stateLabel(state?: string): string {
-  const labels: Record<string, string> = {
-    active_action: '行动阶段',
-    active_judgment: 'GM 思考中',
-    paused: '已暂停',
-    waiting: '等待行动',
-    created: '创建中',
-    ended: '已结束',
-  }
-  return (state && labels[state]) || state || '未知'
+/**
+ * 对局状态 → 文案 key：对局顶栏（play/[gameKey]）与本面板共用，
+ * 映射与 lib/game-state 的中文硬编码版本一致。
+ */
+export const GAME_STATE_LABEL_KEYS: Record<string, TKey> = {
+  setup: 'dfStateSetup',
+  waiting: 'dfStateWaiting',
+  action: 'dfStateAction',
+  active_action: 'dfStateAction',
+  resolving: 'dfStateResolving',
+  active_judgment: 'dfStateJudging',
+  paused: 'dfStatePaused',
+  created: 'dfStateCreated',
+  ended: 'dfStateEnded',
 }
 
 function HealthEventCard({
@@ -28,17 +33,18 @@ function HealthEventCard({
   event: HealthEvent
   onResolve: (id: string, action: 'resolve' | 'ignore') => void
 }) {
+  const t = useT()
   return (
     <View className="rounded-md border border-border bg-muted p-3 gap-2">
       <Text className="text-sm font-medium">{event.title || event.message || event.code}</Text>
       <View className="flex-row gap-2">
         <Button size="sm" variant="outline" onPress={() => onResolve(event.id, 'resolve')}>
           <Icon as={Check} size={12} />
-          <Text variant="small">{strings.play.resolved}</Text>
+          <Text variant="small">{t('dfHealthResolved')}</Text>
         </Button>
         <Button size="sm" variant="ghost" onPress={() => onResolve(event.id, 'ignore')}>
           <Icon as={X} size={12} />
-          <Text variant="small">{strings.play.ignore}</Text>
+          <Text variant="small">{t('ignore')}</Text>
         </Button>
       </View>
     </View>
@@ -62,6 +68,14 @@ export function HealthPanel({
   const events = health?.events ?? []
   const active = events.filter((e) => !e.resolved && !e.ignored)
   const history = events.filter((e) => e.resolved || e.ignored).slice(-5).reverse()
+  const t = useT()
+
+  // 状态标签原文回退：未知状态直接展示服务端原值（与旧版 stateLabel 行为一致）
+  const stateLabelText = detail?.state
+    ? GAME_STATE_LABEL_KEYS[detail.state]
+      ? t(GAME_STATE_LABEL_KEYS[detail.state])
+      : detail.state
+    : t('dfPlayUnknown')
 
   // 非 GM 且非单人模式时不显示
   if (!isGm && !detail?.solo_mode) {
@@ -77,19 +91,19 @@ export function HealthPanel({
       {/* 状态标签 */}
       <View className="gap-2">
         <Text variant="small" className="font-semibold text-muted-foreground">
-          状态
+          {t('dfPlayStatus')}
         </Text>
         <View className="flex-row flex-wrap gap-2">
           <View className="rounded-md border border-border bg-muted px-3 py-2">
-            <Text variant="small">{strings.play.round}</Text>
+            <Text variant="small">{t('dfPlayRoundShort')}</Text>
             <Text className="font-mono font-semibold">{detail?.round_number ?? 0}</Text>
           </View>
           <View className="rounded-md border border-border bg-muted px-3 py-2">
-            <Text variant="small">{strings.play.phase}</Text>
-            <Text className="font-semibold">{stateLabel(detail?.state)}</Text>
+            <Text variant="small">{t('phase')}</Text>
+            <Text className="font-semibold">{stateLabelText}</Text>
           </View>
           <View className="rounded-md border border-border bg-muted px-3 py-2">
-            <Text variant="small">{strings.play.players}</Text>
+            <Text variant="small">{t('players')}</Text>
             <Text className="font-mono font-semibold">
               {detail?.multiplayer?.player_count ?? 0}/{detail?.multiplayer?.max_players ?? 0}
             </Text>
@@ -109,7 +123,7 @@ export function HealthPanel({
       {active.length > 0 && (
         <View className="gap-2">
           <Text variant="small" className="font-semibold text-muted-foreground">
-            {strings.play.unhandledIssues}
+            {t('dfHealthIssues')}
           </Text>
           {active.map((event) => (
             <HealthEventCard key={event.id} event={event} onResolve={onResolve} />
@@ -121,7 +135,7 @@ export function HealthPanel({
       {history.length > 0 && (
         <View className="gap-2">
           <Text variant="small" className="font-semibold text-muted-foreground">
-            最近记录
+            {t('dfHealthRecent')}
           </Text>
           {history.map((event) => (
             <View key={event.id} className="rounded-md border border-border bg-muted px-3 py-2">
@@ -135,7 +149,7 @@ export function HealthPanel({
 
       {events.length === 0 && (
         <Text variant="muted" className="text-center">
-          {strings.play.noHealthEvents}
+          {t('dfHealthNoEvents')}
         </Text>
       )}
     </ScrollView>

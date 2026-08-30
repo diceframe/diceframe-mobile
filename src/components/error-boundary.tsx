@@ -3,6 +3,7 @@ import { View } from 'react-native'
 
 import { Button } from '@/components/ui/button'
 import { Text } from '@/components/ui/text'
+import { getT } from '@/i18n/t'
 
 interface Props {
   children: React.ReactNode
@@ -38,14 +39,16 @@ export class ErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback
+      // class 组件用不了 useT，渲染期取即时语言的 t
+      const t = getT()
       return (
         <View className="flex-1 items-center justify-center gap-4 bg-background p-8">
-          <Text variant="h3">页面渲染出错</Text>
+          <Text variant="h3">{t('dfUiRenderErrorTitle')}</Text>
           <Text variant="muted" className="text-center">
-            {this.state.error?.message || '发生未知错误'}
+            {this.state.error?.message || t('dfUiUnknownError')}
           </Text>
           <Button onPress={this.reset} variant="outline">
-            <Text>重试</Text>
+            <Text>{t('dfCommonRetry')}</Text>
           </Button>
         </View>
       )

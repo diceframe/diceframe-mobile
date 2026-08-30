@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Icon } from '@/components/ui/icon'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
+import { useT } from '@/i18n/t'
 
 interface LegalRowProps {
   icon: typeof ScrollText
@@ -38,18 +39,19 @@ function LegalRow({ icon, title, description, onPress }: LegalRowProps) {
 
 export default function LegalIndexScreen() {
   const router = useRouter()
+  const t = useT()
 
   return (
     <Screen className="px-4" style={{ width: '100%', maxWidth: 720, alignSelf: 'center' }}>
-      <PageHeader title="法律与隐私" subtitle="使用规则与数据处理说明" onBack={() => router.back()} className="px-0" />
+      <PageHeader title={t('legalDocumentLabel')} subtitle={t('dfLegalSubtitle')} onBack={() => router.back()} className="px-0" />
       <Card className="overflow-hidden py-0">
         <CardContent className="px-0 py-0">
-          <LegalRow icon={ScrollText} title="服务条款" description="了解服务使用规则、责任范围和内容权利" onPress={() => router.push('/legal/terms')} />
+          <LegalRow icon={ScrollText} title={t('dfLegalTermsTitle')} description={t('dfLegalTermsDesc')} onPress={() => router.push('/legal/terms')} />
           <Separator className="ml-16" />
-          <LegalRow icon={FileLock2} title="隐私政策" description="了解客户端、自托管服务器与第三方服务如何处理数据" onPress={() => router.push('/legal/privacy')} />
+          <LegalRow icon={FileLock2} title={t('dfLegalPrivacyTitle')} description={t('dfLegalPrivacyDesc')} onPress={() => router.push('/legal/privacy')} />
         </CardContent>
       </Card>
-      <Text variant="small" className="mt-3 px-1 leading-5">DiceFrame 支持连接自托管服务器。服务器运营者可能有独立的使用规则和隐私说明。</Text>
+      <Text variant="small" className="mt-3 px-1 leading-5">{t('dfLegalFooter')}</Text>
     </Screen>
   )
 }

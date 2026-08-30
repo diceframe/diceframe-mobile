@@ -19,6 +19,7 @@ import {
   Swords,
 } from 'lucide-react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useT, type T } from '@/i18n/t'
 
 import { PageHeader } from '@/components/page-header'
 import { Screen } from '@/components/screen'
@@ -30,49 +31,64 @@ import { Switch } from '@/components/ui/switch'
 import { Text } from '@/components/ui/text'
 import { playGameHaptic } from '@/features/play/useHaptics'
 import { useAppUpdates } from '@/hooks/useAppUpdates'
-import { strings } from '@/lib/strings'
 import { useThemeToken } from '@/lib/theme'
-import type { HapticEvent } from '@/lib/haptics'
-import { type ThemeMode, useSettingsStore } from '@/stores/settings'
+import type { LocalePreference } from '@/lib/locale'
+import { useSettingsStore } from '@/stores/settings'
 
 const SECTIONS = ['server', 'identity', 'appearance', 'speech', 'haptics', 'updates'] as const
 
 /** 「我的」页菜单等处复用此类型，避免手写联合类型与 SECTIONS 漂移 */
 export type SettingsSection = (typeof SECTIONS)[number]
 
-const SECTION_META: Record<SettingsSection, { title: string; subtitle: string }> = {
-  server: { title: '服务器', subtitle: '管理 DiceFrame 服务端连接' },
-  identity: { title: '身份与登录', subtitle: '管理 GM 和玩家身份' },
-  appearance: { title: '外观', subtitle: '选择移动端显示主题' },
-  speech: { title: '朗读', subtitle: '调整叙事语音的播放速度' },
-  haptics: { title: '触觉反馈', subtitle: '对局事件的震动开关与手感' },
-  updates: { title: strings.updates.title, subtitle: strings.updates.subtitle },
+function sectionMeta(section: SettingsSection, t: T): { title: string; subtitle: string } {
+  switch (section) {
+    case 'server':
+      return { title: t('dfSettingsServer'), subtitle: t('dfSettingsServerHint') }
+    case 'identity':
+      return { title: t('dfSettingsIdentity'), subtitle: t('dfSettingsIdentityHint') }
+    case 'appearance':
+      return { title: t('dfSettingsAppearance'), subtitle: t('dfSettingsAppearanceHint') }
+    case 'speech':
+      return { title: t('dfSettingsSpeech'), subtitle: t('dfSettingsSpeechHint') }
+    case 'haptics':
+      return { title: t('dfSettingsHaptics'), subtitle: t('dfSettingsHapticsHint') }
+    case 'updates':
+      return { title: t('dfUpdatesTitle'), subtitle: t('dfUpdatesSubtitle') }
+  }
 }
 
-/** 各事件的手感预览（与叙事推导共用同一触发通道） */
-const HAPTIC_PREVIEWS: { event: HapticEvent; label: string; icon: typeof Dices }[] = [
-  { event: 'dice', label: '骰子', icon: Dices },
-  { event: 'damage', label: '受伤', icon: HeartCrack },
-  { event: 'combat', label: '攻击', icon: Swords },
-  { event: 'reward', label: '拾获', icon: Coins },
-  { event: 'check-pass', label: '检定成功', icon: CircleCheck },
-  { event: 'check-fail', label: '检定失败', icon: CircleX },
-  { event: 'critical', label: '大成功', icon: Sparkles },
-  { event: 'fumble', label: '大失败', icon: Skull },
-]
+/** 各事件的手感预览（与叙事推导共用同一触发通道）；as const 保持 key 字面量类型供 t() 校验 */
+const HAPTIC_PREVIEWS = [
+  { event: 'dice', labelKey: 'dfHapticDice', icon: Dices },
+  { event: 'damage', labelKey: 'dfHapticDamage', icon: HeartCrack },
+  { event: 'combat', labelKey: 'dfHapticCombat', icon: Swords },
+  { event: 'reward', labelKey: 'dfHapticReward', icon: Coins },
+  { event: 'check-pass', labelKey: 'dfHapticCheckPass', icon: CircleCheck },
+  { event: 'check-fail', labelKey: 'dfHapticCheckFail', icon: CircleX },
+  { event: 'critical', labelKey: 'dfHapticCritical', icon: Sparkles },
+  { event: 'fumble', labelKey: 'dfHapticFumble', icon: Skull },
+] as const
 
 /** 拆分包文件名 → 用户可读的架构标签；识别不了的（如 universal）展示原文件名 */
-function apkOptionLabel(name: string): string {
+function apkOptionLabel(name: string, t: T): string {
   const lower = name.toLowerCase()
-  if (lower.includes('arm64-v8a')) return 'armv8 安装包（2016 年后主流机型）'
-  if (lower.includes('armeabi-v7a')) return 'armv7 安装包（较旧机型）'
-  return `${name}（通用兼容）`
+  if (lower.includes('arm64-v8a')) return t('dfUpdatesApkArm64')
+  if (lower.includes('armeabi-v7a')) return t('dfUpdatesApkArmv7')
+  return t('dfUpdatesApkUniversal', { name })
 }
 
-const THEME_OPTIONS: { value: ThemeMode; label: string; description: string; icon: typeof Sun }[] = [
-  { value: 'system', label: '跟随系统', description: '随设备的浅色或深色模式切换', icon: Monitor },
-  { value: 'light', label: '浅色', description: '始终使用明亮界面', icon: Sun },
-  { value: 'dark', label: '深色', description: '始终使用暗色奇幻界面', icon: Moon },
+/** as const 保持 labelKey/descKey 字面量类型供 t() 校验 */
+const THEME_OPTIONS = [
+  { value: 'system', labelKey: 'dfSettingsThemeSystem', descKey: 'dfSettingsThemeSystemDesc', icon: Monitor },
+  { value: 'light', labelKey: 'dfSettingsThemeLight', descKey: 'dfSettingsThemeLightDesc', icon: Sun },
+  { value: 'dark', labelKey: 'dfSettingsThemeDark', descKey: 'dfSettingsThemeDarkDesc', icon: Moon },
+] as const
+
+// 语言名用各自母语展示（切换语言前也要能认出来），不进文案字典
+const LANGUAGE_OPTIONS: { value: LocalePreference; label: string }[] = [
+  { value: 'zh-CN', label: '简体中文' },
+  { value: 'en', label: 'English' },
+  { value: 'ja', label: '日本語' },
 ]
 
 function isSection(value: string | undefined): value is SettingsSection {
@@ -82,12 +98,13 @@ function isSection(value: string | undefined): value is SettingsSection {
 export default function SettingsScreen() {
   const router = useRouter()
   const params = useLocalSearchParams<{ section?: string }>()
+  const t = useT()
   const settings = useSettingsStore()
   const updates = useAppUpdates()
   const gold = useThemeToken('gold')
   const border = useThemeToken('border')
   const section = isSection(params.section) ? params.section : null
-  const meta = section ? SECTION_META[section] : { title: '设置', subtitle: '服务器、身份与使用偏好' }
+  const meta = section ? sectionMeta(section, t) : { title: t('dfCommonSettings'), subtitle: t('dfSettingsSubtitle') }
 
   // 设置菜单已收敛到「我的」页的设置组；不带 section 进入（深链等）时回个人页
   useEffect(() => {
@@ -101,14 +118,14 @@ export default function SettingsScreen() {
         {section === 'server' ? (
           <>
             <Card className="gap-3">
-              <CardHeader><CardTitle>当前服务器</CardTitle></CardHeader>
+              <CardHeader><CardTitle>{t('dfSettingsCurrentServer')}</CardTitle></CardHeader>
               <CardContent className="gap-3">
                 <View className="flex-row items-center gap-3 rounded-xl border border-border bg-muted/50 p-4">
                   <View className="h-10 w-10 items-center justify-center rounded-full bg-primary/15"><Icon as={Server} size={18} /></View>
-                  <View className="min-w-0 flex-1"><Text className="font-semibold">{settings.baseUrl ? '已配置' : '尚未连接'}</Text><Text variant="small" numberOfLines={2}>{settings.baseUrl || '原生端需要填写 DiceFrame 服务器地址'}</Text></View>
+                  <View className="min-w-0 flex-1"><Text className="font-semibold">{settings.baseUrl ? t('dfSettingsConfigured') : t('dfSettingsNotConnected')}</Text><Text variant="small" numberOfLines={2}>{settings.baseUrl || t('dfSettingsBaseUrlEmptyHint')}</Text></View>
                 </View>
-                <Text variant="small">切换服务器会清除本机保存的 GM 密码和玩家身份，避免把旧服务器身份发送到新地址。</Text>
-                <Button onPress={() => router.push({ pathname: '/login', params: { mode: 'switch' } })}><Text>{settings.baseUrl ? '切换服务器' : '连接服务器'}</Text></Button>
+                <Text variant="small">{t('dfSettingsSwitchServerWarning')}</Text>
+                <Button onPress={() => router.push({ pathname: '/login', params: { mode: 'switch' } })}><Text>{settings.baseUrl ? t('dfServerSwitch') : t('connectServer')}</Text></Button>
               </CardContent>
             </Card>
           </>
@@ -116,36 +133,70 @@ export default function SettingsScreen() {
 
         {section === 'identity' ? (
           <Card className="gap-3">
-            <CardHeader><CardTitle>本机身份</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t('dfSettingsLocalIdentity')}</CardTitle></CardHeader>
             <CardContent className="gap-4">
-              <View className="flex-row items-center justify-between gap-3"><View className="min-w-0 flex-1 gap-1"><Text className="font-semibold">GM（房主）</Text><Text variant="small">{settings.token ? '已保存服务器访问凭据' : '未登录'}</Text></View>{settings.token ? <Button size="sm" variant="destructive" onPress={() => settings.setToken(null)}><Text>退出</Text></Button> : <Button size="sm" variant="outline" onPress={() => router.push('/login')}><Icon as={LogIn} size={15} /><Text>登录</Text></Button>}</View>
+              <View className="flex-row items-center justify-between gap-3"><View className="min-w-0 flex-1 gap-1"><Text className="font-semibold">{t('dfSettingsGmRole')}</Text><Text variant="small">{settings.token ? t('dfSettingsGmSaved') : t('dfSettingsNotLoggedIn')}</Text></View>{settings.token ? <Button size="sm" variant="destructive" onPress={() => settings.setToken(null)}><Text>{t('dfSettingsLogoutButton')}</Text></Button> : <Button size="sm" variant="outline" onPress={() => router.push('/login')}><Icon as={LogIn} size={15} /><Text>{t('dfSettingsLogin')}</Text></Button>}</View>
               <Separator />
-              <View className="flex-row items-center justify-between gap-3"><View className="min-w-0 flex-1 gap-1"><Text className="font-semibold">玩家身份</Text><Text variant="small" numberOfLines={2}>{settings.share ? `${settings.share.name || settings.share.user} · ${settings.share.game}` : '尚未通过分享链接加入对局'}</Text></View>{settings.share ? <Button size="sm" variant="outline" onPress={() => settings.setShare(null)}><Text>清除</Text></Button> : <Button size="sm" variant="outline" onPress={() => router.push('/join')}><Text>加入对局</Text></Button>}</View>
-              <Text variant="small">GM 身份和玩家身份互相独立；加入分享对局时会使用该对局专属的玩家身份。</Text>
+              <View className="flex-row items-center justify-between gap-3"><View className="min-w-0 flex-1 gap-1"><Text className="font-semibold">{t('dfSettingsPlayerIdentity')}</Text><Text variant="small" numberOfLines={2}>{settings.share ? `${settings.share.name || settings.share.user} · ${settings.share.game}` : t('dfSettingsNoShare')}</Text></View>{settings.share ? <Button size="sm" variant="outline" onPress={() => settings.setShare(null)}><Text>{t('dfSettingsClear')}</Text></Button> : <Button size="sm" variant="outline" onPress={() => router.push('/join')}><Text>{t('dfSettingsJoinGame')}</Text></Button>}</View>
+              <Text variant="small">{t('dfSettingsIdentityIndependence')}</Text>
             </CardContent>
           </Card>
         ) : null}
 
         {section === 'appearance' ? (
-          <Card className="gap-3">
-            <CardHeader><CardTitle>主题</CardTitle></CardHeader>
-            <CardContent className="gap-2">
-              {THEME_OPTIONS.map((option) => {
-                const active = settings.themeMode === option.value
-                return <Button key={option.value} variant={active ? 'secondary' : 'outline'} className="h-auto min-h-16 justify-start px-4 py-3" onPress={() => settings.setThemeMode(option.value)} accessibilityState={{ selected: active }}><View className="h-9 w-9 items-center justify-center rounded-full bg-background"><Icon as={option.icon} size={17} /></View><View className="min-w-0 flex-1 items-start gap-1"><Text className="font-semibold">{option.label}</Text><Text variant="small" className="text-left">{option.description}</Text></View>{active ? <View className="h-2.5 w-2.5 rounded-full bg-primary" /> : null}</Button>
-              })}
-            </CardContent>
-          </Card>
+          <>
+            <Card className="gap-3">
+              <CardHeader><CardTitle>{t('dfSettingsTheme')}</CardTitle></CardHeader>
+              <CardContent className="gap-2">
+                {THEME_OPTIONS.map((option) => {
+                  const active = settings.themeMode === option.value
+                  return <Button key={option.value} variant={active ? 'secondary' : 'outline'} className="h-auto min-h-16 justify-start px-4 py-3" onPress={() => settings.setThemeMode(option.value)} accessibilityState={{ selected: active }}><View className="h-9 w-9 items-center justify-center rounded-full bg-background"><Icon as={option.icon} size={17} /></View><View className="min-w-0 flex-1 items-start gap-1"><Text className="font-semibold">{t(option.labelKey)}</Text><Text variant="small" className="text-left">{t(option.descKey)}</Text></View>{active ? <View className="h-2.5 w-2.5 rounded-full bg-primary" /> : null}</Button>
+                })}
+              </CardContent>
+            </Card>
+            <Card className="gap-3">
+              <CardHeader><CardTitle>{t('dfSettingsLanguage')}</CardTitle></CardHeader>
+              <CardContent className="gap-2">
+                <Button
+                  variant={settings.language === 'system' ? 'secondary' : 'outline'}
+                  className="h-auto min-h-14 justify-start px-4 py-3"
+                  onPress={() => settings.setLanguage('system')}
+                  accessibilityState={{ selected: settings.language === 'system' }}
+                >
+                  <View className="min-w-0 flex-1 items-start gap-0.5">
+                    <Text className="font-semibold">{t('dfSettingsFollowSystem')}</Text>
+                    <Text variant="small" className="text-left">{t('dfSettingsLanguageHint')}</Text>
+                  </View>
+                  {settings.language === 'system' ? <View className="h-2.5 w-2.5 rounded-full bg-primary" /> : null}
+                </Button>
+                {LANGUAGE_OPTIONS.map((option) => {
+                  const active = settings.language === option.value
+                  return (
+                    <Button
+                      key={option.value}
+                      variant={active ? 'secondary' : 'outline'}
+                      className="h-auto min-h-12 justify-start px-4 py-3"
+                      onPress={() => settings.setLanguage(option.value)}
+                      accessibilityState={{ selected: active }}
+                    >
+                      <Text className="font-semibold">{option.label}</Text>
+                      {active ? <View className="h-2.5 w-2.5 rounded-full bg-primary" /> : null}
+                    </Button>
+                  )
+                })}
+              </CardContent>
+            </Card>
+          </>
         ) : null}
 
         {section === 'haptics' ? (
           <Card className="gap-3">
-            <CardHeader><CardTitle>对局震动</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t('dfSettingsGameHaptics')}</CardTitle></CardHeader>
             <CardContent className="gap-4">
               <View className="flex-row items-center justify-between gap-3">
                 <View className="min-w-0 flex-1 gap-1">
-                  <Text className="font-semibold">触觉反馈</Text>
-                  <Text variant="small">叙事中的受伤、骰子、拾获等事件产生不同节奏的震动</Text>
+                  <Text className="font-semibold">{t('dfSettingsHapticsToggle')}</Text>
+                  <Text variant="small">{t('dfSettingsHapticsToggleDesc')}</Text>
                 </View>
                 <Switch
                   checked={settings.hapticsEnabled}
@@ -158,16 +209,16 @@ export default function SettingsScreen() {
               </View>
               <Separator />
               <View className="gap-2">
-                <Text variant="small" className="font-semibold">试试各事件的震动手感</Text>
+                <Text variant="small" className="font-semibold">{t('dfSettingsHapticsTry')}</Text>
                 <View className="flex-row flex-wrap gap-2">
                   {HAPTIC_PREVIEWS.map((preview) => (
                     <Button key={preview.event} size="sm" variant="outline" onPress={() => void playGameHaptic(preview.event)}>
                       <Icon as={preview.icon} size={15} />
-                      <Text>{preview.label}</Text>
+                      <Text>{t(preview.labelKey)}</Text>
                     </Button>
                   ))}
                 </View>
-                <Text variant="small">节奏差异在 Android 上最完整；iOS 使用系统触感预设近似。</Text>
+                <Text variant="small">{t('dfSettingsHapticsPlatformHint')}</Text>
               </View>
             </CardContent>
           </Card>
@@ -175,49 +226,49 @@ export default function SettingsScreen() {
 
         {section === 'speech' ? (
           <Card className="gap-3">
-            <CardHeader><CardTitle>朗读语速</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t('dfSettingsTtsSpeed')}</CardTitle></CardHeader>
             <CardContent className="gap-5">
-              <View className="items-center gap-1 rounded-xl border border-border bg-muted/50 py-5"><Text variant="h2" className="border-b-0 pb-0 font-mono">{settings.ttsRate.toFixed(2)}x</Text><Text variant="small">叙事文本播放速度</Text></View>
+              <View className="items-center gap-1 rounded-xl border border-border bg-muted/50 py-5"><Text variant="h2" className="border-b-0 pb-0 font-mono">{settings.ttsRate.toFixed(2)}x</Text><Text variant="small">{t('dfSettingsTtsRateLabel')}</Text></View>
               <Slider minimumValue={0.5} maximumValue={2} step={0.25} value={settings.ttsRate} onValueChange={(value) => settings.setTtsRate(Number(value))} minimumTrackTintColor={gold} maximumTrackTintColor={border} />
-              <View className="flex-row justify-between"><Text variant="small">0.50x 慢速</Text><Text variant="small">1.00x 标准</Text><Text variant="small">2.00x 快速</Text></View>
-              <Text variant="small">语速会立即用于之后播放的叙事，不影响已经开始的朗读。</Text>
+              <View className="flex-row justify-between"><Text variant="small">{t('dfSettingsTtsSlow')}</Text><Text variant="small">{t('dfSettingsTtsStandard')}</Text><Text variant="small">{t('dfSettingsTtsFast')}</Text></View>
+              <Text variant="small">{t('dfSettingsTtsApplyHint')}</Text>
             </CardContent>
           </Card>
         ) : null}
 
         {section === 'updates' ? (
           <Card className="gap-3">
-            <CardHeader><CardTitle>{strings.updates.appVersion}</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t('dfUpdatesAppVersion')}</CardTitle></CardHeader>
             <CardContent className="gap-4">
               <View className="gap-1 rounded-xl border border-border bg-muted/50 p-4">
-                <Text className="font-semibold">{strings.updates.currentVersion.replace('{version}', updates.current.version)}</Text>
-                <Text variant="small">{strings.updates.buildNumber.replace('{build}', updates.current.buildVersion || '-')}</Text>
+                <Text className="font-semibold">{t('dfUpdatesCurrentVersion', { version: updates.current.version })}</Text>
+                <Text variant="small">{t('dfUpdatesBuildNumber', { build: updates.current.buildVersion || '-' })}</Text>
               </View>
               <Button onPress={() => void updates.check()} disabled={updates.checking}>
                 {updates.checking ? <ActivityIndicator className="text-primary-foreground" /> : <Icon as={RefreshCw} size={15} />}
-                <Text>{updates.checking ? strings.updates.checking : strings.updates.checkNow}</Text>
+                <Text>{updates.checking ? t('dfUpdatesChecking') : t('dfUpdatesCheckNow')}</Text>
               </Button>
               {updates.error ? <Text variant="small" className="text-destructive">{updates.error}</Text> : null}
               {updates.result ? (
                 <View className="gap-3 rounded-xl border border-border bg-card p-4">
                   <View className="gap-1">
-                    <Text className="font-semibold">{updates.result.isNewer ? strings.updates.newVersionFound.replace('{version}', updates.result.latestVersion) : strings.updates.upToDate}</Text>
-                    <Text variant="small">{strings.updates.releaseLabel.replace('{name}', updates.result.releaseName)}</Text>
+                    <Text className="font-semibold">{updates.result.isNewer ? t('dfUpdatesNewVersionFound', { version: updates.result.latestVersion }) : t('dfUpdatesUpToDate')}</Text>
+                    <Text variant="small">{t('dfUpdatesReleaseLabel', { name: updates.result.releaseName })}</Text>
                   </View>
                   {updates.result.releaseNotes ? <Text variant="small" numberOfLines={8}>{updates.result.releaseNotes}</Text> : null}
                   {updates.result.isNewer ? (
                     <View className="gap-2">
                       <Button onPress={() => void Linking.openURL(updates.result!.apkUrl)}>
                         <Icon as={Download} size={15} />
-                        <Text>{strings.updates.downloadApk}</Text>
+                        <Text>{t('dfUpdatesDownloadApk')}</Text>
                       </Button>
-                      <Text variant="small" className="text-muted-foreground">{strings.updates.apkHint}</Text>
+                      <Text variant="small" className="text-muted-foreground">{t('dfUpdatesApkHint')}</Text>
                       {updates.result.apks.length > 1 ? (
                         <View className="gap-1 rounded-xl border border-border p-2">
-                          <Text variant="small" className="px-1 pt-1 font-semibold">{strings.updates.manualPick}</Text>
+                          <Text variant="small" className="px-1 pt-1 font-semibold">{t('dfUpdatesManualPick')}</Text>
                           {updates.result.apks.map((apk) => (
                             <Button key={apk.url} size="sm" variant="ghost" onPress={() => void Linking.openURL(apk.url)}>
-                              <Text numberOfLines={1}>{apkOptionLabel(apk.name)}</Text>
+                              <Text numberOfLines={1}>{apkOptionLabel(apk.name, t)}</Text>
                             </Button>
                           ))}
                         </View>
@@ -226,7 +277,7 @@ export default function SettingsScreen() {
                   ) : null}
                 </View>
               ) : null}
-              <Text variant="small">{strings.updates.footer}</Text>
+              <Text variant="small">{t('dfUpdatesFooter')}</Text>
             </CardContent>
           </Card>
         ) : null}

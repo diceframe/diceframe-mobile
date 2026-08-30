@@ -2,6 +2,8 @@ import { ScrollText, UserRound, Users, BookOpen } from 'lucide-react-native'
 import { useWindowDimensions, View, type ColorValue } from 'react-native'
 import { Tabs } from 'expo-router'
 
+
+import { useT } from '@/i18n/t'
 import { appLayoutForWidth } from '@/lib/layout'
 import { useThemeToken } from '@/lib/theme'
 
@@ -33,6 +35,7 @@ function TabBarIcon({
 
 /** 一级页面：对局列表 + 我的（选中态用 goldStrong 强化对比，与 Web 同一色族） */
 export default function TabsLayout() {
+  const t = useT()
   const { width } = useWindowDimensions()
   const { isTablet, navigationSidebarWidth } = appLayoutForWidth(width)
   const gold = useThemeToken('gold')
@@ -62,7 +65,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="overview"
         options={{
-          title: '对局',
+          title: t('dfTabGames'),
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon icon={ScrollText} color={color} focused={focused} pillColor={pillColor} />
           ),
@@ -71,7 +74,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="characters"
         options={{
-          title: '角色',
+          title: t('navCharacters'),
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon icon={Users} color={color} focused={focused} pillColor={pillColor} />
           ),
@@ -80,7 +83,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="lorebook"
         options={{
-          title: '设定',
+          title: t('dfTabLore'),
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon icon={BookOpen} color={color} focused={focused} pillColor={pillColor} />
           ),
@@ -89,7 +92,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: '我的',
+          title: t('dfTabProfile'),
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon icon={UserRound} color={color} focused={focused} pillColor={pillColor} />
           ),

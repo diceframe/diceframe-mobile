@@ -10,6 +10,7 @@ import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
 import { createGame, fetchRules, fetchWorldTemplates } from '@/api/games'
 import type { RuleSummary, WorldTemplateSummary } from '@/api/types'
+import { useT } from '@/i18n/t'
 
 /** 从模板摘要里取稳定 id */
 function worldIdOf(w: WorldTemplateSummary): string {
@@ -29,6 +30,7 @@ export function CreateGameSheet({
   /** 世界图鉴「用它开团」带入选中的世界 id */
   preselectedWorldId?: string | null
 }) {
+  const t = useT()
   const [worlds, setWorlds] = React.useState<WorldTemplateSummary[]>([])
   const [rules, setRules] = React.useState<RuleSummary[]>([])
   const [worldId, setWorldId] = React.useState('')
@@ -73,7 +75,7 @@ export function CreateGameSheet({
       ? currentWorld.default_rule
       : '')
 
-  const worldOptions = worlds.map((w) => ({ value: worldIdOf(w), label: w.name || w.world_name || w.id || '未命名' }))
+  const worldOptions = worlds.map((w) => ({ value: worldIdOf(w), label: w.name || w.world_name || w.id || t('unnamed') }))
   const ruleOptions = rules.map((r) => ({ value: r.rule_id, label: r.rule_name || r.rule_id }))
 
   async function submit() {
@@ -89,11 +91,11 @@ export function CreateGameSheet({
         difficulty: '标准',
         language: 'zh-CN',
       })
-      if (!result.ok || !result.game_key) throw new Error('创建对局未返回 key')
+      if (!result.ok || !result.game_key) throw new Error(t('dfOverviewCreateNoKey'))
       onCreated(result.game_key)
       onClose()
     } catch (e) {
-      setError(e instanceof Error ? e.message : '创建失败')
+      setError(e instanceof Error ? e.message : t('dfOverviewCreateFailed'))
     } finally {
       setBusy(false)
     }
@@ -104,18 +106,18 @@ export function CreateGameSheet({
   return (
     <Sheet open={open} onClose={onClose}>
       <View className="gap-4 pb-4">
-        <Text variant="h3">创建对局</Text>
+        <Text variant="h3">{t('dfOverviewCreate')}</Text>
 
         {worldOptions.length > 0 && (
           <View className="gap-1.5">
             <Text variant="small" className="font-semibold text-muted-foreground">
-              世界模板
+              {t('worldTemplate')}
             </Text>
             <SheetSelect
               options={worldOptions}
               value={worldId}
               onValueChange={setWorldId}
-              placeholder="选择世界"
+              placeholder={t('dfOverviewPickWorld')}
             />
           </View>
         )}
@@ -123,52 +125,52 @@ export function CreateGameSheet({
         {ruleOptions.length > 0 && (
           <View className="gap-1.5">
             <Text variant="small" className="font-semibold text-muted-foreground">
-              规则
+              {t('rule')}
             </Text>
             <SheetSelect
               options={ruleOptions}
               value={effectiveRuleId}
               onValueChange={setRuleId}
-              placeholder="选择规则"
+              placeholder={t('dfOverviewPickRule')}
             />
           </View>
         )}
 
         <View className="gap-1.5">
           <Text variant="small" className="font-semibold text-muted-foreground">
-            对局名称（可选）
+            {t('dfOverviewNameOptional')}
           </Text>
           <Input
             value={name}
             onChangeText={setName}
-            placeholder={currentWorld?.name || '例如：龙之远征'}
+            placeholder={currentWorld?.name || t('dfOverviewNamePlaceholder')}
             autoCapitalize="none"
           />
         </View>
 
         <View className="gap-1.5">
           <Text variant="small" className="font-semibold text-muted-foreground">
-            世界描述（可选）
+            {t('dfOverviewDescOptional')}
           </Text>
           <Textarea
             value={description}
             onChangeText={setDescription}
-            placeholder="一段简短的设定描述…"
+            placeholder={t('dfOverviewDescPlaceholder')}
             numberOfLines={3}
           />
         </View>
 
         <View className="gap-1.5">
           <Text variant="small" className="font-semibold text-muted-foreground">
-            模式
+            {t('mode')}
           </Text>
           <Tabs value={solo ? 'solo' : 'multi'} onValueChange={(v) => setSolo(v === 'solo')}>
             <TabsList>
               <TabsTrigger value="solo">
-                <Text variant="small">单人</Text>
+                <Text variant="small">{t('solo')}</Text>
               </TabsTrigger>
               <TabsTrigger value="multi">
-                <Text variant="small">多人</Text>
+                <Text variant="small">{t('multiplayer')}</Text>
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -177,7 +179,7 @@ export function CreateGameSheet({
         {error ? <Text className="text-destructive">{error}</Text> : null}
 
         <Button disabled={!canSubmit} onPress={() => void submit()}>
-          <Text>{busy ? '创建中…' : '创建'}</Text>
+          <Text>{busy ? t('creating') : t('create')}</Text>
         </Button>
       </View>
     </Sheet>

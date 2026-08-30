@@ -7,7 +7,7 @@ import type { MapData, MapLocation } from '@/api/types'
 import { Icon } from '@/components/ui/icon'
 import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
-import { strings } from '@/lib/strings'
+import { useT, type T } from '@/i18n/t'
 import { MapGraph } from './MapGraph'
 import { useAssetUri } from './useAssetUri'
 import { mapAssetSource } from '@/api/assets'
@@ -21,10 +21,10 @@ function locationId(location: MapLocation): string {
   return String(location.id ?? location.name ?? '')
 }
 
-function sourceLabel(location: MapLocation): string {
+function sourceLabel(location: MapLocation, t: T): string {
   return location.source === 'plugin'
-    ? location.plugin_name || strings.map.sourcePlugin
-    : strings.map.sourceLorebook
+    ? location.plugin_name || t('mapSourcePlugin')
+    : t('mapSourceLorebook')
 }
 
 /**
@@ -32,6 +32,7 @@ function sourceLabel(location: MapLocation): string {
  * 搜索时详情区临时显示结果列表，选中地点后立即回到详情。
  */
 export function MapWorkspace({ map, currentScene }: MapWorkspaceProps) {
+  const t = useT()
   const locations = map?.locations ?? []
 
   const [query, setQuery] = React.useState('')
@@ -92,7 +93,7 @@ export function MapWorkspace({ map, currentScene }: MapWorkspaceProps) {
           <Input
             value={query}
             onChangeText={setQuery}
-            placeholder={strings.map.searchPlaceholder}
+            placeholder={t('mapSearchPlaceholder')}
             className="pl-9"
             returnKeyType="search"
           />
@@ -124,14 +125,14 @@ export function MapWorkspace({ map, currentScene }: MapWorkspaceProps) {
                 <View className="min-w-0 flex-1">
                   <Text numberOfLines={1}>{location.name}</Text>
                   <Text variant="small" className="text-muted-foreground" numberOfLines={1}>
-                    {sourceLabel(location)}
+                    {sourceLabel(location, t)}
                   </Text>
                 </View>
               </Pressable>
             ))}
             {filteredLocations.length === 0 ? (
               <Text variant="muted" className="py-6 text-center">
-                {strings.map.noSearchResults}
+                {t('dfMapNoSearchResults')}
               </Text>
             ) : null}
           </ScrollView>
@@ -159,6 +160,7 @@ function MapLocationDetail({
   connectedLocations: MapLocation[]
   onSelectConnected: (location: MapLocation) => void
 }) {
+  const t = useT()
   const imageUri = useAssetUri(mapAssetSource(location.image_url))
 
   return (
@@ -179,7 +181,7 @@ function MapLocationDetail({
       <View className="flex-row items-start justify-between gap-2">
         <View className="min-w-0 flex-1">
           <Text variant="small" className="text-muted-foreground">
-            {sourceLabel(location)}
+            {sourceLabel(location, t)}
           </Text>
           <Text variant="h4" numberOfLines={2}>
             {location.name}
@@ -189,18 +191,18 @@ function MapLocationDetail({
           <View className="flex-row items-center gap-1 rounded-full border border-border px-2.5 py-1">
             <Icon as={Star} size={11} className="text-primary" />
             <Text variant="small" className="text-primary">
-              {strings.map.currentLocation}
+              {t('dfMapCurrentLocation')}
             </Text>
           </View>
         ) : null}
       </View>
 
-      <Text>{location.content || strings.map.noDescription}</Text>
+      <Text>{location.content || t('dfMapNoDescription')}</Text>
 
       {connectedLocations.length > 0 ? (
         <View className="gap-1.5">
           <Text variant="small" className="font-semibold text-muted-foreground">
-            {strings.map.connections}
+            {t('dfMapConnections')}
           </Text>
           <View className="flex-row flex-wrap gap-1.5">
             {connectedLocations.map((connected) => (
@@ -222,7 +224,7 @@ function MapLocationDetail({
       {location.keywords && location.keywords.length > 0 ? (
         <View className="gap-1.5">
           <Text variant="small" className="font-semibold text-muted-foreground">
-            {strings.map.keywords}
+            {t('dfMapKeywords')}
           </Text>
           <View className="flex-row flex-wrap gap-1.5">
             {location.keywords.map((keyword) => (

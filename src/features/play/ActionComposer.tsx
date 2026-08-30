@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
+import { useT } from '@/i18n/t'
 import { appendActionText } from '@/lib/action-text'
-import { strings } from '@/lib/strings'
 import { cn } from '@/lib/utils'
 
 export interface VoiceInputState {
@@ -39,6 +39,7 @@ export function ActionComposer({
   voice?: VoiceInputState
   topControls?: React.ReactNode
 }) {
+  const t = useT()
   const locked = busy || !!disabled
 
   return (
@@ -72,7 +73,7 @@ export function ActionComposer({
           <Pressable
             onPress={voice.onToggle}
             disabled={voice.busy || (locked && !voice.recording)}
-            accessibilityLabel={voice.recording ? strings.play.recordStop : strings.play.recordStart}
+            accessibilityLabel={voice.recording ? t('dfPlayRecordStop') : t('dfPlayRecordStart')}
             className={cn(
               'h-12 w-12 shrink-0 items-center justify-center rounded-full',
               voice.recording ? 'bg-destructive' : 'border border-input bg-background',
@@ -90,7 +91,7 @@ export function ActionComposer({
         <Textarea
           value={value}
           onChangeText={onChangeText}
-          placeholder={strings.play.actionPlaceholder}
+          placeholder={t('actionPlaceholder')}
           className="min-h-12 flex-1"
           editable={!locked}
           multiline
@@ -100,7 +101,7 @@ export function ActionComposer({
           size="icon"
           onPress={onSend}
           disabled={locked || !value.trim()}
-          accessibilityLabel={strings.play.send}
+          accessibilityLabel={t('send')}
           className="h-12 w-12 shrink-0"
         >
           <Icon as={Send} size={18} />
@@ -111,7 +112,7 @@ export function ActionComposer({
       {disabledReason ? <Text variant="small" className="px-3">{disabledReason}</Text> : null}
       {voice?.recording ? (
         <Text variant="small" className="px-3 text-destructive">
-          录音中…再次点击结束并识别
+          {t('dfPlayRecordingHint')}
         </Text>
       ) : null}
     </View>

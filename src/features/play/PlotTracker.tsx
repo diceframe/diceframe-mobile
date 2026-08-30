@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import type { PlotDecision, PlotQuest, PlotRelation, PlotTracker as PlotTrackerData } from '@/api/types'
+import { useT } from '@/i18n/t'
+import type { TKey } from '@/i18n/keyset'
 
 function Section({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
   return (
@@ -41,25 +43,29 @@ function QuestCard({ quest }: { quest: PlotQuest }) {
 }
 
 function RelationItem({ relation }: { relation: PlotRelation }) {
+  const t = useT()
   const tier = relation.tier ?? 'neutral'
-  const tierLabel: Record<string, string> = {
-    liked: '友好',
-    friendly: '友善',
-    neutral: '中立',
-    unfriendly: '不友善',
-    hostile: '敌对',
+  // 关系档位 → 文案 key；未知档位回退展示服务端原值
+  const tierLabelKey: Record<string, TKey> = {
+    liked: 'dfRelationLiked',
+    friendly: 'dfRelationFriendly',
+    neutral: 'dfRelationNeutral',
+    unfriendly: 'dfRelationUnfriendly',
+    hostile: 'dfRelationHostile',
   }
+  const tierKey = tierLabelKey[tier]
   return (
     <View className="flex-row items-center gap-2 rounded-md border border-border bg-muted px-3 py-2">
       <Text className="flex-1 text-sm" numberOfLines={1}>
         {relation.npc_name}
       </Text>
-      <Text variant="small">{tierLabel[tier] ?? tier}</Text>
+      <Text variant="small">{tierKey ? t(tierKey) : tier}</Text>
     </View>
   )
 }
 
 function DecisionItem({ decision }: { decision: PlotDecision | string }) {
+  const t = useT()
   const text = typeof decision === 'string'
     ? decision
     : decision.title || decision.summary || decision.description || ''
@@ -68,7 +74,7 @@ function DecisionItem({ decision }: { decision: PlotDecision | string }) {
   return (
     <View className="rounded-md border border-border bg-muted px-3 py-2">
       <Text className="text-sm" numberOfLines={2}>
-        {round ? `第 ${round} 回合 · ` : ''}{text}
+        {round ? `${t('dfPlayRoundLabel', { round })} · ` : ''}{text}
       </Text>
     </View>
   )
@@ -76,6 +82,7 @@ function DecisionItem({ decision }: { decision: PlotDecision | string }) {
 
 /** 剧情追踪面板（对齐 Web GameSidebar 的 plot tracker 区块） */
 export function PlotTracker({ data }: { data?: PlotTrackerData | null }) {
+  const t = useT()
   const quests = Object.values(data?.quests ?? {})
   const relations = Object.values(data?.relations ?? {})
   const decisions = data?.decisions ?? []
@@ -90,7 +97,7 @@ export function PlotTracker({ data }: { data?: PlotTrackerData | null }) {
   if (!hasContent) {
     return (
       <Text variant="muted" className="text-center">
-        暂无剧情记录
+        {t('dfPlotNoRecords')}
       </Text>
     )
   }
@@ -98,7 +105,7 @@ export function PlotTracker({ data }: { data?: PlotTrackerData | null }) {
   return (
     <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-5 pb-8">
       {activeQuests.length > 0 && (
-        <Section title="当前任务" count={activeQuests.length}>
+        <Section title={t('dfPlotActiveQuests')} count={activeQuests.length}>
           <View className="gap-2">
             {activeQuests.map((q, i) => (
               <QuestCard key={`aq-${i}`} quest={q} />
@@ -108,7 +115,7 @@ export function PlotTracker({ data }: { data?: PlotTrackerData | null }) {
       )}
 
       {doneQuests.length > 0 && (
-        <Section title="已完成" count={doneQuests.length}>
+        <Section title={t('dfPlotCompleted')} count={doneQuests.length}>
           <View className="gap-2">
             {doneQuests.map((q, i) => (
               <QuestCard key={`dq-${i}`} quest={q} />
@@ -118,7 +125,7 @@ export function PlotTracker({ data }: { data?: PlotTrackerData | null }) {
       )}
 
       {notableRelations.length > 0 && (
-        <Section title="NPC 关系" count={notableRelations.length}>
+        <Section title={t('npcRelations')} count={notableRelations.length}>
           <View className="gap-2">
             {notableRelations.map((r, i) => (
               <RelationItem key={`r-${i}`} relation={r} />
@@ -128,7 +135,7 @@ export function PlotTracker({ data }: { data?: PlotTrackerData | null }) {
       )}
 
       {recentDecisions.length > 0 && (
-        <Section title="关键决策" count={recentDecisions.length}>
+        <Section title={t('dfPlayKeyDecision')} count={recentDecisions.length}>
           <View className="gap-2">
             {recentDecisions.map((d, i) => (
               <DecisionItem key={`d-${i}`} decision={d} />
@@ -139,7 +146,7 @@ export function PlotTracker({ data }: { data?: PlotTrackerData | null }) {
 
       <Separator />
       <Text variant="small" className="text-center text-muted-foreground">
-        剧情追踪由 GM 叙事自动更新
+        {t('dfPlotAutoUpdated')}
       </Text>
     </ScrollView>
   )

@@ -15,6 +15,7 @@ import { Icon } from '@/components/ui/icon'
 import { Text } from '@/components/ui/text'
 import { CharacterCardEditor } from '@/features/characters/CharacterCardEditor'
 import { useCharacters } from '@/hooks/useCharacters'
+import { useT } from '@/i18n/t'
 import type { CharacterCardPatch } from '@/lib/character-card'
 import { confirmDestructive } from '@/lib/confirm'
 
@@ -23,6 +24,7 @@ function cardId(card: CharacterCard): string {
 }
 
 export default function CharactersScreen() {
+  const t = useT()
   const { cards, loading, error, refresh, addCard, updateCard, deleteCard } = useCharacters()
   const [sheetOpen, setSheetOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<CharacterCard | null>(null)
@@ -44,10 +46,10 @@ export default function CharactersScreen() {
 
   async function removeCard(card: CharacterCard) {
     const ok = await confirmDestructive({
-      title: '删除角色卡？',
-      message: `将删除「${card.character_name || '未命名角色'}」，此操作无法撤销。`,
-      confirmText: '删除',
-      cancelText: '取消',
+      title: t('dfCharacterDeleteTitle'),
+      message: t('dfCharacterDeleteMessage', { name: card.character_name || t('dfCharacterUnnamed') }),
+      confirmText: t('dfCommonDelete'),
+      cancelText: t('dfCommonCancel'),
     })
     if (ok) await deleteCard(cardId(card))
   }
@@ -55,15 +57,15 @@ export default function CharactersScreen() {
   return (
     <Screen className="px-4" style={{ width: '100%', maxWidth: 840, alignSelf: 'center' }}>
       <PageHeader
-        title="角色名册"
-        subtitle={loading ? '正在同步角色卡库' : `${cards.length} 张共享角色卡`}
+        title={t('dfCharacterRosterTitle')}
+        subtitle={loading ? t('dfCharacterSyncing') : t('dfCharacterCardCount', { count: cards.length })}
         className="px-0"
-        right={<Button size="sm" onPress={() => openEditor()}><Icon as={Plus} size={16} /><Text>新角色</Text></Button>}
+        right={<Button size="sm" onPress={() => openEditor()}><Icon as={Plus} size={16} /><Text>{t('dfCharacterNew')}</Text></Button>}
       />
-      {error ? <View className="mb-3 flex-row items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3"><Text className="flex-1 text-destructive" numberOfLines={2}>{error}</Text><Button size="sm" variant="outline" onPress={() => void refresh()}><Icon as={RefreshCw} size={15} /><Text>重试</Text></Button></View> : null}
+      {error ? <View className="mb-3 flex-row items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3"><Text className="flex-1 text-destructive" numberOfLines={2}>{error}</Text><Button size="sm" variant="outline" onPress={() => void refresh()}><Icon as={RefreshCw} size={15} /><Text>{t('dfCommonRetry')}</Text></Button></View> : null}
       <View className="mb-3 flex-row items-center gap-3 rounded-xl border border-border bg-card p-4">
         <View className="h-10 w-10 items-center justify-center rounded-full bg-primary/15"><Icon as={Swords} size={19} /></View>
-        <View className="flex-1"><Text className="font-semibold">跨对局角色卡</Text><Text variant="small">这里的角色来自服务器角色卡库，可在加入或替换角色时直接使用。</Text></View>
+        <View className="flex-1"><Text className="font-semibold">{t('dfCharacterCrossGameTitle')}</Text><Text variant="small">{t('dfCharacterCrossGameDesc')}</Text></View>
       </View>
       <FlatList
         data={cards}
@@ -78,10 +80,10 @@ export default function CharactersScreen() {
             <CardContent className="flex-row items-center gap-3 px-4">
               <RemoteAvatar source={libraryAvatarSource(item.portrait)} name={String(item.character_name || '?')} className="h-11 w-11 rounded-full border border-border bg-muted" />
               <View className="min-w-0 flex-1 gap-0.5">
-                <Text className="font-semibold" numberOfLines={1}>{item.character_name || '未命名角色'}</Text>
+                <Text className="font-semibold" numberOfLines={1}>{item.character_name || t('dfCharacterUnnamed')}</Text>
                 {/* RN 里 Text 默认 flexShrink:0，不放 wrap/shrink 会在徽章过长时溢出到右侧按钮列下方 */}
                 <View className="flex-row flex-wrap items-center gap-x-1.5 gap-y-1">
-                  <Badge variant="outline" className="max-w-full px-1.5 py-0"><Text className="shrink text-[10px]" numberOfLines={1}>{String(item.rule_name || item.rule_id || '未绑定规则')}</Text></Badge>
+                  <Badge variant="outline" className="max-w-full px-1.5 py-0"><Text className="shrink text-[10px]" numberOfLines={1}>{String(item.rule_name || item.rule_id || t('dfCharacterNoRule'))}</Text></Badge>
                   {[item.race, item.class].filter(Boolean).length ? (
                     <Text variant="small" className="shrink text-muted-foreground" numberOfLines={1}>
                       {[item.race, item.class].filter(Boolean).join(' · ')}
@@ -91,13 +93,13 @@ export default function CharactersScreen() {
                 {item.background ? <Text variant="small" numberOfLines={2}>{String(item.background)}</Text> : null}
               </View>
               <View className="gap-1">
-                <Button size="sm" variant="ghost" onPress={() => openEditor(item)}><Text>编辑</Text></Button>
-                <Button size="sm" variant="ghost" onPress={() => void removeCard(item)}><Text className="text-destructive">删除</Text></Button>
+                <Button size="sm" variant="ghost" onPress={() => openEditor(item)}><Text>{t('edit')}</Text></Button>
+                <Button size="sm" variant="ghost" onPress={() => void removeCard(item)}><Text className="text-destructive">{t('dfCommonDelete')}</Text></Button>
               </View>
             </CardContent>
           </Card>
         )}
-        ListEmptyComponent={!loading ? <View className="items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12"><Icon as={UserRound} size={28} className="text-muted-foreground" /><Text className="font-semibold">角色卡库还是空的</Text><Text variant="small">创建第一张角色卡，之后可以在不同对局复用。</Text></View> : null}
+        ListEmptyComponent={!loading ? <View className="items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12"><Icon as={UserRound} size={28} className="text-muted-foreground" /><Text className="font-semibold">{t('dfCharacterEmptyTitle')}</Text><Text variant="small">{t('dfCharacterEmptyDesc')}</Text></View> : null}
       />
       {sheetOpen ? (
         // 内容长（规则/头像/技能/背景/金钱），固定 85% 高并交给 Sheet 内部滚动，保证底部按钮可达

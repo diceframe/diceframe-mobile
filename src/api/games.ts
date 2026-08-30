@@ -26,6 +26,7 @@ import type {
   WorldCandidate,
   WorldTemplatesResponse,
 } from './types'
+import { contentLanguage } from '@/i18n/t'
 import { api, apiBlob } from './client'
 
 function gamePath(gameKey: string, suffix = ''): string {
@@ -145,12 +146,12 @@ export async function requestSseTicket(gameKey: string): Promise<string> {
 // ---------- 世界观 / 规则（创建对局选择器） ----------
 
 /** 世界模板列表（language 决定后端 locale overlay，桌面端同样默认传当前语言） */
-export function fetchWorldTemplates(language = 'zh-CN'): Promise<WorldTemplatesResponse> {
+export function fetchWorldTemplates(language = contentLanguage()): Promise<WorldTemplatesResponse> {
   return api<WorldTemplatesResponse>(`/world-templates?language=${encodeURIComponent(language)}`)
 }
 
 /** 冒险包列表（世界图鉴徽章用它映射 recommended_world_id → 冒险包名） */
-export function fetchAdventures(language = 'zh-CN'): Promise<{ adventures?: AdventureSummary[] }> {
+export function fetchAdventures(language = contentLanguage()): Promise<{ adventures?: AdventureSummary[] }> {
   return api<{ adventures?: AdventureSummary[] }>(`/adventures?language=${encodeURIComponent(language)}`)
 }
 
@@ -302,7 +303,7 @@ export async function switchGameWorld(gameKey: string, worldId: string): Promise
 }
 
 /** 获取可切换的世界观候选列表（模板 + 已有 lorebook） */
-export async function fetchWorldCandidates(gameKey: string, language = 'zh-CN'): Promise<WorldCandidate[]> {
+export async function fetchWorldCandidates(gameKey: string, language = contentLanguage()): Promise<WorldCandidate[]> {
   const [templateData, worldData] = await Promise.all([
     fetchWorldTemplates(),
     api<{ worlds?: { id?: string; world_id?: string; name?: string; world_name?: string; description?: string; entry_count?: number }[] }>('/worlds'),

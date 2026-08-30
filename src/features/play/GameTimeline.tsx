@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Text } from '@/components/ui/text'
 import type { CheckResult, LogEntry, Player, PublicAction } from '@/api/types'
-import { strings } from '@/lib/strings'
+import { useT } from '@/i18n/t'
 
 import { GmNarration } from './GmNarration'
 import { TimelineItem } from './TimelineItem'
@@ -22,14 +22,18 @@ function LuckCard({
   busy: boolean
   onDecide: (check: CheckResult, spend: boolean) => void
 }) {
+  const t = useT()
   return (
     <Card className="gap-2 border-warning p-4">
       <Text className="font-semibold">
-        运气检定 · {check.label || check.skill || ''}
+        {t('dfPlayLuckCheckTitle', { label: check.label || check.skill || '' })}
       </Text>
       <Text variant="muted">
-        初始结果 {check.roll ?? '?'}（{check.original_verdict || check.verdict || ''}）。花费{' '}
-        {check.luck_cost ?? '?'} 点运气重骰，或接受当前结果？
+        {t('dfPlayLuckDecisionBody', {
+          roll: check.roll ?? '?',
+          verdict: check.original_verdict || check.verdict || '',
+          cost: check.luck_cost ?? '?',
+        })}
       </Text>
       <View className="flex-row gap-2">
         <Button
@@ -37,7 +41,7 @@ function LuckCard({
           disabled={busy}
           onPress={() => onDecide(check, true)}
         >
-          <Text>{strings.play.luckSpend}</Text>
+          <Text>{t('dfPlayLuckSpend')}</Text>
         </Button>
         <Button
           size="sm"
@@ -45,7 +49,7 @@ function LuckCard({
           disabled={busy}
           onPress={() => onDecide(check, false)}
         >
-          <Text>{strings.play.luckDecline}</Text>
+          <Text>{t('dfPlayLuckDecline')}</Text>
         </Button>
       </View>
     </Card>
@@ -87,12 +91,13 @@ export function GameTimeline({
   onDecideLuck: (check: CheckResult, spend: boolean) => void
   onSpeak: (text: string) => void
 }) {
+  const t = useT()
   const hasOlder = logPage < logTotalPages
 
   // inverted 列表：视觉上的头部（列表 Footer）放"加载更早"，尾部（列表 Header）放实时区
   const footer = hasOlder ? (
     <Pressable onPress={onLoadOlder} className="items-center py-3">
-      <Text className="text-muted-foreground">{strings.play.loadMore}</Text>
+      <Text className="text-muted-foreground">{t('dfPlayLoadMore')}</Text>
     </Pressable>
   ) : null
 
@@ -121,7 +126,7 @@ export function GameTimeline({
             </Avatar>
             <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
               <Text variant="small">
-                {action.character_name || action.user_id} · {strings.play.submitting}
+                {action.character_name || action.user_id} · {t('dfPlaySubmitting')}
               </Text>
               <Text numberOfLines={2}>{action.text}</Text>
             </View>
@@ -132,7 +137,7 @@ export function GameTimeline({
       {gmThinking ? (
         <Card className="gap-0 p-4">
           <Text variant="small" className="mb-1.5 text-muted-foreground">
-            {strings.play.gmThinking}
+            {t('dfPlayGmThinking')}
           </Text>
           {liveNarration ? (
             <GmNarration text={liveNarration} />

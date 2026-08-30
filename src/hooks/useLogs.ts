@@ -2,6 +2,7 @@ import * as React from 'react'
 
 import { fetchLog, fetchPrivateLog } from '@/api/games'
 import { errorMessage } from '@/api/client'
+import { getT } from '@/i18n/t'
 import type { PrivateLogResponse } from '@/api/types'
 
 export interface NarrativeLogItem {
@@ -34,6 +35,8 @@ export function useLogs(gameKey: string) {
   async function refreshLogs() {
     if (!gameKey) { setLogs([]); return }
     setLoading(true)
+    // 抛错/生成条目发生在组件渲染之外，用即时语言的 t
+    const t = getT()
     try {
       const [storyResult, privateResult] = await Promise.all([
         fetchLog(gameKey),
@@ -43,8 +46,8 @@ export function useLogs(gameKey: string) {
         id: `story:${entry.round ?? index}`,
         kind: 'story',
         round: Number(entry.round ?? index + 1),
-        title: `第 ${entry.round ?? index + 1} 轮叙事`,
-        content: String(entry.gm_response || '本轮没有叙事文本'),
+        title: t('dfLogsRoundNarration', { round: entry.round ?? index + 1 }),
+        content: String(entry.gm_response || t('dfLogsNoNarration')),
         detail: actionText(entry.player_actions || entry.actions),
       }))
       const rawPrivate = privateResult.messages ?? privateResult.private_log ?? []
@@ -52,7 +55,7 @@ export function useLogs(gameKey: string) {
         id: `private:${message.round ?? 0}:${index}`,
         kind: 'private',
         round: Number(message.round ?? 0),
-        title: message.character_name ? `${message.character_name} 的私密消息` : '私密消息',
+        title: message.character_name ? t('dfLogsPrivateFrom', { name: message.character_name }) : t('dfLogsPrivateTab'),
         content: String(message.text || ''),
       }))
       setLogs([...story, ...privateItems].sort((a, b) => b.round - a.round))

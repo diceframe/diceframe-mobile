@@ -3,6 +3,7 @@ import * as React from 'react'
 import { createCharacterCard, deleteCharacterCard, fetchCharacterCards, updateCharacterCard } from '@/api/library'
 import { errorMessage } from '@/api/client'
 import type { CharacterCard } from '@/api/types'
+import { getT } from '@/i18n/t'
 
 export function useCharacters() {
   const [cards, setCards] = React.useState<CharacterCard[]>([])
@@ -25,20 +26,21 @@ export function useCharacters() {
   React.useEffect(() => { queueMicrotask(() => void load()) }, [])
 
   async function addCard(card: CharacterCard) {
+    // source 是发给服务端的数据默认值（非界面文案），保持中文固定值
     const result = await createCharacterCard({ ...card, source: card.source || '移动端角色名册' })
-    if (result.ok === false) throw new Error(result.error || '保存角色失败')
+    if (result.ok === false) throw new Error(result.error || getT()('dfCharacterSaveFailed'))
     await load()
   }
 
   async function updateCard(cardId: string, patch: Partial<CharacterCard>) {
     const result = await updateCharacterCard(cardId, patch)
-    if (result.ok === false) throw new Error(result.error || '更新角色失败')
+    if (result.ok === false) throw new Error(result.error || getT()('dfCharacterUpdateFailed'))
     await load()
   }
 
   async function deleteCard(cardId: string) {
     const result = await deleteCharacterCard(cardId)
-    if (result.ok === false) throw new Error(result.error || '删除角色失败')
+    if (result.ok === false) throw new Error(result.error || getT()('dfCharacterDeleteFailed'))
     await load()
   }
 

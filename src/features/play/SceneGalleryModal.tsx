@@ -6,9 +6,10 @@ import { Sheet } from '@/components/patterns/sheet'
 import { Text } from '@/components/ui/text'
 import type { GeneratedImageItem } from '@/api/types'
 import { apiAssetDataUri } from '@/api/assets'
-import { strings } from '@/lib/strings'
+import { useT } from '@/i18n/t'
 
 function GalleryImage({ item, gameKey }: { item: GeneratedImageItem; gameKey: string }) {
+  const t = useT()
   const [uri, setUri] = React.useState<string | null>(null)
 
   React.useEffect(() => {
@@ -47,7 +48,7 @@ function GalleryImage({ item, gameKey }: { item: GeneratedImageItem; gameKey: st
       )}
       {item.round != null && (
         <Text variant="small" className="px-2 pb-2">
-          第 {item.round} 回合
+          {t('dfPlayRoundLabel', { round: item.round })}
         </Text>
       )}
     </View>
@@ -72,10 +73,11 @@ export function SceneGalleryModal({
   loading,
   onClose,
 }: SceneGalleryModalProps) {
+  const t = useT()
   return (
     <Sheet open={open} onClose={onClose} className="h-[80%]" scrollable={false}>
       <View className="flex-1 gap-4 pt-1">
-        <Text variant="h3">{strings.play.sceneGallery}</Text>
+        <Text variant="h3">{t('sceneGallery')}</Text>
 
         <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-4 pb-6">
           {loading ? (
@@ -84,7 +86,7 @@ export function SceneGalleryModal({
             </View>
           ) : images.length === 0 ? (
             <Text variant="muted" className="text-center">
-              暂无场景图
+              {t('dfPlayNoSceneImages')}
             </Text>
           ) : (
             images.map((item) => (

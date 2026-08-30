@@ -11,11 +11,9 @@ import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
 import { buildCardPatch, normalizeSkillList, type CharacterCardPatch } from '@/lib/character-card'
-import { strings } from '@/lib/strings'
+import { useT } from '@/i18n/t'
 import { PortraitPickerSection } from './PortraitPickerSection'
 import { SkillRowsEditor } from './SkillRowsEditor'
-
-const t = strings.characterCard
 
 interface RuleSchema {
   ruleId: string
@@ -37,6 +35,7 @@ export function CharacterCardEditor({
   onSubmit: (payload: CharacterCardPatch) => Promise<void>
   onClose: () => void
 }) {
+  const t = useT()
   const isEditing = Boolean(card?.card_id || card?.id)
 
   const [name, setName] = React.useState(card?.character_name ?? '')
@@ -129,20 +128,20 @@ export function CharacterCardEditor({
           className="h-11 w-11 rounded-full border border-border bg-muted"
         />
         <View className="flex-1">
-          <Text variant="h3">{isEditing ? t.editTitle : t.createTitle}</Text>
+          <Text variant="h3">{isEditing ? t('dfCharacterCardEditTitle') : t('dfCharacterCardCreateTitle')}</Text>
           {isEditing ? (
             <Text variant="small" className="text-muted-foreground">
               {String(activeSchema?.meta?.rule_name || card?.rule_name || card?.rule_id || '')}
             </Text>
           ) : (
-            <Text variant="small" className="text-muted-foreground">{t.ruleHint}</Text>
+            <Text variant="small" className="text-muted-foreground">{t('dfCharacterCardRuleHint')}</Text>
           )}
         </View>
       </View>
 
       {!isEditing && rules.length > 1 ? (
         <View className="gap-1.5">
-          <Text variant="small" className="font-semibold">{t.rule}</Text>
+          <Text variant="small" className="font-semibold">{t('dfCharacterCardRule')}</Text>
           {/* 芯片排布在规则多时占满纵向空间，改用底部弹窗单选；ruleId 默认已指向第一条 */}
           <SheetSelect
             options={rules.map((rule) => ({
@@ -151,31 +150,31 @@ export function CharacterCardEditor({
             }))}
             value={ruleId}
             onValueChange={setRuleId}
-            placeholder={t.rule}
+            placeholder={t('dfCharacterCardRule')}
           />
         </View>
       ) : null}
 
       <View className="gap-1.5">
-        <Text variant="small" className="font-semibold">{t.name}</Text>
-        <Input value={name} onChangeText={setName} placeholder={t.name} />
+        <Text variant="small" className="font-semibold">{t('dfCharacterCardName')}</Text>
+        <Input value={name} onChangeText={setName} placeholder={t('dfCharacterCardName')} />
       </View>
 
       <PortraitPickerSection value={portrait} onChange={setPortrait} ruleId={ruleId} name={name} />
 
       <View className="flex-row gap-2">
         <View className="flex-1 gap-1.5">
-          <Text variant="small" className="font-semibold">{t.race}</Text>
-          <Input value={race} onChangeText={setRace} placeholder={t.race} />
+          <Text variant="small" className="font-semibold">{t('dfCharacterCardRace')}</Text>
+          <Input value={race} onChangeText={setRace} placeholder={t('dfCharacterCardRace')} />
         </View>
         <View className="flex-1 gap-1.5">
-          <Text variant="small" className="font-semibold">{t.class}</Text>
-          <Input value={klass} onChangeText={setKlass} placeholder={t.class} />
+          <Text variant="small" className="font-semibold">{t('dfCharacterCardClass')}</Text>
+          <Input value={klass} onChangeText={setKlass} placeholder={t('dfCharacterCardClass')} />
         </View>
       </View>
 
       <View className="gap-1.5">
-        <Text variant="small" className="font-semibold">{t.skills}</Text>
+        <Text variant="small" className="font-semibold">{t('dfCharacterCardSkills')}</Text>
         <SkillRowsEditor
           skills={skills}
           onChange={setSkills}
@@ -186,21 +185,21 @@ export function CharacterCardEditor({
       </View>
 
       <View className="gap-1.5">
-        <Text variant="small" className="font-semibold">{t.background}</Text>
-        <Textarea value={background} onChangeText={setBackground} placeholder={t.backgroundPlaceholder} className="min-h-24" />
+        <Text variant="small" className="font-semibold">{t('dfCharacterCardBackground')}</Text>
+        <Textarea value={background} onChangeText={setBackground} placeholder={t('dfCharacterCardBackgroundPlaceholder')} className="min-h-24" />
       </View>
 
       <View className="gap-1.5">
-        <Text variant="small" className="font-semibold">{t.gold}</Text>
+        <Text variant="small" className="font-semibold">{t('dfCharacterCardGold')}</Text>
         <Input value={gold} onChangeText={setGold} inputMode="numeric" placeholder="30" />
       </View>
 
       {error ? <Text variant="small" className="text-destructive">{error}</Text> : null}
 
       <View className="flex-row gap-2">
-        <Button variant="outline" className="flex-1" onPress={onClose}><Text>{t.cancel}</Text></Button>
+        <Button variant="outline" className="flex-1" onPress={onClose}><Text>{t('dfCommonCancel')}</Text></Button>
         <Button className="flex-1" disabled={saving} onPress={() => void save()}>
-          <Text>{saving ? t.saving : t.save}</Text>
+          <Text>{saving ? t('dfCommonSaving') : t('dfCommonSave')}</Text>
         </Button>
       </View>
     </View>

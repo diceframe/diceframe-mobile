@@ -2,6 +2,7 @@ import * as React from 'react'
 
 import { errorMessage } from '@/api/client'
 import { deleteMemory as deleteMemoryApi, fetchMemories } from '@/api/library'
+import { getT } from '@/i18n/t'
 import type { MemoryItem } from '@/types'
 
 function toMemoryItem(entry: Record<string, unknown>): MemoryItem {
@@ -34,12 +35,12 @@ export function useMemory(gameKey: string) {
 
   async function deleteMemory(id: string) {
     const result = await deleteMemoryApi(gameKey, Number(id))
-    if (result.ok === false) throw new Error(result.error || '删除记忆失败')
+    if (result.ok === false) throw new Error(result.error || getT()('dfMemoryDeleteFailed'))
     await searchMemories()
   }
 
   async function addMemory(): Promise<never> {
-    throw new Error('服务器不支持手工创建叙事记忆；记忆会在对局推进时自动提取')
+    throw new Error(getT()('dfMemoryAddUnsupported'))
   }
 
   return { memories, loading, error, addMemory, deleteMemory, searchMemories, refreshMemories: searchMemories }

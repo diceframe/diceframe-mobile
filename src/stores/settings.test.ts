@@ -46,6 +46,14 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     expect(useSettingsStore.getState().themeMode).toBe('dark')
   })
 
+  it('语言偏好默认跟随系统，可显式覆盖', () => {
+    expect(useSettingsStore.getState().language).toBe('system')
+    useSettingsStore.getState().setLanguage('en')
+    expect(useSettingsStore.getState().language).toBe('en')
+    useSettingsStore.getState().setLanguage('system')
+    expect(useSettingsStore.getState().language).toBe('system')
+  })
+
   beforeEach(() => {
     useSettingsStore.setState({ baseUrl: '', token: null, share: null })
     configureApiClient({ baseUrl: '', token: null, share: null })

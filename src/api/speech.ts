@@ -5,6 +5,7 @@
  * - 合成（TTS）：JSON 入、音频字节出（Web 用 blob + Audio 播放，移动端写缓存文件后播放）。
  */
 import { api, apiBlob } from './client'
+import { getT } from '@/i18n/t'
 import type { TranscriptionResponse, TtsSpeechRequest } from './types'
 
 export async function transcribeAudio(
@@ -22,7 +23,7 @@ export async function transcribeAudio(
     },
   )
   if (typeof result.text !== 'string') {
-    throw new Error(result.error || '转写失败：服务器未返回文本')
+    throw new Error(result.error || getT()('dfErrorsTranscribeEmpty'))
   }
   return result.text
 }

@@ -2,6 +2,7 @@ import * as React from 'react'
 
 import { errorMessage } from '@/api/client'
 import { controlPlugin, fetchInstalledPlugins, fetchMarketplacePlugins, installMarketplacePlugin, uninstallPlugin as uninstallPluginApi } from '@/api/library'
+import { getT } from '@/i18n/t'
 import type { Plugin } from '@/types'
 
 export function usePlugins() {
@@ -30,13 +31,13 @@ export function usePlugins() {
 
   async function installPlugin(pluginId: string) {
     const result = await installMarketplacePlugin(pluginId)
-    if (result.ok === false) throw new Error(result.error || '安装插件失败')
+    if (result.ok === false) throw new Error(result.error || getT()('dfPluginsInstallFailed'))
     await load()
   }
 
   async function uninstallPlugin(pluginId: string) {
     const result = await uninstallPluginApi(pluginId)
-    if (result.ok === false) throw new Error(result.error || '卸载插件失败')
+    if (result.ok === false) throw new Error(result.error || getT()('dfPluginsUninstallFailed'))
     await load()
   }
 
@@ -44,7 +45,7 @@ export function usePlugins() {
     const plugin = plugins.find((item) => item.id === pluginId)
     if (!plugin?.isInstalled) return
     const result = await controlPlugin(pluginId, plugin.isEnabled ? 'stop' : 'start')
-    if (result.ok === false) throw new Error(result.error || '切换插件状态失败')
+    if (result.ok === false) throw new Error(result.error || getT()('dfPluginsToggleFailed'))
     await load()
   }
 

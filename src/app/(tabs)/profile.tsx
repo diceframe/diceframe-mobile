@@ -23,8 +23,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Icon } from '@/components/ui/icon'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
+import { useT } from '@/i18n/t'
 import type { SettingsSection } from '@/app/(profile)/settings'
-import { strings } from '@/lib/strings'
 import { useSettingsStore } from '@/stores/settings'
 
 interface MenuRowProps {
@@ -65,12 +65,14 @@ function MenuGroup({ children }: { children: React.ReactNode }) {
   )
 }
 
-const THEME_LABEL = { system: '跟随系统', light: '浅色', dark: '深色' } as const
+/** 主题选项存 key 而非文案：模块级常量取不到 useT，渲染时再翻译 */
+const THEME_LABEL_KEYS = { system: 'dfSettingsThemeSystem', light: 'dfSettingsThemeLight', dark: 'dfSettingsThemeDark' } as const
 
 export default function ProfileScreen() {
   const router = useRouter()
+  const t = useT()
   const settings = useSettingsStore()
-  const identity = settings.token ? 'GM 已登录' : settings.share ? settings.share.name || '玩家已加入' : '未登录'
+  const identity = settings.token ? t('dfProfileGmLoggedIn') : settings.share ? settings.share.name || t('dfProfilePlayerJoined') : t('dfSettingsNotLoggedIn')
 
   const openSetting = (section: SettingsSection) => {
     router.push({ pathname: '/settings', params: { section } })
@@ -78,52 +80,52 @@ export default function ProfileScreen() {
 
   return (
     <Screen className="px-4" style={{ width: '100%', maxWidth: 760, alignSelf: 'center' }}>
-      <PageHeader title="我的" subtitle="身份、偏好与冒险工具" className="px-0" />
+      <PageHeader title={t('dfTabProfile')} subtitle={t('dfProfileSubtitle')} className="px-0" />
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-5 pb-8">
         {/* 身份摘要卡：点击直达「身份与登录」，通用偏好仍走下方设置组，避免重复入口 */}
         <Pressable
           className="flex-row items-center gap-4 rounded-2xl border border-border bg-card px-5 py-5 active:bg-accent"
           onPress={() => openSetting('identity')}
           accessibilityRole="button"
-          accessibilityLabel="冒险者档案，查看身份与登录"
+          accessibilityLabel={t('dfProfileCardA11y')}
         >
           <View className="h-14 w-14 items-center justify-center rounded-full border border-primary/40 bg-primary/10">
             <Icon as={CircleUserRound} size={27} />
           </View>
           <View className="min-w-0 flex-1 gap-1">
-            <Text variant="h3" className="border-b-0 pb-0" numberOfLines={1}>冒险者档案</Text>
-            <Text variant="small" numberOfLines={1}>{identity} · {settings.baseUrl || '尚未连接服务器'}</Text>
+            <Text variant="h3" className="border-b-0 pb-0" numberOfLines={1}>{t('dfProfileAdventurerCard')}</Text>
+            <Text variant="small" numberOfLines={1}>{identity} · {settings.baseUrl || t('dfProfileNoServer')}</Text>
           </View>
           <Icon as={ChevronRight} size={18} className="text-muted-foreground" />
         </Pressable>
 
         <View className="gap-2">
-          <Text variant="small" className="px-1 font-semibold text-foreground">设置</Text>
+          <Text variant="small" className="px-1 font-semibold text-foreground">{t('dfCommonSettings')}</Text>
           <MenuGroup>
-            <MenuRow icon={Server} label="服务器" detail={settings.baseUrl ? settings.baseUrl.replace(/^https?:\/\//, '') : '未连接'} onPress={() => openSetting('server')} />
-            <MenuRow icon={CircleUserRound} label="身份与登录" detail={identity} onPress={() => openSetting('identity')} />
-            <MenuRow icon={Palette} label="外观" detail={THEME_LABEL[settings.themeMode]} onPress={() => openSetting('appearance')} />
-            <MenuRow icon={Volume2} label="朗读" detail={`${settings.ttsRate.toFixed(2)}x`} onPress={() => openSetting('speech')} />
-            <MenuRow icon={Vibrate} label="触觉反馈" detail={settings.hapticsEnabled ? '已开启' : '已关闭'} onPress={() => openSetting('haptics')} />
-            <MenuRow icon={RefreshCw} label={strings.updates.title} detail={`v${Constants.expoConfig?.version ?? '-'}`} onPress={() => openSetting('updates')} />
+            <MenuRow icon={Server} label={t('dfSettingsServer')} detail={settings.baseUrl ? settings.baseUrl.replace(/^https?:\/\//, '') : t('dfProfileServerNotConnected')} onPress={() => openSetting('server')} />
+            <MenuRow icon={CircleUserRound} label={t('dfSettingsIdentity')} detail={identity} onPress={() => openSetting('identity')} />
+            <MenuRow icon={Palette} label={t('dfSettingsAppearance')} detail={t(THEME_LABEL_KEYS[settings.themeMode])} onPress={() => openSetting('appearance')} />
+            <MenuRow icon={Volume2} label={t('dfSettingsSpeech')} detail={`${settings.ttsRate.toFixed(2)}x`} onPress={() => openSetting('speech')} />
+            <MenuRow icon={Vibrate} label={t('dfSettingsHaptics')} detail={settings.hapticsEnabled ? t('dfProfileHapticsOn') : t('dfProfileHapticsOff')} onPress={() => openSetting('haptics')} />
+            <MenuRow icon={RefreshCw} label={t('dfUpdatesTitle')} detail={`v${Constants.expoConfig?.version ?? '-'}`} onPress={() => openSetting('updates')} />
           </MenuGroup>
         </View>
 
         {/* 冒险工具与法律信息共用一张卡片，压缩页面层级；版本号作页面脚注 */}
         <View className="gap-2">
-          <Text variant="small" className="px-1 font-semibold text-foreground">冒险工具</Text>
+          <Text variant="small" className="px-1 font-semibold text-foreground">{t('dfProfileTools')}</Text>
           <MenuGroup>
-            <MenuRow icon={Globe2} label="世界图鉴" onPress={() => router.push('/worlds')} />
-            <MenuRow icon={PackageOpen} label="插件与内容包" onPress={() => router.push('/plugins')} />
-            <MenuRow icon={Brain} label="叙事记忆" onPress={() => router.push('/memory')} />
-            <MenuRow icon={BookOpenText} label="对局记录" onPress={() => router.push('/logs')} />
-            <MenuRow icon={Gavel} label="规则库" onPress={() => router.push('/rules')} />
-            <MenuRow icon={FileText} label="法律与隐私" onPress={() => router.push('/legal')} />
+            <MenuRow icon={Globe2} label={t('dfProfileWorlds')} onPress={() => router.push('/worlds')} />
+            <MenuRow icon={PackageOpen} label={t('dfPluginsTitle')} onPress={() => router.push('/plugins')} />
+            <MenuRow icon={Brain} label={t('dfMemoryTitle')} onPress={() => router.push('/memory')} />
+            <MenuRow icon={BookOpenText} label={t('dfLogsTitle')} onPress={() => router.push('/logs')} />
+            <MenuRow icon={Gavel} label={t('dfRulesTitle')} onPress={() => router.push('/rules')} />
+            <MenuRow icon={FileText} label={t('legalDocumentLabel')} onPress={() => router.push('/legal')} />
           </MenuGroup>
         </View>
 
         <Text variant="small" className="text-center text-muted-foreground">
-          DiceFrame 移动端 v{Constants.expoConfig?.version ?? '-'}
+          {t('dfProfileFooter', { version: Constants.expoConfig?.version ?? '-' })}
         </Text>
       </ScrollView>
     </Screen>

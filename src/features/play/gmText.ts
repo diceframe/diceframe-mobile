@@ -91,7 +91,18 @@ export function extractStateLines(text: string): { narration: string; states: St
   return { narration: narration.join('\n').trim(), states }
 }
 
-export function formatTagLine(tagBlock: string): TagBadge[] {
+/**
+ * 标签徽章的可本地化文案：金币前缀与 DECISION 缺省文案。
+ * 缺省保持中文（纯逻辑默认值/单测基准），UI 层（GmNarration）经 t() 传入当前语言。
+ */
+export interface TagLabels {
+  gold?: string
+  decision?: string
+}
+
+export function formatTagLine(tagBlock: string, labels?: TagLabels): TagBadge[] {
+  const goldLabel = labels?.gold ?? '金币'
+  const decisionFallback = labels?.decision ?? '关键决策'
   const badges: TagBadge[] = []
   String(tagBlock || '')
     .split('\n')
@@ -107,9 +118,9 @@ export function formatTagLine(tagBlock: string): TagBadge[] {
       if (tag === 'HP' && !Number.isNaN(count)) {
         badges.push({ tone: count < 0 ? 'hp-dn' : 'hp-up', text: `HP ${count < 0 ? String(count) : `+${count}`}` })
       } else if (tag === 'GOLD' && !Number.isNaN(count)) {
-        badges.push({ tone: 'gold', text: `金币 ${count < 0 ? String(count) : `+${count}`}` })
+        badges.push({ tone: 'gold', text: `${goldLabel} ${count < 0 ? String(count) : `+${count}`}` })
       } else if (tag === 'PAY' && !Number.isNaN(count)) {
-        badges.push({ tone: 'pay', text: `金币 ${-Math.abs(count)}` })
+        badges.push({ tone: 'pay', text: `${goldLabel} ${-Math.abs(count)}` })
       } else if (tag === 'LOOT' && val) {
         badges.push({ tone: 'loot', text: val })
       } else if (tag === 'KEY_ITEM' && val) {
@@ -125,7 +136,7 @@ export function formatTagLine(tagBlock: string): TagBadge[] {
       } else if (tag === 'QUEST' && val) {
         badges.push({ tone: 'quest', text: val })
       } else if (tag === 'DECISION') {
-        badges.push({ tone: 'decision', text: val || '关键决策' })
+        badges.push({ tone: 'decision', text: val || decisionFallback })
       } else if (tag === 'XP' && val) {
         badges.push({ tone: 'gold', text: `XP +${val}` })
       } else if (tag === 'ROLL' && val) {
@@ -135,7 +146,7 @@ export function formatTagLine(tagBlock: string): TagBadge[] {
   return badges
 }
 
-export function parseGMText(text: string): GMBlock {
+export function parseGMText(text: string, labels?: TagLabels): GMBlock {
   const extracted = extractStateLines(normalizeProtocolSuffix(text))
   let narration = extracted.narration
   let tagBlock = ''
@@ -148,5 +159,5 @@ export function parseGMText(text: string): GMBlock {
     .split(/\n\s*\n|\n/)
     .map((p) => p.trim())
     .filter(Boolean)
-  return { paragraphs, states: extracted.states, tags: formatTagLine(tagBlock) }
+  return { paragraphs, states: extracted.states, tags: formatTagLine(tagBlock, labels) }
 }

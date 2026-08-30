@@ -23,7 +23,7 @@ import { gameStateLabel, gameStateTone } from '@/lib/game-state'
 import { appLayoutForWidth } from '@/lib/layout'
 import { confirmDestructive } from '@/lib/confirm'
 import { useThemeToken } from '@/lib/theme'
-import { strings } from '@/lib/strings'
+import { useT } from '@/i18n/t'
 import { CreateGameSheet } from '@/features/overview/CreateGameSheet'
 
 type SortMode = 'recent' | 'oldest' | 'name' | 'round'
@@ -102,12 +102,14 @@ function OverviewContent({
   onCreate: () => void
   onOpen: (key: string) => void
 }) {
+  const t = useT()
+
   if (error) {
     return (
       <View className="gap-3">
         <Text className="text-destructive">{error}</Text>
         <Button onPress={onRetry} className="self-start">
-          <Text>{strings.common.retry}</Text>
+          <Text>{t('dfCommonRetry')}</Text>
         </Button>
       </View>
     )
@@ -127,10 +129,10 @@ function OverviewContent({
     return (
       <View className="mt-8 items-center gap-4">
         <Text variant="muted" className="text-center">
-          {strings.overview.empty}
+          {t('dfOverviewEmpty')}
         </Text>
         <Button onPress={onCreate}>
-          <Text>创建第一个对局</Text>
+          <Text>{t('dfOverviewCreateFirst')}</Text>
         </Button>
       </View>
     )
@@ -169,7 +171,7 @@ function OverviewContent({
               <SceneCover
                 source={gameSceneCoverSource(item.game_key, item.rule_id)}
                 className="absolute inset-0"
-                accessibilityLabel={`${item.world_name || item.game_key}封面`}
+                accessibilityLabel={t('dfOverviewCoverA11y', { name: item.world_name || item.game_key })}
               />
               <View className="min-h-[196px] justify-end p-3">
                 <GlassView
@@ -188,10 +190,10 @@ function OverviewContent({
                   </CardHeader>
                   <CardContent className="flex-row flex-wrap gap-x-4 gap-y-1">
                     <Text variant="small">
-                      {strings.overview.round} {item.round_number ?? 0}
+                      {t('dfOverviewRound')} {item.round_number ?? 0}
                     </Text>
                     <Text variant="small">
-                      {strings.overview.players} {item.player_count ?? 0}/{item.max_players ?? '-'}
+                      {t('players')} {item.player_count ?? 0}/{item.max_players ?? '-'}
                     </Text>
                     <Text variant="small" className="flex-1 text-right">
                       {item.last_activity?.slice(0, 10) ?? ''}
@@ -201,7 +203,7 @@ function OverviewContent({
                     <CardContent className="pt-3">
                       <View className="flex-row gap-2">
                         <Button size="sm" variant="destructive" disabled={busy} onPress={() => onRemove(item.game_key)}>
-                          <Text>删除</Text>
+                          <Text>{t('dfCommonDelete')}</Text>
                         </Button>
                       </View>
                     </CardContent>
@@ -219,6 +221,7 @@ function OverviewContent({
 export default function OverviewScreen() {
   const router = useRouter()
   const navigation = useNavigation()
+  const t = useT()
   const { width } = useWindowDimensions()
   const { gameListColumns } = appLayoutForWidth(width)
   const mutedForeground = useThemeToken('mutedForeground')
@@ -296,10 +299,10 @@ export default function OverviewScreen() {
 
   async function removeGame(key: string) {
     const confirmed = await confirmDestructive({
-      title: strings.overview.deleteTitle,
-      message: strings.overview.deleteMessage,
-      confirmText: strings.common.confirm,
-      cancelText: strings.common.cancel,
+      title: t('dfOverviewDeleteTitle'),
+      message: t('dfOverviewDeleteMessage'),
+      confirmText: t('dfCommonConfirm'),
+      cancelText: t('dfCommonCancel'),
     })
     if (!confirmed) return
     setBusy(true)
@@ -322,10 +325,10 @@ export default function OverviewScreen() {
   async function batchRemove() {
     if (selected.size === 0) return
     const confirmed = await confirmDestructive({
-      title: strings.overview.batchDeleteTitle,
-      message: strings.overview.batchDeleteMessage,
-      confirmText: strings.common.confirm,
-      cancelText: strings.common.cancel,
+      title: t('dfOverviewBatchDeleteTitle'),
+      message: t('dfOverviewBatchDeleteMessage'),
+      confirmText: t('dfCommonConfirm'),
+      cancelText: t('dfCommonCancel'),
     })
     if (!confirmed) return
     setBusy(true)
@@ -335,7 +338,7 @@ export default function OverviewScreen() {
       setGames((prev) => prev?.filter((g) => !deleted.has(g.game_key)) ?? null)
       setSelected(new Set())
       if (result.failed.length > 0) {
-        setError(`删除完成：成功 ${result.deleted.length}，失败 ${result.failed.length}`)
+        setError(t('dfOverviewBatchResult', { ok: result.deleted.length, failed: result.failed.length }))
       }
     } catch (e) {
       setError(errorMessage(e))
@@ -362,12 +365,12 @@ export default function OverviewScreen() {
       style={{ width: '100%', maxWidth: 1280, alignSelf: 'center' }}
     >
       <PageHeader
-        title={strings.overview.title}
+        title={t('dfOverviewTitle')}
         className="px-0"
         right={
-          <Button size="sm" onPress={() => openCreate()} accessibilityLabel="创建对局">
+          <Button size="sm" onPress={() => openCreate()} accessibilityLabel={t('dfOverviewCreate')}>
             <Icon as={Plus} size={16} />
-            <Text>新对局</Text>
+            <Text>{t('dfOverviewNew')}</Text>
           </Button>
         }
       />
@@ -376,19 +379,19 @@ export default function OverviewScreen() {
       {games !== null && totalGames > 0 && (
         <View className="mb-3 flex-row gap-2">
           <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <Text variant="small">总对局</Text>
+            <Text variant="small">{t('dfOverviewStatTotal')}</Text>
             <Text className="font-mono text-lg font-semibold">{totalGames}</Text>
           </View>
           <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <Text variant="small">进行中</Text>
+            <Text variant="small">{t('activeGames')}</Text>
             <Text className="font-mono text-lg font-semibold">{activeGames}</Text>
           </View>
           <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <Text variant="small">玩家</Text>
+            <Text variant="small">{t('players')}</Text>
             <Text className="font-mono text-lg font-semibold">{totalPlayers}</Text>
           </View>
           <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <Text variant="small">回合</Text>
+            <Text variant="small">{t('dfOverviewRound')}</Text>
             <Text className="font-mono text-lg font-semibold">{totalRounds}</Text>
           </View>
         </View>
@@ -402,16 +405,16 @@ export default function OverviewScreen() {
               <Tabs value={sort} onValueChange={(v) => setSort(v as SortMode)}>
                 <TabsList>
                   <TabsTrigger value="recent">
-                    <Text variant="small">最近</Text>
+                    <Text variant="small">{t('dfOverviewSortRecent')}</Text>
                   </TabsTrigger>
                   <TabsTrigger value="oldest">
-                    <Text variant="small">最早</Text>
+                    <Text variant="small">{t('dfOverviewSortOldest')}</Text>
                   </TabsTrigger>
                   <TabsTrigger value="name">
-                    <Text variant="small">名称</Text>
+                    <Text variant="small">{t('dfOverviewSortName')}</Text>
                   </TabsTrigger>
                   <TabsTrigger value="round">
-                    <Text variant="small">回合</Text>
+                    <Text variant="small">{t('dfOverviewRound')}</Text>
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
@@ -421,7 +424,7 @@ export default function OverviewScreen() {
                 variant="ghost"
                 size="icon"
                 onPress={batchRemove}
-                accessibilityLabel="批量删除"
+                accessibilityLabel={t('dfOverviewBatchDeleteA11y')}
                 disabled={busy}
               >
                 <Icon as={Trash2} size={20} className="text-destructive" />
@@ -430,10 +433,10 @@ export default function OverviewScreen() {
           </View>
           {selected.size > 0 && (
             <View className="flex-row items-center justify-between">
-              <Text variant="small">已选 {selected.size} 个对局</Text>
+              <Text variant="small">{t('dfOverviewSelectedCount', { count: selected.size })}</Text>
               <Pressable onPress={clearSelection}>
                 <Text variant="small" className="text-primary">
-                  清除选择
+                  {t('dfOverviewClearSelection')}
                 </Text>
               </Pressable>
             </View>

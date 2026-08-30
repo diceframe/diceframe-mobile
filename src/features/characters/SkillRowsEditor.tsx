@@ -6,10 +6,8 @@ import type { CharacterSkill, RuleMeta } from '@/api/types'
 import { Icon } from '@/components/ui/icon'
 import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
-import { strings } from '@/lib/strings'
+import { useT } from '@/i18n/t'
 import { skillPoolNames } from '@/lib/character-card'
-
-const t = strings.characterCard
 
 /**
  * 技能行编辑器（对齐 Web SkillEditor）：名称+数值行、增删、规则技能池快捷添加，
@@ -26,6 +24,7 @@ export function SkillRowsEditor({
   pool?: (string | { name?: string; key?: string })[]
   meta?: RuleMeta | null
 }) {
+  const t = useT()
   const hint = meta?.skill_hint || ''
   const maxSkills = Number(meta?.max_skills || 0)
   const pointTotal = Number(meta?.skill_point_total || 0)
@@ -53,9 +52,9 @@ export function SkillRowsEditor({
       {maxSkills || pointTotal || maxValue ? (
         <Text variant="small" className={overLimit ? 'font-medium text-destructive' : 'text-muted-foreground'}>
           {[
-            maxSkills ? `已填 ${filled.length}/${maxSkills}` : '',
-            pointTotal ? `技能点 ${spent}/${pointTotal}` : '',
-            maxValue ? `单技能上限 ${maxValue}` : '',
+            maxSkills ? t('dfCharacterCardSkillCount', { filled: filled.length, max: maxSkills }) : '',
+            pointTotal ? t('dfCharacterCardSkillPoints', { spent, total: pointTotal }) : '',
+            maxValue ? t('dfCharacterCardSkillMaxValue', { max: maxValue }) : '',
           ].filter(Boolean).join(' · ')}
         </Text>
       ) : null}
@@ -64,7 +63,7 @@ export function SkillRowsEditor({
           <Input
             value={skill.name}
             onChangeText={(name) => update(index, { name })}
-            placeholder={t.skillName}
+            placeholder={t('dfCharacterCardSkillName')}
             className="flex-1"
           />
           <Input
@@ -76,7 +75,7 @@ export function SkillRowsEditor({
           <Pressable
             onPress={() => onChange(skills.filter((_, i) => i !== index))}
             className="rounded-md p-1.5"
-            accessibilityLabel={t.delete}
+            accessibilityLabel={t('dfCommonDelete')}
           >
             <Icon as={X} size={16} className="text-muted-foreground" />
           </Pressable>
@@ -88,7 +87,7 @@ export function SkillRowsEditor({
       >
         <View className="flex-row items-center gap-1">
           <Icon as={Plus} size={14} />
-          <Text variant="small">{t.addSkill}</Text>
+          <Text variant="small">{t('dfCharacterCardAddSkill')}</Text>
         </View>
       </Pressable>
       {poolNames.length ? (

@@ -7,7 +7,7 @@ import { Icon } from '@/components/ui/icon'
 import { Sheet } from '@/components/patterns/sheet'
 import { Text } from '@/components/ui/text'
 import type { WorldCandidate } from '@/api/types'
-import { strings } from '@/lib/strings'
+import { useT } from '@/i18n/t'
 
 interface WorldSwitchModalProps {
   open: boolean
@@ -31,12 +31,13 @@ export function WorldSwitchModal({
   onClose,
   onSwitch,
 }: WorldSwitchModalProps) {
+  const t = useT()
   return (
     <Sheet open={open} onClose={onClose} className="h-[75%]" scrollable={false}>
       <View className="flex-1 gap-4 pt-1">
-        <Text variant="h3">{strings.play.switchWorldTitle}</Text>
+        <Text variant="h3">{t('dfPlaySwitchWorldTitle')}</Text>
         <Text variant="muted">
-          {strings.play.currentWorld}: {currentWorldId || '未绑定'}
+          {t('dfPlayCurrentWorld')}: {currentWorldId || t('dfPlayWorldUnbound')}
         </Text>
 
         <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-3 pb-6">
@@ -46,7 +47,7 @@ export function WorldSwitchModal({
             </View>
           ) : candidates.length === 0 ? (
             <Text variant="muted" className="text-center">
-              暂无可选世界观
+              {t('dfPlayNoWorldCandidates')}
             </Text>
           ) : (
             candidates.map((world) => {
@@ -72,7 +73,7 @@ export function WorldSwitchModal({
                           {world.source}
                           {world.default_rule ? ` · ${world.default_rule}` : ''}
                           {world.entry_count !== undefined
-                            ? ` · ${world.entry_count} 条目`
+                            ? ` · ${t('dfPlayEntryCount', { count: world.entry_count })}`
                             : ''}
                         </Text>
                       )}

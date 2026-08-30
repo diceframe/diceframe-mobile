@@ -12,6 +12,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
 import { ErrorBoundary } from '@/components/error-boundary'
 import { configureApiClient } from '@/api/client'
+import { useLocaleSync } from '@/hooks/useLocaleSync'
 import { useResolvedTheme, useThemeToken } from '@/lib/theme'
 import { bootstrapSession, useSettingsStore } from '@/stores/settings'
 
@@ -28,6 +29,9 @@ export default function RootLayout() {
   const theme = useResolvedTheme()
   const background = useThemeToken('background')
   const { setColorScheme } = useNativeWindColorScheme()
+
+  // 语言偏好 → i18n 单例；切换语言时全树经 useTranslation 重渲染
+  useLocaleSync()
 
   React.useEffect(() => {
     setSystemTheme(systemColorScheme === 'light' ? 'light' : 'dark')

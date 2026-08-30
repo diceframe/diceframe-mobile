@@ -12,13 +12,14 @@ import { fetchGameDetail, joinGame, verifyRoomPassword } from '@/api/games'
 import type { GameDetail } from '@/api/types'
 import { parseShareLink, type ParsedShareLink } from '@/lib/share-link'
 import { useSettingsStore } from '@/stores/settings'
-import { strings } from '@/lib/strings'
+import { useT } from '@/i18n/t'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 
 type Step = 'link' | 'room' | 'identity' | 'done'
 
 export default function JoinScreen() {
   const router = useRouter()
+  const t = useT()
   const setBaseUrl = useSettingsStore((s) => s.setBaseUrl)
   const setShare = useSettingsStore((s) => s.setShare)
 
@@ -37,7 +38,7 @@ export default function JoinScreen() {
     setError('')
     const result = parseShareLink(link)
     if (!result) {
-      setError(strings.join.invalidLink)
+      setError(t('dfJoinInvalidLink'))
       return
     }
     setBusy(true)
@@ -93,7 +94,7 @@ export default function JoinScreen() {
   async function join() {
     if (!parsed) return
     if (!parsed.user && !characterName.trim()) {
-      setError('请填写角色名')
+      setError(t('dfJoinNameRequired'))
       return
     }
     setBusy(true)
@@ -105,7 +106,7 @@ export default function JoinScreen() {
             join_as_new: true,
             character_name: characterName.trim(),
           })
-      if (!result.user_id) throw new Error(result.error || '加入失败')
+      if (!result.user_id) throw new Error(result.error || t('dfJoinFailed'))
       const share = shareOf(parsed, result.user_id)
       setShare(share)
       setStep('done')
@@ -123,7 +124,7 @@ export default function JoinScreen() {
       style={{ width: '100%', maxWidth: 600, alignSelf: 'center' }}
     >
       <PageHeader
-        title={strings.join.title}
+        title={t('dfJoinTitle')}
         subtitle={detail?.world_name}
         onBack={() => router.back()}
         className="px-0"
@@ -138,11 +139,11 @@ export default function JoinScreen() {
         >
       {step === 'link' && (
         <View className="gap-3">
-          <Text variant="small">{strings.join.linkLabel}</Text>
+          <Text variant="small">{t('dfJoinLinkLabel')}</Text>
           <Input
             value={link}
             onChangeText={setLink}
-            placeholder={strings.join.linkPlaceholder}
+            placeholder={t('dfJoinLinkPlaceholder')}
             autoCapitalize="none"
             autoCorrect={false}
             multiline
@@ -152,7 +153,7 @@ export default function JoinScreen() {
             {busy ? (
               <ActivityIndicator className="text-primary-foreground" />
             ) : (
-              <Text>{strings.join.parse}</Text>
+              <Text>{t('dfJoinParse')}</Text>
             )}
           </Button>
         </View>
@@ -160,11 +161,11 @@ export default function JoinScreen() {
 
       {step === 'room' && (
         <View className="gap-3">
-          <Text variant="small">{strings.join.roomPasswordLabel}</Text>
+          <Text variant="small">{t('roomPassword')}</Text>
           <Input
             value={roomPassword}
             onChangeText={setRoomPassword}
-            placeholder={strings.join.roomPasswordPlaceholder}
+            placeholder={t('dfJoinRoomPasswordPlaceholder')}
             secureTextEntry
             editable={!busy}
           />
@@ -172,7 +173,7 @@ export default function JoinScreen() {
             {busy ? (
               <ActivityIndicator className="text-primary-foreground" />
             ) : (
-              <Text>{strings.join.verify}</Text>
+              <Text>{t('dfJoinVerify')}</Text>
             )}
           </Button>
         </View>
@@ -183,30 +184,30 @@ export default function JoinScreen() {
           {parsed.user ? (
             <>
               <Text variant="muted">
-                将找回角色：{parsed.name || parsed.user}
+                {t('dfJoinReclaimHint', { name: parsed.name || parsed.user })}
               </Text>
               <Button onPress={join} disabled={busy}>
                 {busy ? (
                   <ActivityIndicator className="text-primary-foreground" />
                 ) : (
-                  <Text>{strings.join.reclaimIdentity}</Text>
+                  <Text>{t('dfJoinReclaim')}</Text>
                 )}
               </Button>
             </>
           ) : (
             <>
-              <Text variant="small">{strings.join.newNameLabel}</Text>
+              <Text variant="small">{t('dfJoinNameLabel')}</Text>
               <Input
                 value={characterName}
                 onChangeText={setCharacterName}
-                placeholder={strings.join.newNamePlaceholder}
+                placeholder={t('dfJoinNamePlaceholder')}
                 editable={!busy}
               />
               <Button onPress={join} disabled={busy}>
                 {busy ? (
                   <ActivityIndicator className="text-primary-foreground" />
                 ) : (
-                  <Text>{strings.join.createCharacter}</Text>
+                  <Text>{t('dfJoinCreateCharacter')}</Text>
                 )}
               </Button>
             </>

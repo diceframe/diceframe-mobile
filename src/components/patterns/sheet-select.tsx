@@ -4,6 +4,7 @@ import { Check } from 'lucide-react-native'
 
 import { Sheet } from '@/components/patterns/sheet'
 import { Text } from '@/components/ui/text'
+import { useT } from '@/i18n/t'
 import { cn } from '@/lib/utils'
 
 export type SheetSelectOption = {
@@ -28,6 +29,7 @@ export function SheetSelect({
   className,
 }: SheetSelectProps) {
   const [open, setOpen] = React.useState(false)
+  const t = useT()
   const selected = options.find((option) => option.value === value)
 
   return (
@@ -40,7 +42,7 @@ export function SheetSelect({
         )}
       >
         <Text className={selected ? 'text-foreground' : 'text-muted-foreground'} numberOfLines={1}>
-          {selected?.label ?? placeholder ?? '请选择'}
+          {selected?.label ?? placeholder ?? t('dfUiSelect')}
         </Text>
       </Pressable>
 
@@ -51,7 +53,7 @@ export function SheetSelect({
         stickyHeaderIndices={[0]}
       >
         <View className="bg-card pb-2">
-          <Text variant="h3">{placeholder ?? '选择'}</Text>
+          <Text variant="h3">{placeholder ?? t('choose')}</Text>
         </View>
         <View className="gap-1 pb-4">
           {options.map((option) => {

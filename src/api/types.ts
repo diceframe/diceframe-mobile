@@ -1,12 +1,3 @@
-/**
- * DiceFrame 移动端 API 契约 —— 上游全量镜像 + 移动端扩展段。
- *
- * 从文件开头到「移动端扩展段」分隔线为止，逐字拷贝自主仓库
- * frontend-v2/src/api/types.ts（该文件是后端 API 的手写镜像，后端无 OpenAPI/代码生成）。
- * 同步方式：整文件重拷上游版本后，还原文末「移动端扩展段」。
- * 不要在镜像段手改字段；移动端新增契约一律写进扩展段，
- * 与上游同名接口靠 declaration merging 合并（同名成员类型必须一致）。
- */
 
 export type JsonObject = Record<string, unknown>
 
@@ -34,7 +25,8 @@ export interface GeneratedImageRecord {
 }
 
 export interface CharacterPortrait {
-  kind: 'builtin' | 'upload' | 'plugin' | 'generated'
+  // Legacy saves can contain an empty object; treat it as no portrait.
+  kind?: 'builtin' | 'upload' | 'plugin' | 'generated'
   id?: string
   asset_id?: string
   plugin_id?: string
@@ -103,6 +95,8 @@ export interface CharacterCard extends CharacterSheet {
   character_name: string
   race?: string
   class?: string
+  ruleset_runtime?: RulesetRuntimeMeta
+  ruleset_revision?: number
 }
 
 export interface Player {
@@ -200,6 +194,40 @@ export interface Multiplayer {
   submitted_actions?: PublicAction[]
 }
 
+export interface RestSessionParticipant {
+  user_id: string
+  character_name: string
+  status: 'waiting' | 'submitted' | string
+}
+
+export interface RestSessionStatus {
+  active: boolean
+  status: 'idle' | 'collecting' | 'resolving' | 'completed' | 'error' | string
+  rest: 'short' | 'long' | null | string
+  ready_count: number
+  active_count: number
+  participants: RestSessionParticipant[]
+  resolved_at?: string
+  error?: string
+}
+
+export interface LiveAdvancementPlayerStatus {
+  user_id: string
+  character_name: string
+  level: number
+  xp: number
+  next_level_xp: number
+  entitled: boolean
+  target_level: number
+  source: 'ai_gm' | 'gm' | string
+}
+
+export interface LiveAdvancementStatus {
+  mode: 'milestone' | 'xp'
+  authority: 'ai_gm' | 'gm'
+  players: LiveAdvancementPlayerStatus[]
+}
+
 export interface PendingPayment {
   id?: string
   payment_id?: string
@@ -228,6 +256,9 @@ export interface GameDetail {
   state?: string
   language?: string
   solo_mode?: boolean
+  narrative_perspective?: 'auto' | 'immersive' | 'third_person' | string
+  advancement?: LiveAdvancementStatus
+  rest_session?: RestSessionStatus
   player_access_open?: boolean
   has_room_password?: boolean
   multiplayer?: Multiplayer
@@ -237,6 +268,10 @@ export interface GameDetail {
   round_check_results?: CheckResult[]
   total_tokens?: number
   token_budget_bump?: TokenBudgetBump | null
+  ruleset_runtime?: RulesetRuntimeMeta & {
+    content_version?: string
+    state_schema_version?: number
+  }
   [key: string]: unknown
 }
 
@@ -367,6 +402,34 @@ export interface LorebookResponse {
   [key: string]: unknown
 }
 
+export interface LoreProjection {
+  visible: boolean
+  audience: 'public' | 'character' | 'gm'
+  subjects: string[]
+}
+
+export interface LorePreviewViewer {
+  kind: 'gm' | 'party' | 'character'
+  uid?: string
+  name?: string
+}
+
+export interface LorePreviewSummary {
+  total: number
+  visible: number
+  public: number
+  character_only: number
+  gm_secret: number
+}
+
+export interface LorePreviewResponse {
+  ok?: boolean
+  world_id?: string
+  viewer?: LorePreviewViewer
+  projections?: Record<string, LoreProjection>
+  summary?: LorePreviewSummary
+}
+
 export interface GameSummary {
   game_key: string
   world_name?: string
@@ -378,6 +441,7 @@ export interface GameSummary {
   state?: string
   language?: string
   solo_mode?: boolean
+  narrative_perspective?: 'auto' | 'immersive' | 'third_person' | string
   gm_uid?: string
   round_number?: number
   player_count?: number
@@ -397,6 +461,7 @@ export interface GamesResponse {
 export interface GameMutationResponse {
   ok?: boolean
   error?: string
+  error_code?: string
   game_key?: string
   world_id?: string
   world_name?: string
@@ -407,6 +472,7 @@ export interface GameMutationResponse {
   seed_code?: string
   language?: string
   generated_password?: string
+  adventure_binding?: Record<string, unknown>
   [key: string]: unknown
 }
 
@@ -504,6 +570,8 @@ export interface CharacterListResponse {
   rule_attrs_total?: number
   rule_meta?: RuleMeta
   rule_special_stats?: SpecialStatSpec[]
+  ruleset_runtime?: RulesetRuntimeMeta
+  advancement?: LiveAdvancementStatus
   [key: string]: unknown
 }
 
@@ -626,6 +694,511 @@ export interface RuleMeta {
   [key: string]: unknown
 }
 
+export interface RulesetRuntimeCapabilities {
+  experience_profile: string
+  character_builder: 'legacy' | 'guided' | 'professional'
+  character_lifecycle: 'legacy' | 'rules_aware'
+  authoritative_intents: boolean
+  deterministic_combat: boolean
+  versioned_state: boolean
+  session_zero: boolean
+  tutorial_coach: boolean
+  narrative_turns: boolean
+  adventure_formats?: string[]
+}
+
+export interface RulesetRuntimeMeta {
+  id: string
+  version: number
+  requested_minimum_version: number
+  capabilities: RulesetRuntimeCapabilities
+}
+
+export type RulesetBuilderMode = 'quick' | 'guided' | 'expert'
+
+export interface RulesetExperience {
+  profile: string
+  builder_mode: RulesetRuntimeCapabilities['character_builder']
+  modes: RulesetBuilderMode[]
+  content_version: string
+  locale: string
+}
+
+export interface RulesetExperienceResponse {
+  ok: boolean
+  rule_id: string
+  ruleset_runtime: RulesetRuntimeMeta
+  experience: RulesetExperience
+}
+
+export interface RulesetChoice {
+  ref: string
+  id: string
+  name: string
+  summary: string
+  automation_level: 'deterministic' | 'guided' | 'reference'
+  source_ref: string
+  recommendation_reason?: string
+  difficulty?: 'beginner' | 'intermediate' | 'advanced' | string
+  fantasy_tags?: string[]
+  items?: Array<{ ref: string; name: string; quantity: number }>
+}
+
+export interface RulesetQuickCharacterPreset extends RulesetChoice {
+  draft: JsonObject
+  difficulty: 'beginner' | 'intermediate' | 'advanced' | string
+  fantasy_tags: string[]
+}
+
+export interface RulesetSpeciesChoiceSpec {
+  id: string
+  count: number
+  option_ids?: string[]
+  option_refs?: string[]
+}
+
+export interface RulesetFeatChoiceOption {
+  value: string
+  name: string
+  source_ref: string
+}
+
+export interface RulesetFeatChoiceSpec {
+  id: string
+  name: string
+  count: number
+  options: RulesetFeatChoiceOption[]
+}
+
+export interface RulesetFeatChoice {
+  feat_ref: string
+  name: string
+  summary: string
+  automation_level: 'deterministic' | 'guided' | 'reference'
+  source_ref: string
+  specs: RulesetFeatChoiceSpec[]
+}
+
+export interface RulesetAbilityMethodChoice {
+  id: string
+  values?: number[]
+}
+
+export interface RulesetSpellChoice {
+  ref: string
+  id: string
+  name: string
+  level: number
+  school: string
+  class_refs: string[]
+  casting_time: string
+  range: string
+  components: string[]
+  ritual: boolean
+  concentration: boolean
+  duration: string
+  source_ref: string
+}
+
+export interface RulesetClassSpellRequirements {
+  class_ref: string
+  level: number
+  cantrip_count: number
+  prepared_spell_count: number
+  spellbook_minimum: number
+  maximum_spell_level: number
+  slot_profile: string
+  spell_slots: Record<string, number>
+}
+
+export interface RulesetClassSpellChoices {
+  requirements: RulesetClassSpellRequirements
+  cantrips: RulesetSpellChoice[]
+  leveled_spells: RulesetSpellChoice[]
+}
+
+export interface RulesetSelectedClassSpells extends JsonObject {
+  cantrip_ids?: string[]
+  prepared_spell_ids?: string[]
+  spellbook_ids?: string[]
+  cantrip_refs?: string[]
+  prepared_spell_refs?: string[]
+  spellbook_refs?: string[]
+}
+
+export interface RulesetBuilderChoices {
+  ability_methods: RulesetAbilityMethodChoice[]
+  classes: RulesetChoice[]
+  species: RulesetChoice[]
+  backgrounds: RulesetChoice[]
+  class_skills: RulesetChoice[]
+  class_skill_count: number
+  equipment_packages: RulesetChoice[]
+  background_equipment_packages: RulesetChoice[]
+  background_ability_refs: string[]
+  species_sizes: string[]
+  species_choices: RulesetSpeciesChoiceSpec[]
+  species_skills: RulesetChoice[]
+  species_skill_count: number
+  species_feats: RulesetChoice[]
+  species_feat_count: number
+  feat_choices: RulesetFeatChoice[]
+  class_tools: RulesetChoice[]
+  class_tool_count: number
+  recommended_base_abilities: Record<string, number>
+  skills: RulesetChoice[]
+  languages: RulesetChoice[]
+  origin_feats: RulesetChoice[]
+  quick_presets: RulesetQuickCharacterPreset[]
+  class_spells: RulesetClassSpellChoices | Record<string, never>
+  recommended_class_spells: RulesetSelectedClassSpells
+  [key: string]: unknown
+}
+
+export interface RulesetProgressionRow {
+  level: number
+  proficiency_bonus: number
+  gained_feature_ids: string[]
+  tracks: Record<string, number>
+  spell_slots: Record<string, number>
+  slot_profile: string
+  source_ref: string
+  content_version: string
+}
+
+export interface RulesetProgressionResponse {
+  ok: boolean
+  rule_id: string
+  progression: RulesetProgressionRow[]
+}
+
+export interface RulesetAdvancementPreview extends JsonObject {
+  ok: boolean
+  errors: string[]
+  requirements: JsonObject[]
+  from_level: number
+  to_level: number
+  class_ref: string
+  source_ref: string
+  content_version: string
+  diff: JsonObject
+  snapshot: JsonObject
+}
+
+export interface RulesetAdvancementPreviewResponse {
+  ok: boolean
+  rule_id: string
+  advancement: RulesetAdvancementPreview
+  card_id?: string
+  revision?: number
+}
+
+export interface RulesetAdvancementApplyResponse {
+  ok: boolean
+  rule_id: string
+  character: JsonObject
+  card?: JsonObject
+  card_id?: string
+  revision?: number
+  duplicate?: boolean
+}
+
+export interface RulesetRestResponse extends JsonObject {
+  ok: boolean
+  rule_id: string
+  rest: 'short' | 'long'
+  character: JsonObject
+  events: JsonObject[]
+  source_ref: string
+  requires_elapsed_time_confirmation: boolean
+  revision?: number
+  duplicate?: boolean
+  pending?: boolean
+  resolved?: boolean
+  rest_session?: RestSessionStatus
+  party_results?: Array<{ user_id: string; character_name: string; events: JsonObject[] }>
+}
+
+export interface RulesetCombatTarget {
+  actor_id: string
+  kind: 'player' | 'enemy'
+  name: string
+  hp: number
+  max_hp: number
+  position: number
+  armor_class?: number
+  speed?: number
+  conditions?: Record<string, JsonObject>
+  concentration?: JsonObject | null
+  death_saves?: Record<string, number>
+}
+
+export interface RulesetCombatWeapon extends JsonObject {
+  id: string
+  name?: string
+  weapon_ref?: string
+  attack_id?: string
+  damage: string
+  damage_type?: string
+  range?: number
+  thrown_range?: number
+  long_range?: number
+}
+
+export interface RulesetCombatSpell extends JsonObject {
+  spell_ref: string
+  name: string
+  level: number
+  casting_time: string
+  range: number
+  mode: string
+  available_slot_levels: number[]
+}
+
+export interface RulesetPendingDecision extends JsonObject {
+  decision_id: string
+  kind: string
+  options: string[]
+  assigned_to: string
+}
+
+export interface RulesetCombatAction extends JsonObject {
+  type: string
+  label: string
+  actor_id?: string
+  expected_version: number
+  weapons?: RulesetCombatWeapon[]
+  spells?: RulesetCombatSpell[]
+  targets?: RulesetCombatTarget[]
+  decisions?: RulesetPendingDecision[]
+  movement_remaining?: number
+  requires?: string[]
+  choice_ids?: string[]
+  submitted?: Record<string, string>
+}
+
+export interface RulesetEncounterPreset extends JsonObject {
+  id: string
+  name: string
+  description: string
+  difficulty: string
+  enemies: JsonObject[]
+}
+
+export interface RulesetSessionZeroAgreement extends JsonObject {
+  tone: string
+  difficulty: 'story' | 'standard' | 'challenging' | 'lethal' | string
+  content_rating: 'family' | 'teen' | 'mature' | string
+  session_length_minutes: number
+  pvp_policy: 'disabled' | 'consent' | 'enabled' | string
+  safety_tool: string
+  lines: string[]
+  veils: string[]
+  table_rules: string[]
+  coach_enabled?: boolean
+}
+
+export interface RulesetCampaignProposal extends JsonObject {
+  proposal_id: string
+  entity_id: string
+  kind: 'task' | 'clue' | 'fact' | 'item' | 'relationship' | string
+  title: string
+  summary: string
+  visibility: 'public' | 'gm' | string
+  status: 'pending' | 'confirmed' | 'rejected' | string
+}
+
+export interface RulesetCampaignEntity extends JsonObject {
+  id: string
+  kind: string
+  title: string
+  summary: string
+  visibility: 'public' | 'gm' | string
+  status?: string
+}
+
+export interface RulesetTutorialChoice extends JsonObject {
+  id: string
+  label: string
+  description: string
+  next_step_id: string
+}
+
+export interface RulesetTutorialStep extends JsonObject {
+  id: string
+  chapter_id: string
+  title: string
+  narration: string
+  objective: string
+  hint: string
+  requires: string
+  encounter_preset_id: string
+  choices: RulesetTutorialChoice[]
+}
+
+export interface RulesetEncounterReadiness extends JsonObject {
+  ready_player_ids: string[]
+  required_player_ids: string[]
+  ready_count: number
+  required_count: number
+  all_ready: boolean
+  players: Array<{ player_id: string; name: string; ready: boolean }>
+}
+
+export interface RulesetCombatEvent extends JsonObject {
+  event_id: string
+  batch_id: string
+  intent_type: string
+  state_version: number
+  type: string
+  actor_id?: string
+  actor_name?: string
+  target_id?: string
+  target_name?: string
+  previous_actor_id?: string
+  previous_actor_name?: string
+  text?: string
+  round?: number
+  natural?: number
+  modifier?: number
+  total?: number
+  target?: number
+  success?: boolean
+  critical?: boolean
+  delta?: number
+  amount?: number
+  damage_type?: string
+  distance?: number
+}
+
+export interface RulesetPartyDecision extends JsonObject {
+  status: 'open' | string
+  step_id: string
+  choices: RulesetTutorialChoice[]
+  submitted: Record<string, string>
+  submitted_count: number
+  total_players: number
+}
+
+export interface RulesetCampaignView extends JsonObject {
+  automation?: {
+    mode: 'auto' | 'assist' | 'manual' | string
+    configured_by?: string
+  }
+  world_binding?: {
+    world_id: string
+    source?: string
+  }
+  adventure_binding?: {
+    adventure_id: string
+    world_id: string
+    recommended_world_id?: string
+    compatibility: 'not_selected' | 'compatible' | 'review_required' | string
+    scene_source: 'world' | 'adventure' | string
+  }
+  session_zero: {
+    status: 'not_started' | 'pending' | 'locked' | string
+    revision: number
+    agreement?: RulesetSessionZeroAgreement | null
+    pending_agreement?: RulesetSessionZeroAgreement | null
+    responses: Record<string, { response: string; comment?: string }>
+  }
+  session_zero_defaults: RulesetSessionZeroAgreement
+  proposals: RulesetCampaignProposal[]
+  entities: Record<string, RulesetCampaignEntity[]>
+  party_decision?: RulesetPartyDecision
+  tutorial: {
+    status: 'not_started' | 'active' | 'completed' | string
+    coach_enabled: boolean
+    current_step?: RulesetTutorialStep | null
+    requirement_met?: boolean
+    adventure: { id: string; name: string; summary: string; estimated_minutes: number; chapter_count: number }
+    history: JsonObject[]
+    hints_used: Record<string, number>
+  }
+  chapter_summaries: JsonObject[]
+}
+
+export interface RulesetGameplayView {
+  state_schema_version: number
+  state_version: number
+  combat: {
+    status: 'none' | 'active' | 'ended' | string
+    outcome?: string
+    round: number
+    turn_index: number
+    current_actor_id: string
+    initiative: string[]
+    position_mode: string
+    economy: Record<string, number | boolean | string>
+    reactions: Record<string, number>
+    pending_decisions: RulesetPendingDecision[]
+    actors: RulesetCombatTarget[]
+  }
+  encounter_presets: RulesetEncounterPreset[]
+  encounter_request?: {
+    status: 'pending' | string
+    source?: string
+    round?: number
+    encounter_preset_id?: string
+    confidence?: number
+    ready_player_ids?: string[]
+    readiness?: RulesetEncounterReadiness
+  } | null
+  recent_combat_events?: RulesetCombatEvent[]
+  director?: { context?: JsonObject; proposal?: RulesetDirectorProposal }
+  campaign?: RulesetCampaignView
+}
+
+export interface RulesetDirectorProposal {
+  kind?: 'narrative' | 'check' | 'party_decision' | 'combat' | 'adventure_choice' | string
+  confidence?: number
+  rationale?: string
+  action_ids?: string[]
+  encounter_preset_id?: string
+  requires_gm_confirmation?: boolean
+  mode?: 'auto' | 'assist' | 'manual' | string
+  [key: string]: unknown
+}
+
+export interface RulesetGameplayResponse {
+  ok: boolean
+  game_key: string
+  rule_id: string
+  ruleset_runtime: RulesetRuntimeMeta
+  gameplay: RulesetGameplayView
+  available_actions: RulesetCombatAction[]
+  result?: {
+    applied: boolean
+    duplicate: boolean
+    replayed: boolean
+    state_version: number
+    event_batch: JsonObject
+    pending_decision?: RulesetPendingDecision | null
+    automatic_event_batches?: JsonObject[]
+    resolved_event_batches?: JsonObject[]
+  }
+}
+
+export interface RulesetBuilderChoicesResponse {
+  ok: boolean
+  rule_id: string
+  choices: RulesetBuilderChoices
+}
+
+export interface RulesetBuilderValidationResponse {
+  ok: boolean
+  rule_id: string
+  valid: boolean
+  errors: string[]
+}
+
+export interface RulesetBuilderCharacterResponse {
+  ok: boolean
+  rule_id: string
+  character: JsonObject
+}
+
 export interface CommandResponse {
   ok?: boolean
   error?: string
@@ -655,6 +1228,35 @@ export interface ActionSubmitResponse {
   [key: string]: unknown
 }
 
+export interface KpQuestionResponse {
+  ok: boolean
+  kind: 'kp_table_talk'
+  answer: string
+  visibility: 'private' | 'party'
+  exchange?: TableTalkExchange | null
+  advanced: false
+  action_consumed: false
+  round_number: number
+  provider_used?: string
+  total_tokens?: number
+}
+
+export interface TableTalkExchange {
+  id: string
+  actor_uid: string
+  actor_name: string
+  question: string
+  answer: string
+  round: number
+  created_at: string
+  visibility: 'party'
+}
+
+export interface TableTalkResponse {
+  ok: boolean
+  exchanges: TableTalkExchange[]
+}
+
 export interface LuckDecisionResponse extends ActionSubmitResponse {
   ok?: boolean
   error?: string
@@ -664,6 +1266,12 @@ export interface LuckDecisionResponse extends ActionSubmitResponse {
 export interface BotBindTokenResponse {
   bind_token: string
   [key: string]: unknown
+}
+
+export interface GmStyle {
+  tone?: string
+  verbosity?: 'brief' | 'normal' | 'detailed'
+  custom_instructions?: string
 }
 
 export interface WorldTemplateSummary {
@@ -676,6 +1284,13 @@ export interface WorldTemplateSummary {
   recommended_rules?: string[]
   scene_image?: SceneImageRef
   language?: string
+  active_locale?: string
+  lorebook_count?: number
+  source?: 'builtin' | 'user' | 'plugin'
+  game_scoped?: boolean
+  plugin_id?: string
+  plugin_name?: string
+  gm_style?: GmStyle | null
   [key: string]: unknown
 }
 
@@ -688,11 +1303,62 @@ export interface WorldSummary {
   entry_count?: number
   language?: string
   scene_image?: SceneImageRef
+  gm_style?: GmStyle | null
   [key: string]: unknown
+}
+
+export interface WorldCloneResponse {
+  ok: boolean
+  error?: string
+  world_id?: string
+  name?: string
+  language?: string
 }
 
 export interface WorldTemplatesResponse {
   templates?: WorldTemplateSummary[]
+}
+
+export interface AdventureSummary {
+  adventure_id: string
+  version: string
+  format: string
+  world_policy: 'fixed' | 'portable' | 'agnostic'
+  recommended_world_id: string
+  required_runtime?: { id: string; minimum_version: number }
+  name: string
+  summary: string
+  estimated_minutes: number
+  compatibility: 'compatible' | 'incompatible'
+  incompatibility_reasons: string[]
+  directory_id?: string
+  source?: 'builtin' | 'custom'
+  custom?: boolean
+  editable?: boolean
+  in_use?: number
+}
+
+export interface AdventuresResponse {
+  ok: boolean
+  error?: string
+  adventures: AdventureSummary[]
+}
+
+export interface AdventureDetail {
+  adventure_id: string
+  directory_id: string
+  version: string
+  format: string
+  content_digest: string
+  custom: boolean
+  editable: boolean
+  bound_games: string[]
+  files: Record<string, unknown>
+}
+
+export interface AdventureDetailResponse {
+  ok: boolean
+  adventure: AdventureDetail
 }
 
 export interface WorldListResponse {
@@ -728,6 +1394,7 @@ export interface RuleSummary {
   file?: string
   source_rule_id?: string
   scene_image?: SceneImageRef
+  ruleset_runtime?: RulesetRuntimeMeta
   [key: string]: unknown
 }
 
@@ -745,6 +1412,7 @@ export interface CharacterSchemaResponse {
   rule_special_stats?: SpecialStatSpec[]
   rule_meta?: RuleMeta
   skill_pool?: Array<string | SkillSpec>
+  ruleset_runtime?: RulesetRuntimeMeta
 }
 
 export interface RuleTemplate extends JsonObject {
@@ -773,6 +1441,7 @@ export interface RuleDetailResponse {
   ok?: boolean
   rule?: RuleTemplate
   error?: string
+  ruleset_runtime?: RulesetRuntimeMeta
 }
 
 export interface RuleForm {
@@ -1114,6 +1783,7 @@ export interface AiProvider {
   base_url: string
   api_format: 'openai' | 'anthropic' | string
   models?: string[]
+  model_capabilities?: Record<string, 'chat' | 'image' | 'embedding' | 'tts' | 'asr'>
   api_key?: SecretField
 }
 
@@ -1196,6 +1866,7 @@ export interface AppConfig {
   imagegen_style_prefix?: string
   imagegen_timeout_seconds?: number
   test_timeout_seconds?: number
+  model_request_timeout_seconds?: number
   [key: string]: unknown
 }
 
@@ -1326,7 +1997,7 @@ export interface UpdateSelfUpdateInfo {
 export interface UpdateStatusResponse {
   state:'idle' | 'downloading' | 'verifying' | 'staged' | 'applying' | 'restarting' | 'done' | 'rolled-back' | 'failed'
   version?:string
-  kind?:'source' | 'portable'
+  kind?:'source' | 'portable' | 'docker'
   asset?:string
   downloaded_bytes?:number
   total_bytes?:number
@@ -1413,7 +2084,6 @@ export interface ApplicationHealthResponse {
   pid:number
   boot_id:string
 }
-
 // ===========================================================================
 // 移动端扩展段（上游 frontend-v2/src/api/types.ts 没有的契约）。
 //
@@ -1422,14 +2092,6 @@ export interface ApplicationHealthResponse {
 // 同名成员的类型必须与镜像段完全一致，否则合并报错。
 // ===========================================================================
 
-/** GM 叙事风格（用户自建世界的编辑项） */
-export interface GmStyle {
-  tone?: string
-  verbosity?: 'brief' | 'normal' | 'detailed'
-  custom_instructions?: string
-  [key: string]: unknown
-}
-
 // ---- 与上游同名接口的字段合并：服务端已返回、上游尚未类型化的字段 ----
 
 /** 服务端 game_lifecycle / round_effects 已返回 plot_tracker，Web 端未类型化 */
@@ -1437,47 +2099,13 @@ export interface GameDetail {
   plot_tracker?: PlotTracker
 }
 
-/** 服务端 worlds 服务已返回的模板附加字段；gm_style 来源待实机核对 */
-export interface WorldTemplateSummary {
-  active_locale?: string
-  lorebook_count?: number
-  source?: 'builtin' | 'user' | 'plugin'
-  /** 对局临时模板（*_copy_* / *_blank_*），图鉴中应跳过 */
-  game_scoped?: boolean
-  plugin_id?: string
-  plugin_name?: string
-  gm_style?: GmStyle | null
-}
-
-/** GET /worlds 用户世界行附加字段；gm_style 来源待实机核对 */
-export interface WorldSummary {
-  gm_style?: GmStyle | null
-}
-
-/** 绑定接口在 bind_token 外还返回 ok/error（上游未类型化，待实机核对） */
+/** 绑定接口在 bind_token 外还返回 ok/error（上游只类型化了 bind_token） */
 export interface BotBindTokenResponse {
   ok?: boolean
   error?: string
 }
 
 // ---- 移动端独有接口 ----
-
-/** GET /adventures 冒险包摘要（图鉴徽章只用 name + recommended_world_id） */
-export interface AdventureSummary {
-  adventure_id?: string
-  name?: string
-  recommended_world_id?: string
-  [key: string]: unknown
-}
-
-/** 世界克隆接口响应 */
-export interface WorldCloneResponse {
-  ok?: boolean
-  error?: string
-  world_id?: string
-  name?: string
-  language?: string
-}
 
 /** ASR 语音转写响应 */
 export interface TranscriptionResponse {
@@ -1519,7 +2147,7 @@ export interface PlotTracker {
   decisions?: (PlotDecision | string)[]
 }
 
-// ---- 生成图（对局图集）。上游 GeneratedImageRecord 缺 status 字段，
+// ---- 生成图（对局图集）。上游 GeneratedImageRecord 仍缺 status 字段，
 // 暂保留移动端形状；上游补齐后可改为 type GeneratedImageItem = GeneratedImageRecord ----
 
 export interface GeneratedImageItem {

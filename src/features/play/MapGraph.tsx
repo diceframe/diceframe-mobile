@@ -10,7 +10,7 @@ import { mapAssetSource } from '@/api/assets'
 import type { MapData, MapLocation } from '@/api/types'
 import { Text } from '@/components/ui/text'
 import { Icon } from '@/components/ui/icon'
-import { strings } from '@/lib/strings'
+import { useT } from '@/i18n/t'
 import { useThemeToken } from '@/lib/theme'
 import { forceLayout, type MapNode } from './mapLayout'
 import {
@@ -178,6 +178,7 @@ export function MapGraph({
   showHeader = true,
   onSelectLocation,
 }: MapGraphProps) {
+  const t = useT()
   const locations = map?.locations ?? []
   const locationIndex = new Map(
     locations.map((location) => [String(location.id ?? location.name ?? ''), location]),
@@ -205,7 +206,7 @@ export function MapGraph({
   const background = useThemeToken('background')
   const border = useThemeToken('border')
 
-  const mapName = map?.active_map?.name || strings.map.title
+  const mapName = map?.active_map?.name || t('mapTitle')
   const view = viewRecord?.key === mapIdentity ? viewRecord.view : resetTargetView()
 
   function resetTargetView(): MapViewState {
@@ -283,7 +284,7 @@ export function MapGraph({
   if (nodes.length === 0) {
     return (
       <View className="items-center py-8">
-        <Text variant="muted">{strings.map.noMapData}</Text>
+        <Text variant="muted">{t('dfMapNoData')}</Text>
       </View>
     )
   }
@@ -302,12 +303,12 @@ export function MapGraph({
           </View>
           <Pressable
             className="flex-row items-center gap-1.5 rounded-md border border-border px-3 py-2 active:bg-accent"
-            accessibilityLabel={strings.map.recenter}
+            accessibilityLabel={t('mapRecenter')}
             onPress={resetView}
           >
             <Icon as={Crosshair} size={14} className="text-primary" />
             <Text variant="small" className="text-primary">
-              {strings.map.recenter}
+              {t('mapRecenter')}
             </Text>
           </Pressable>
         </View>

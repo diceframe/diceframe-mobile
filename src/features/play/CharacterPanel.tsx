@@ -7,6 +7,7 @@ import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import type { CharacterSheet, Player, RuleAttribute, RuleMeta } from '@/api/types'
 import { avatarSource } from '@/api/assets'
+import { useT } from '@/i18n/t'
 
 import { characterAttributeRows } from './characterAttributes'
 
@@ -93,6 +94,7 @@ export function CharacterPanel({
   const equipment = itemList(sheet?.equipment)
   const inventory = itemList(sheet?.inventory)
   const keyItems = itemList(sheet?.key_items)
+  const t = useT()
 
   return (
     <ScrollView
@@ -109,7 +111,7 @@ export function CharacterPanel({
           className="h-14 w-14 rounded-full"
         />
         <View className="flex-1 gap-0.5">
-          <Text variant="h3">{player?.character_name ?? '未找到角色'}</Text>
+          <Text variant="h3">{player?.character_name ?? t('dfCharacterNotFound')}</Text>
           <Text variant="small">
             {[sheet?.race, sheet?.class, sheet?.level ? `Lv.${sheet.level}` : '']
               .filter(Boolean)
@@ -118,12 +120,12 @@ export function CharacterPanel({
         </View>
       </View>
 
-      <Section title="生命">
+      <Section title={t('dfCharacterSectionLife')}>
         <ResourceRow label="HP" current={sheet?.hp} max={sheet?.max_hp ?? undefined} />
       </Section>
 
       {specialStats.length > 0 && (
-        <Section title="特殊状态">
+        <Section title={t('dfCharacterSectionSpecial')}>
           <View className="gap-2.5">
             {specialStats.map((stat) => (
               <ResourceRow
@@ -138,7 +140,7 @@ export function CharacterPanel({
       )}
 
       {attributes.length > 0 && (
-        <Section title="属性">
+        <Section title={t('dfCharacterSectionAttributes')}>
           <View className="flex-row flex-wrap gap-2">
             {attributes.map((attribute) => (
               <PanelCard key={attribute.key}>
@@ -153,7 +155,7 @@ export function CharacterPanel({
       )}
 
       {skills.length > 0 && (
-        <Section title="技能">
+        <Section title={t('dfCharacterSectionSkills')}>
           <View className="flex-row flex-wrap gap-2">
             {skills.map((skill, index) => (
               <PanelCard key={`${skill}-${index}`}>
@@ -167,10 +169,10 @@ export function CharacterPanel({
       )}
 
       {typeof sheet?.gold === 'number' && (
-        <Section title="财产">
+        <Section title={t('dfCharacterSectionAssets')}>
           <View className="flex-row flex-wrap gap-2">
             <PanelCard>
-              <Text variant="small">金币</Text>
+              <Text variant="small">{t('goldCurrency')}</Text>
               <Text className="font-mono text-xl font-semibold">{sheet.gold}</Text>
             </PanelCard>
           </View>
@@ -178,7 +180,7 @@ export function CharacterPanel({
       )}
 
       {equipment.length > 0 && (
-        <Section title="装备">
+        <Section title={t('dfCharacterSectionEquipment')}>
           <View className="flex-row flex-wrap gap-2">
             {equipment.map((name, index) => (
               <PanelCard key={`${name}-${index}`}>
@@ -192,7 +194,7 @@ export function CharacterPanel({
       )}
 
       {inventory.length > 0 && (
-        <Section title="背包">
+        <Section title={t('dfCharacterSectionInventory')}>
           <View className="flex-row flex-wrap gap-2">
             {inventory.map((name, index) => (
               <PanelCard key={`${name}-${index}`}>
@@ -206,7 +208,7 @@ export function CharacterPanel({
       )}
 
       {keyItems.length > 0 && (
-        <Section title="关键物品">
+        <Section title={t('dfCharacterSectionKeyItems')}>
           <View className="flex-row flex-wrap gap-2">
             {keyItems.map((name, index) => (
               <PanelCard key={`${name}-${index}`}>
@@ -221,7 +223,7 @@ export function CharacterPanel({
 
       <Separator />
       <Text variant="small" className="text-center text-muted-foreground">
-        详细角色编辑请使用角色卡功能（GM 或设置中的角色管理）
+        {t('dfCharacterEditHint')}
       </Text>
     </ScrollView>
   )

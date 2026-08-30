@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { ActivityIndicator, Platform, Pressable, ScrollView, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useT } from '@/i18n/t'
 
 import { PageHeader } from '@/components/page-header'
 import { Screen } from '@/components/screen'
@@ -15,13 +16,13 @@ import {
   validateAccessToken,
 } from '@/api/client'
 import { useSettingsStore } from '@/stores/settings'
-import { strings } from '@/lib/strings'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 
 /** 服务器连接 + Owner 登录；已连接时进入即“换服务器”流程 */
 export default function LoginScreen() {
   const router = useRouter()
   const { mode } = useLocalSearchParams<{ mode?: string }>()
+  const t = useT()
   const settings = useSettingsStore()
 
   const [serverUrl, setServerUrl] = React.useState(settings.baseUrl)
@@ -65,7 +66,7 @@ export default function LoginScreen() {
   async function connectServer() {
     const normalized = normalizeBaseUrl(serverUrl)
     if (!normalized && !isWeb) {
-      setError(strings.common.networkError)
+      setError(t('dfCommonNetworkError'))
       return
     }
     setBusy('server')
@@ -82,8 +83,8 @@ export default function LoginScreen() {
       setPasswordNeeded(!!config.access_password?.configured)
     } catch (e) {
       const detail = errorMessage(e)
-      const target = normalized || '当前地址'
-      setError(detail ? `${strings.common.networkError}（${target}：${detail}）` : strings.common.networkError)
+      const target = normalized || t('dfLoginCurrentAddress')
+      setError(detail ? `${t('dfCommonNetworkError')}（${target}：${detail}）` : t('dfCommonNetworkError'))
     } finally {
       setBusy(null)
     }
@@ -104,7 +105,7 @@ export default function LoginScreen() {
       settings.setShare(null)
       router.replace('/overview')
     } catch (e) {
-      setError(e instanceof Error && e.message ? e.message : strings.login.wrongPassword)
+      setError(e instanceof Error && e.message ? e.message : t('dfLoginWrongPassword'))
     } finally {
       setBusy(null)
     }
@@ -118,7 +119,7 @@ export default function LoginScreen() {
   return (
     <Screen style={{ width: '100%', maxWidth: 600, alignSelf: 'center' }}>
       {switching ? (
-        <PageHeader title="切换服务器" onBack={() => router.back()} />
+        <PageHeader title={t('dfServerSwitch')} onBack={() => router.back()} />
       ) : (
         <View className="h-3" />
       )}
@@ -132,15 +133,15 @@ export default function LoginScreen() {
         >
         <View className="items-center gap-2">
           <Text variant="h1">DiceFrame</Text>
-          <Text variant="muted">{strings.login.title}</Text>
+          <Text variant="muted">{t('dfLoginTitle')}</Text>
         </View>
 
         <View className="gap-3">
-          <Text variant="small">{strings.login.serverLabel}</Text>
+          <Text variant="small">{t('serverAddress')}</Text>
           <Input
             value={serverUrl}
             onChangeText={setServerUrl}
-            placeholder={isWeb ? strings.login.serverPlaceholderWeb : strings.login.serverPlaceholder}
+            placeholder={isWeb ? t('dfLoginServerPlaceholderWeb') : t('dfLoginServerPlaceholder')}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
@@ -150,7 +151,7 @@ export default function LoginScreen() {
             {busy === 'server' ? (
               <ActivityIndicator className="text-primary-foreground" />
             ) : (
-              <Text>{switching ? '切换服务器' : strings.login.connect}</Text>
+              <Text>{switching ? t('dfServerSwitch') : t('connectServer')}</Text>
             )}
           </Button>
         </View>
@@ -159,11 +160,11 @@ export default function LoginScreen() {
           <View className="gap-3">
             {passwordNeeded ? (
               <>
-                <Text variant="small">{strings.login.passwordLabel}</Text>
+                <Text variant="small">{t('dfLoginPasswordLabel')}</Text>
                 <Input
                   value={password}
                   onChangeText={setPassword}
-                  placeholder={strings.login.passwordPlaceholder}
+                  placeholder={t('dfLoginPasswordPlaceholder')}
                   secureTextEntry
                   editable={busy === null}
                 />
@@ -171,13 +172,13 @@ export default function LoginScreen() {
                   {busy === 'login' ? (
                     <ActivityIndicator className="text-primary-foreground" />
                   ) : (
-                    <Text>{strings.login.login}</Text>
+                    <Text>{t('dfLoginSubmit')}</Text>
                   )}
                 </Button>
               </>
             ) : (
               <Button variant="secondary" onPress={enterOpen} disabled={busy !== null}>
-                <Text>{strings.login.enterOpen}</Text>
+                <Text>{t('dfLoginEnterOpen')}</Text>
               </Button>
             )}
           </View>
@@ -190,7 +191,7 @@ export default function LoginScreen() {
           onPress={() => router.push('/join')}
           accessibilityRole="link"
         >
-          <Text className="text-primary">{strings.login.joinInstead}</Text>
+          <Text className="text-primary">{t('dfLoginJoinInstead')}</Text>
         </Pressable>
         </ScrollView>
       </View>

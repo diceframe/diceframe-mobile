@@ -9,6 +9,7 @@ import {
   updateWorldGmStyle,
 } from '@/api/library'
 import type { GmStyle, SceneImageRef, WorldSummary, WorldTemplateSummary } from '@/api/types'
+import { getT } from '@/i18n/t'
 
 /** 图鉴卡片（对齐 Web WorldsView 的 GalleryCard） */
 export interface WorldGalleryCard {
@@ -35,7 +36,7 @@ function contentLanguageOf(language?: string | null): 'zh-CN' | 'en' | 'ja' {
   return 'zh-CN'
 }
 
-/** 语言展示标签（对齐 Web languageLabel） */
+/** 语言展示标签（对齐 Web languageLabel）；各语言一律用自身名字显示，刻意不随界面语言翻译 */
 export function languageLabel(language?: string | null): string {
   const normalized = contentLanguageOf(language)
   if (normalized === 'ja') return '日本語'
@@ -141,13 +142,13 @@ export function useWorlds() {
 
   async function clone(card: WorldGalleryCard) {
     const result = await cloneWorldFromTemplate(card.id)
-    if (result.ok === false || result.error) throw new Error(result.error || '克隆世界失败')
+    if (result.ok === false || result.error) throw new Error(result.error || getT()('dfWorldsCloneFailed'))
     await load()
   }
 
   async function remove(card: WorldGalleryCard) {
     const result = await deleteWorld(card.id)
-    if (result.ok === false || result.error) throw new Error(result.error || '删除世界失败')
+    if (result.ok === false || result.error) throw new Error(result.error || getT()('dfWorldsDeleteFailed'))
     await load()
   }
 
@@ -157,7 +158,7 @@ export function useWorlds() {
       verbosity: gmStyle.verbosity ?? 'normal',
       custom_instructions: gmStyle.custom_instructions ?? '',
     })
-    if (result.ok === false || result.error) throw new Error(result.error || '保存 GM 风格失败')
+    if (result.ok === false || result.error) throw new Error(result.error || getT()('dfWorldsSaveStyleFailed'))
     await load()
   }
 

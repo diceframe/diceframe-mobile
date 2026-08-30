@@ -5,7 +5,7 @@ import { ChevronLeft } from 'lucide-react-native'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { Text } from '@/components/ui/text'
-import { strings } from '@/lib/strings'
+import { useT } from '@/i18n/t'
 import { cn } from '@/lib/utils'
 
 /** 统一页头：衬线标题 + 可选返回 + 右侧动作区 */
@@ -22,6 +22,7 @@ export function PageHeader({
   onBack?: () => void
   right?: React.ReactNode
 }) {
+  const t = useT()
   return (
     <View className={cn('flex-row items-center gap-3 px-4 pb-4 pt-5', className)} {...props}>
       {onBack ? (
@@ -29,7 +30,7 @@ export function PageHeader({
           variant="ghost"
           size="icon"
           onPress={onBack}
-          accessibilityLabel={strings.common.back}
+          accessibilityLabel={t('dfCommonBack')}
           hitSlop={8}
         >
           <Icon as={ChevronLeft} size={22} />

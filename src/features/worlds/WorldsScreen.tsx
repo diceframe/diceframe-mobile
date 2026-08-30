@@ -17,27 +17,30 @@ import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
 import { DEFAULT_GM_STYLE, languageLabel, useWorlds, type WorldGalleryCard } from '@/hooks/useWorlds'
+import { useT, type T } from '@/i18n/t'
 import { appLayoutForWidth } from '@/lib/layout'
 import { confirmDestructive } from '@/lib/confirm'
 
-const SOURCE_LABELS: Record<WorldGalleryCard['source'], string> = {
-  builtin: '内置',
-  user: '自建',
-  plugin: '插件',
-}
+/** 模块级常量只存 key，渲染时经 t() 取文案 */
+const SOURCE_LABEL_KEYS = {
+  builtin: 'dfWorldsSourceBuiltin',
+  user: 'dfWorldsSourceUser',
+  plugin: 'dfWorldsSourcePlugin',
+} as const
 
 const VERBOSITY_OPTIONS = [
-  { label: '从简', value: 'brief' },
-  { label: '默认', value: 'normal' },
-  { label: '详尽', value: 'detailed' },
-]
+  { labelKey: 'dfWorldsVerbosityBrief', value: 'brief' },
+  { labelKey: 'dfWorldsVerbosityNormal', value: 'normal' },
+  { labelKey: 'dfWorldsVerbosityDetailed', value: 'detailed' },
+] as const
 
-function cardMeta(card: WorldGalleryCard): string {
-  return `${SOURCE_LABELS[card.source]} · ${languageLabel(card.language)} · ${card.lorebookCount} 个世界书条目`
+function cardMeta(card: WorldGalleryCard, t: T): string {
+  return `${t(SOURCE_LABEL_KEYS[card.source])} · ${languageLabel(card.language)} · ${t('dfWorldsEntryCount', { count: card.lorebookCount })}`
 }
 
 export default function WorldsScreen() {
   const router = useRouter()
+  const t = useT()
   const { width } = useWindowDimensions()
   const { gameListColumns: columns } = appLayoutForWidth(width)
   const { cards, loading, error, refresh, clone, remove, saveGmStyle } = useWorlds()
@@ -80,7 +83,7 @@ export default function WorldsScreen() {
     try {
       await clone(card)
     } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : '克隆世界失败')
+      setActionError(cause instanceof Error ? cause.message : t('dfWorldsCloneFailed'))
     } finally {
       setBusy(false)
     }
@@ -94,7 +97,7 @@ export default function WorldsScreen() {
       await saveGmStyle(previewCard, { tone, verbosity, custom_instructions: customInstructions })
       closePreview()
     } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : '保存 GM 风格失败')
+      setActionError(cause instanceof Error ? cause.message : t('dfWorldsSaveStyleFailed'))
     } finally {
       setBusy(false)
     }
@@ -102,10 +105,10 @@ export default function WorldsScreen() {
 
   async function deleteCard(card: WorldGalleryCard) {
     const confirmed = await confirmDestructive({
-      title: '删除世界？',
-      message: `确定删除「${card.name}」？其世界书条目将一并删除，且无法恢复。`,
-      confirmText: '删除',
-      cancelText: '取消',
+      title: t('dfWorldsDeleteTitle'),
+      message: t('dfWorldsDeleteMessage', { name: card.name }),
+      confirmText: t('dfCommonDelete'),
+      cancelText: t('dfCommonCancel'),
     })
     if (!confirmed) return
     setBusy(true)
@@ -114,7 +117,7 @@ export default function WorldsScreen() {
       await remove(card)
       closePreview()
     } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : '删除世界失败')
+      setActionError(cause instanceof Error ? cause.message : t('dfWorldsDeleteFailed'))
     } finally {
       setBusy(false)
     }
@@ -125,8 +128,8 @@ export default function WorldsScreen() {
   return (
     <Screen className="px-4" style={{ width: '100%', maxWidth: 840, alignSelf: 'center' }}>
       <PageHeader
-        title="世界"
-        subtitle="世界画廊 · 浏览内置与自建世界，一键开团或克隆后自定义 GM 风格"
+        title={t('stepWorld')}
+        subtitle={t('dfWorldsSubtitle')}
         onBack={() => router.back()}
         className="px-0"
       />
@@ -135,7 +138,7 @@ export default function WorldsScreen() {
         <View className="mb-3 flex-row items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3">
           <Text className="flex-1 text-destructive" numberOfLines={2}>{shownError}</Text>
           <Button size="sm" variant="outline" onPress={() => { setActionError(''); void refresh() }}>
-            <Text>重试</Text>
+            <Text>{t('dfCommonRetry')}</Text>
           </Button>
         </View>
       ) : null}
@@ -160,16 +163,16 @@ export default function WorldsScreen() {
                 <SceneCover
                   source={worldCoverSource(item.sceneImage, item.defaultRule)}
                   className="h-28 w-full"
-                  accessibilityLabel={`${item.name}封面`}
+                  accessibilityLabel={t('dfWorldsCoverA11y', { name: item.name })}
                 />
                 <View className="absolute left-2 top-2 flex-row flex-wrap gap-1.5">
                   <View className="rounded-full bg-black/55 px-2 py-0.5">
-                    <Text variant="small" className="text-white">{SOURCE_LABELS[item.source]}</Text>
+                    <Text variant="small" className="text-white">{t(SOURCE_LABEL_KEYS[item.source])}</Text>
                   </View>
                   {item.adventureName ? (
                     <View className="rounded-full bg-primary/90 px-2 py-0.5">
                       <Text variant="small" className="text-primary-foreground" numberOfLines={1}>
-                        冒险包：{item.adventureName}
+                        {t('dfWorldsAdventurePack', { name: item.adventureName })}
                       </Text>
                     </View>
                   ) : null}
@@ -181,14 +184,14 @@ export default function WorldsScreen() {
                   <Text className="leading-5 text-muted-foreground" numberOfLines={2}>{item.description}</Text>
                 ) : null}
                 <Text variant="small" className="text-muted-foreground" numberOfLines={1}>
-                  {languageLabel(item.language)} · {item.lorebookCount} 个世界书条目
+                  {languageLabel(item.language)} · {t('dfWorldsEntryCount', { count: item.lorebookCount })}
                 </Text>
                 <View className="flex-row flex-wrap gap-1.5 pt-1">
                   <Button size="sm" onPress={() => startGame(item)}>
-                    <Text>用它开团</Text>
+                    <Text>{t('dfWorldsActionUse')}</Text>
                   </Button>
                   <Button size="sm" variant="outline" onPress={() => openPreview(item)}>
-                    <Text>预览</Text>
+                    <Text>{t('dfWorldsActionPreview')}</Text>
                   </Button>
                   <Button
                     size="sm"
@@ -196,7 +199,7 @@ export default function WorldsScreen() {
                     disabled={busy || item.source === 'user'}
                     onPress={() => void cloneCard(item)}
                   >
-                    <Text>克隆为我的世界</Text>
+                    <Text>{t('dfWorldsActionClone')}</Text>
                   </Button>
                 </View>
               </CardContent>
@@ -206,8 +209,8 @@ export default function WorldsScreen() {
         ListEmptyComponent={!loading ? (
           <View className="items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12">
             <Icon as={Globe2} size={28} className="text-muted-foreground" />
-            <Text className="font-semibold">还没有可浏览的世界</Text>
-            <Text variant="small">服务器返回的世界会显示在这里，下拉可刷新。</Text>
+            <Text className="font-semibold">{t('dfWorldsEmptyTitle')}</Text>
+            <Text variant="small">{t('dfWorldsEmptyDesc')}</Text>
           </View>
         ) : null}
       />
@@ -217,69 +220,69 @@ export default function WorldsScreen() {
           <View className="gap-4 pt-1">
             <View className="gap-1">
               <Text variant="h3" numberOfLines={1}>{previewCard.name}</Text>
-              <Text variant="small">{cardMeta(previewCard)}</Text>
+              <Text variant="small">{cardMeta(previewCard, t)}</Text>
             </View>
             {previewCard.description ? (
               <Text className="leading-6 text-muted-foreground">{previewCard.description}</Text>
             ) : null}
 
             <View className="gap-3 rounded-xl border border-border bg-muted/40 p-3">
-              <Text className="font-semibold">GM 叙事风格</Text>
+              <Text className="font-semibold">{t('dfWorldsGmStyle')}</Text>
               {canEditStyle ? (
                 <View className="gap-3">
                   <View className="gap-1.5">
-                    <Text variant="small" className="font-semibold">叙事口吻</Text>
+                    <Text variant="small" className="font-semibold">{t('dfWorldsStyleTone')}</Text>
                     <Input
                       value={tone}
                       onChangeText={setTone}
                       maxLength={120}
-                      placeholder="例如：严肃哥特"
+                      placeholder={t('dfWorldsTonePlaceholder')}
                     />
                     <Text variant="small" className="text-muted-foreground">
-                      简述你想要的口吻，留空使用默认。
+                      {t('dfWorldsStyleToneHint')}
                     </Text>
                   </View>
                   <View className="gap-1.5">
-                    <Text variant="small" className="font-semibold">叙述详略</Text>
+                    <Text variant="small" className="font-semibold">{t('dfWorldsStyleVerbosity')}</Text>
                     <SheetSelect
-                      options={VERBOSITY_OPTIONS}
+                      options={VERBOSITY_OPTIONS.map((option) => ({ label: t(option.labelKey), value: option.value }))}
                       value={verbosity || 'normal'}
                       onValueChange={(value) => setVerbosity(value as GmStyle['verbosity'])}
-                      placeholder="选择叙述详略"
+                      placeholder={t('dfWorldsVerbosityPlaceholder')}
                     />
                   </View>
                   <View className="gap-1.5">
-                    <Text variant="small" className="font-semibold">附加指令</Text>
+                    <Text variant="small" className="font-semibold">{t('dfWorldsStyleCustom')}</Text>
                     <Textarea
                       value={customInstructions}
                       onChangeText={setCustomInstructions}
                       maxLength={2000}
-                      placeholder="追加到 GM prompt 末尾的风格指令…"
+                      placeholder={t('dfWorldsCustomPlaceholder')}
                       className="min-h-24"
                     />
                     <Text variant="small" className="text-muted-foreground">
-                      仅调整叙事风格，不会覆盖规则与机制判定。
+                      {t('dfWorldsCustomHint')}
                     </Text>
                   </View>
                   <View className="flex-row gap-2">
                     <Button variant="outline" className="flex-1" disabled={busy} onPress={resetStyle}>
-                      <Text>重置</Text>
+                      <Text>{t('dfWorldsStyleReset')}</Text>
                     </Button>
                     <Button className="flex-1" disabled={busy} onPress={() => void saveStyle()}>
-                      <Text>{busy ? '保存中…' : '保存风格'}</Text>
+                      <Text>{busy ? t('dfWorldsStyleSaving') : t('dfWorldsStyleSave')}</Text>
                     </Button>
                   </View>
                 </View>
               ) : (
                 <Text variant="small" className="leading-5 text-muted-foreground">
-                  内置或插件世界只读；请先「克隆为我的世界」，再自定义 GM 叙事风格。
+                  {t('dfWorldsStyleLocked')}
                 </Text>
               )}
             </View>
 
             {previewCard.source === 'user' ? (
               <Button variant="destructive" disabled={busy} onPress={() => void deleteCard(previewCard)}>
-                <Text>删除世界</Text>
+                <Text>{t('dfWorldsActionDelete')}</Text>
               </Button>
             ) : null}
 

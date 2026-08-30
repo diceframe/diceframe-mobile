@@ -4,8 +4,8 @@ import * as Application from 'expo-application'
 import * as Device from 'expo-device'
 
 import { fetchLatestRelease } from '@/api/updates'
+import { getT } from '@/i18n/t'
 import { parseGitHubRelease, type AppUpdateInfo } from '@/lib/updates'
-import { strings } from '@/lib/strings'
 
 interface CheckUpdatesState {
   checking: boolean
@@ -38,7 +38,7 @@ export function useAppUpdates() {
       setState({ checking: false, result, error: null })
       return result
     } catch (error) {
-      const message = error instanceof Error ? error.message : strings.updates.checkFailed
+      const message = error instanceof Error ? error.message : getT()('dfUpdatesCheckFailed')
       setState((current) => ({ ...current, checking: false, error: message }))
       return null
     }

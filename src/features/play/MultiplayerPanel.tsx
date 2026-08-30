@@ -7,7 +7,7 @@ import { Icon } from '@/components/ui/icon'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import type { GameDetail, Player } from '@/api/types'
-import { strings } from '@/lib/strings'
+import { useT, type T } from '@/i18n/t'
 
 interface MultiplayerPanelProps {
   players: Player[]
@@ -31,14 +31,14 @@ function statusTone(player: Player, detail: GameDetail): string {
   return WAITING_TONE
 }
 
-function statusLabel(player: Player, detail: GameDetail): string {
+function statusLabel(player: Player, detail: GameDetail, t: T): string {
   const awaySet = new Set((detail.multiplayer?.away_players ?? []).map((p) => p.user_id))
-  if (awaySet.has(player.user_id)) return strings.play.awayFollowing
+  if (awaySet.has(player.user_id)) return t('dfPlayAwayFollowing')
   const actions = detail.multiplayer?.submitted_actions ?? []
   const action = actions.find((a) => a.user_id === player.user_id)
-  if (action?.dice_pending) return strings.play.needsRoll
-  if (action) return strings.play.acted
-  return strings.play.waitingAction
+  if (action?.dice_pending) return t('dfPlayNeedsRoll')
+  if (action) return t('dfPlayActed')
+  return t('dfStateWaiting')
 }
 
 /**
@@ -55,11 +55,12 @@ export function MultiplayerPanel({
 }: MultiplayerPanelProps) {
   const awaySet = new Set((detail.multiplayer?.away_players ?? []).map((p) => p.user_id))
   const canKick = isGm && players.length > 1
+  const t = useT()
 
   if (players.length === 0) {
     return (
       <Text variant="muted" className="py-6 text-center">
-        暂无玩家
+        {t('dfPlayNoPlayers')}
       </Text>
     )
   }
@@ -67,7 +68,7 @@ export function MultiplayerPanel({
   return (
     <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-3 pb-6">
       <Text variant="small" className="font-semibold text-muted-foreground">
-        {strings.play.playerList}（{players.length}）
+        {t('dfPlayPlayerListCount', { count: players.length })}
       </Text>
 
       {players.map((player) => {
@@ -75,7 +76,7 @@ export function MultiplayerPanel({
         const isSelf = player.user_id === currentUserId
         const isGmPlayer = player.user_id === detail.gm_uid
         const tone = statusTone(player, detail)
-        const label = statusLabel(player, detail)
+        const label = statusLabel(player, detail, t)
 
         return (
           <View key={player.user_id} className="rounded-lg border border-border bg-card p-3 gap-2">
@@ -86,7 +87,7 @@ export function MultiplayerPanel({
               </Text>
               {isSelf && (
                 <Text variant="small" className="text-primary">
-                  我
+                  {t('dfPlayMe')}
                 </Text>
               )}
               {isGmPlayer && (
@@ -106,7 +107,7 @@ export function MultiplayerPanel({
                 <View className="flex-row gap-2 flex-wrap">
                   <Button size="sm" variant="outline" onPress={() => onCopyLink(player.user_id)}>
                     <Icon as={Link} size={12} />
-                    <Text variant="small">{strings.play.copyLink}</Text>
+                    <Text variant="small">{t('dfPlayCopyLink')}</Text>
                   </Button>
                   {!isSelf && (
                     <Button
@@ -115,13 +116,13 @@ export function MultiplayerPanel({
                       onPress={() => onSetAway(player.user_id, !isAway)}
                     >
                       <Icon as={LogOut} size={12} />
-                      <Text variant="small">{isAway ? strings.play.back : strings.play.away}</Text>
+                      <Text variant="small">{isAway ? t('dfPlayBackToGame') : t('away')}</Text>
                     </Button>
                   )}
                   {canKick && !isSelf && !isGmPlayer && (
                     <Button size="sm" variant="destructive" onPress={() => onKick(player.user_id)}>
                       <Icon as={UserMinus} size={12} />
-                      <Text variant="small">{strings.play.kick}</Text>
+                      <Text variant="small">{t('dfPlayKick')}</Text>
                     </Button>
                   )}
                 </View>

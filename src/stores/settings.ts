@@ -10,6 +10,7 @@ import {
   normalizeBaseUrl,
   type ShareIdentity,
 } from '@/api/client'
+import type { LocalePreference } from '@/lib/locale'
 
 const SESSION_KEY = 'diceframe-session'
 
@@ -46,6 +47,8 @@ interface SettingsState {
   hapticsEnabled: boolean
   /** 主题偏好；system 表示跟随设备主题 */
   themeMode: ThemeMode
+  /** 界面语言偏好；system 表示跟随设备语言 */
+  language: LocalePreference
   /** 设备当前主题，用于解析 system 偏好 */
   systemTheme: ResolvedTheme
   hydrated: boolean
@@ -55,6 +58,7 @@ interface SettingsState {
   setTtsRate: (rate: number) => void
   setHapticsEnabled: (enabled: boolean) => void
   setThemeMode: (mode: ThemeMode) => void
+  setLanguage: (language: LocalePreference) => void
   setSystemTheme: (theme: ResolvedTheme) => void
   markHydrated: () => void
 }
@@ -76,6 +80,7 @@ export const useSettingsStore = create<SettingsState>()(
       ttsRate: 1,
       hapticsEnabled: true,
       themeMode: 'system',
+      language: 'system',
       systemTheme: systemTheme(),
       hydrated: false,
       setBaseUrl: (url) => {
@@ -93,6 +98,7 @@ export const useSettingsStore = create<SettingsState>()(
       setTtsRate: (rate) => set({ ttsRate: rate }),
       setHapticsEnabled: (hapticsEnabled) => set({ hapticsEnabled }),
       setThemeMode: (themeMode) => set({ themeMode }),
+      setLanguage: (language) => set({ language }),
       setSystemTheme: (systemTheme) => set({ systemTheme }),
       markHydrated: () => set({ hydrated: true }),
     }),
@@ -106,6 +112,7 @@ export const useSettingsStore = create<SettingsState>()(
         ttsRate: state.ttsRate,
         hapticsEnabled: state.hapticsEnabled,
         themeMode: state.themeMode,
+        language: state.language,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {

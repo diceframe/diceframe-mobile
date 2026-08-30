@@ -1,4 +1,5 @@
 import { api } from './client'
+import { contentLanguage } from '@/i18n/t'
 import type {
   CharacterCard,
   CharacterCardsResponse,
@@ -83,7 +84,7 @@ export function fetchWorlds() {
 
 export function createWorld(name: string, description = '') {
   return api<{ ok?: boolean; error?: string; world_id?: string }>('/worlds', {
-    method: 'POST', body: JSON.stringify({ name, description, language: 'zh-CN' }),
+    method: 'POST', body: JSON.stringify({ name, description, language: contentLanguage() }),
   })
 }
 
@@ -152,11 +153,11 @@ export function uninstallPlugin(pluginId: string) {
 }
 
 export function fetchRuleLibrary(): Promise<RulesResponse> {
-  return api<RulesResponse>('/rules?language=zh-CN')
+  return api<RulesResponse>(`/rules?language=${contentLanguage()}`)
 }
 
 /** 规则角色模式：技能池 / 技能上限 / 规则元数据（编辑角色卡时用） */
-export function fetchCharacterSchema(ruleId: string, language = 'zh-CN'): Promise<CharacterSchemaResponse> {
+export function fetchCharacterSchema(ruleId: string, language = contentLanguage()): Promise<CharacterSchemaResponse> {
   return api<CharacterSchemaResponse>(
     `/rules/${encodeURIComponent(ruleId)}/character-schema?language=${encodeURIComponent(language)}`,
   )

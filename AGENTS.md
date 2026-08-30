@@ -15,7 +15,7 @@ DiceFrame（AI 跑团引擎）的 React Native 客户端：连接 DiceFrame 服�
 
 技术栈：Expo SDK 57（RN 0.86 / React 19.2 / New Architecture）、expo-router、
 NativeWind v4 + React Native Reusables（rnr，基于 `@rn-primitives/*`）、zustand、
-react-native-sse、React Compiler。
+react-native-sse、react-i18next、React Compiler。
 
 ## 常用命令
 
@@ -30,7 +30,7 @@ npm run ui:add      # 从 rnr registry 生成基础组件到 src/components/ui�
 ```
 
 CI（`.github/workflows/ci.yml`）= typecheck + test + lint 三项全绿才算过。提交前至少跑 typecheck 和 lint。
-APK 构建不要本地装 Android Studio：用 GitHub Actions 工作流 `Build Android APK`（README 有说明）。
+对外发布的 APK 用 GitHub Actions 工作流 `Build Android APK`（README 有说明）；实机调试的本地构建方式见下文「平台与构建注意」。
 
 ## 架构与分层（依赖只允许自上而下）
 
@@ -42,10 +42,12 @@ src/
 │                 # play/[gameKey] 对局页。路由逻辑尽量下沉到 features/hooks
 ├── features/     # 按领域的界面与业务组件（overview / play / characters / lorebook / worlds…）
 ├── hooks/        # 数据域 hooks（useCharacters、useWorlds…），内部走 api/ + stores/
+├── i18n/         # react-i18next：index 初始化、keyset（key 全量类型）、useT/getT、
+│                 # messages/web = 上游镜像段，messages/mobile = df 前缀功能簇
 ├── api/          # client.ts（baseUrl/token/会话/Confirm 头）+ 各资源端点 + types.ts 契约
 ├── stream/       # gameStream.ts：SSE 通道（票据握手、可恢复游标、5s 重连、30s 轮询降级）
-├── stores/       # zustand：settings（persist 到 AsyncStorage）、game（对局态）
-├── lib/          # 纯逻辑工具（主题、分享链接解析、GM 文本解析、文案 strings.ts），单测集中地
+├── stores/       # zustand：settings（persist 到 AsyncStorage，含 themeMode/language）、game（对局态）
+├── lib/          # 纯逻辑工具（主题、locale 解析、分享链接解析、GM 文本解析），单测集中地
 └── components/   # ui/ = React Native Reusables（rnr）CLI 生成的 registry 产物；
                   # patterns/ = DiceFrame 自己的组合件（对 ui/ 的定制只放这里）
 ```
@@ -61,16 +63,27 @@ src/
      （Web 端行为不同，勿照搬 Web 代码）；
    - 玩家身份从 settings store `configureApiClient` 注入，拼进 query；
    - 错误统一抛 `ApiError`（含 status/code/retryAfter）。
-3. **`src/api/types.ts` 是主仓库 `frontend-v2/src/api/types.ts` 的 v1 子集副本**。
-   后端字段变更时必须与主仓库两处同步，不要在本仓库"顺手"加 Web 端没有的契约。
+3. **`src/api/types.ts` 是主仓库 `frontend-v2/src/api/types.ts` 的全量镜像 + 文末「移动端扩展段」**。
+   同步方式 = 整文件重拷上游版本后还原文末扩展段；镜像段的字段不要手改。
+   移动端新增契约一律写进扩展段（与上游同名接口用 declaration merging 合并，同名成员类型必须一致）。
+   后端字段变更时先核对 Web 端 types.ts，再决定改镜像还是扩展。
 4. 样式用 NativeWind `className`；颜色取主题令牌（`src/lib/theme.ts` 的 `THEME` /
    `src/global.css` 的 `--df-*`），**不要硬编码色值**。
 5. **`src/components/ui` 是 rnr registry 的生成产物，不许手写或手改**：
    - 缺基础组件先用 `npm run ui:add -- <component>` 从 rnr 生成（配置异常用 `npm run ui:doctor` 检查）；
    - 保持上游 API 原样，不要在 `ui/` 文件里加 DiceFrame 变体或业务逻辑；
    - DiceFrame 的组合与定制放 `src/components/patterns` 或对应 feature 目录。
-6. 通用/跨页面复用的文案进 `src/lib/strings.ts`（预留 i18n）；feature 专属的静态文案
-   可以内联写在组件里。同一句文案出现两处以上时收敛进 strings.ts。
+6. **所有面向用户的文案走 i18n**（react-i18next，zh-CN / en / ja 三语，`src/i18n/`）：
+   - 上游镜像段 `src/i18n/messages/web/`：与主仓库 `frontend-v2/src/i18n/messages/` 同步，
+     机械差异仅两处：插值 `{x}` 已转 i18next 的 `{{x}}`；上游嵌套对象 apiErrors 已拍平为
+     `'apiErrors.xxx'` 扁平 key（移动端 `keySeparator: false` 取不到嵌套 key）；
+   - 移动端自有文案按功能簇放 `src/i18n/messages/mobile/*.ts`（zh/en/ja 三块并列）：
+     key 必须加 `df` 前缀、三语 key 集合必须一致、不得与上游 key 重名（`messages.test.ts` 兜底）；
+   - 上游已有且语义一致的词直接复用上游 key（cancel/delete/roomPassword 等），不要重复建 df key；
+   - 组件内 `useT()`、组件外 `getT()`（均在 `@/i18n/t`），插值 `t('key', { name })`；
+     key 类型由 `src/i18n/keyset.ts` 全量校验，拼错/漏译 typecheck 直接报错；
+   - 内容语言（世界模板/规则库等请求的 language 参数）用 `contentLanguage()` 跟随界面语言；
+   - settings store 的 `language` 偏好（'system' | 具体语言）经 `useLocaleSync` 驱动切换。
 7. 路径别名 `@/*` → `./src/*`（tsconfig / vitest / metro 均已配置）。
 8. 单测只测纯逻辑，文件命名 `*.test.ts`（vitest 只收 `src/**/*.test.ts`，不含 tsx）。
    解析器、状态推导、契约解析类改动必须带测试。
@@ -80,6 +93,13 @@ src/
 
 - `android/` 是本地 `expo prebuild` 产物，**未纳入 git**，改原生配置要走 `app.json` +
   `plugins/`（config plugin），不要直接改 `android/` 里的文件。
+- 实机调试可本地出正式包：`JAVA_HOME` 指 JDK 17、`ANDROID_HOME` 指 Android SDK 后
+  `android/gradlew assembleRelease`（新增含原生代码的依赖后先
+  `npx expo prebuild -p android --clean --no-install`），产物在
+  `android/app/build/outputs/apk/release/`，`adb install -r` 安装；
+  对外发布的 APK 仍以 GitHub Actions `Build Android APK` 工作流为准。
+- 移动端调用的 `/adventures`、`/worlds/clone-from-template`、`/worlds/{id}/gm-style`
+  是预设端点（服务端尚未实现），调用处已做优雅降级，服务端上线后自动生效。
 - Android 已开 `usesCleartextTraffic`（局域网明文 HTTP 是核心场景）；iOS ATS 例外留待出包处理。
 - `.env.local` 是个人环境（隧道地址等），已被 gitignore，不要把里面的值写死进代码。
 - 后台/前台切换有专门生命周期处理（暂停 SSE、回前台刷新）；动 `stream/` 或 `stores/game.ts`

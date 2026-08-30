@@ -3,6 +3,7 @@ import { View } from 'react-native'
 
 import { Badge } from '@/components/ui/badge'
 import { Text } from '@/components/ui/text'
+import { useT } from '@/i18n/t'
 import { cn } from '@/lib/utils'
 
 import { parseGMText, type TagBadge } from './gmText'
@@ -60,9 +61,20 @@ function TagChip({ badge }: { badge: TagBadge }) {
   )
 }
 
-export function GmNarration({ text, className }: { text: string; className?: string }) {
-  const block = parseGMText(text)
-  if (!block.paragraphs.length && !block.states.length && !block.tags.length) return null
+export function GmNarration({
+  text,
+  className,
+  image,
+}: {
+  text: string
+  className?: string
+  /** 叙事段与状态卡之间的插槽（本回合场景图），对齐 Web 时间线的图文混排位置 */
+  image?: React.ReactNode
+}) {
+  const t = useT()
+  // 协议标签徽章的本地化文案（金币前缀 / DECISION 缺省），其余标签是服务端原文
+  const block = parseGMText(text, { gold: t('goldCurrency'), decision: t('dfPlayKeyDecision') })
+  if (!block.paragraphs.length && !block.states.length && !block.tags.length && !image) return null
   return (
     <View className={cn('gap-2.5', className)}>
       {block.paragraphs.map((paragraph, index) => (
@@ -70,6 +82,7 @@ export function GmNarration({ text, className }: { text: string; className?: str
           {renderInline(paragraph.replace(/^[#>\s]+/, '').replace(/^[-•*]\s+/, '• '))}
         </Text>
       ))}
+      {image}
       {block.states.map((state) => {
         const tone = STATE_TONES[state.tone]
         return (

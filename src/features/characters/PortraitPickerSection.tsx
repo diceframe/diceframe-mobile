@@ -15,10 +15,18 @@ import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import { confirmDestructive } from '@/lib/confirm'
 import { builtinPortraitChoices, builtinRuleId, BUILTIN_AVATAR_RULE_IDS, type BuiltinAvatarRuleId } from '@/lib/portraits'
-import { strings } from '@/lib/strings'
+import { useT, type T } from '@/i18n/t'
 import type { CharacterPortrait } from '@/api/types'
 
-const t = strings.characterCard
+/** 内置头像按规则分组的展示名（模块级常量只存 key，渲染时经 t() 取文案） */
+const RULE_LABEL_KEYS = {
+  dnd5e: 'dfCharacterCardRuleLabelDnd5e',
+  freeform_coc: 'dfCharacterCardRuleLabelCoc',
+  freeform_cyberpunk: 'dfCharacterCardRuleLabelCyberpunk',
+  freeform_fantasy: 'dfCharacterCardRuleLabelFantasy',
+  freeform_wuxia: 'dfCharacterCardRuleLabelWuxia',
+  tavern_free: 'dfCharacterCardRuleLabelTavern',
+} as const
 
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp'])
 
@@ -30,16 +38,8 @@ function mimeOfAsset(asset: { mimeType?: string; uri: string }): string {
   return 'image/jpeg'
 }
 
-function ruleLabel(ruleId: BuiltinAvatarRuleId): string {
-  const labels: Record<BuiltinAvatarRuleId, string> = {
-    dnd5e: 'D&D 5e',
-    freeform_coc: '克苏鲁跑团',
-    freeform_cyberpunk: '赛博朋克',
-    freeform_fantasy: '自由奇幻',
-    freeform_wuxia: '自由武侠',
-    tavern_free: '酒馆自由',
-  }
-  return labels[ruleId]
+function ruleLabel(ruleId: BuiltinAvatarRuleId, t: T): string {
+  return t(RULE_LABEL_KEYS[ruleId])
 }
 
 function BuiltinAvatarGrid({
@@ -51,6 +51,7 @@ function BuiltinAvatarGrid({
   value: CharacterPortrait | null
   onPick: (id: string) => void
 }) {
+  const t = useT()
   const choices = builtinPortraitChoices(ruleId)
   return (
     <View className="flex-row flex-wrap gap-2">
@@ -61,7 +62,7 @@ function BuiltinAvatarGrid({
             key={choice.id}
             onPress={() => onPick(choice.id)}
             className={`h-12 w-12 overflow-hidden rounded-lg border-2 ${selected ? 'border-primary' : 'border-transparent'}`}
-            accessibilityLabel={`内置头像 ${choice.index + 1}`}
+            accessibilityLabel={t('dfCharacterCardBuiltinAvatarA11y', { index: choice.index + 1 })}
           >
             <Image
               source={{ uri: buildStaticAssetUrl(choice.assetPath) }}
@@ -99,6 +100,7 @@ export function PortraitPickerSection({
   const [userAvatars, setUserAvatars] = React.useState<UserAvatar[]>([])
   const [userLoading, setUserLoading] = React.useState(false)
   const [error, setError] = React.useState('')
+  const t = useT()
 
   const currentRule = builtinRuleId(ruleId)
 
@@ -106,7 +108,7 @@ export function PortraitPickerSection({
     if (generating) return
     const subject = prompt.trim() || name.trim()
     if (!subject) {
-      setError('请先填写角色名称或头像描述')
+      setError(t('dfCharacterCardGenerateNeedsName'))
       return
     }
     setGenerating(true)
@@ -125,7 +127,7 @@ export function PortraitPickerSection({
     if (uploading) return
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!permission.granted) {
-      setError('未获得相册权限，请在系统设置中允许')
+      setError(t('dfCharacterCardGalleryPermissionDenied'))
       return
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -139,12 +141,12 @@ export function PortraitPickerSection({
     const asset = result.assets[0]
     const mime = mimeOfAsset(asset)
     if (!ALLOWED_MIME.has(mime)) {
-      setError(t.avatarFormatHint)
+      setError(t('dfCharacterCardAvatarFormatHint'))
       return
     }
     const fileData = asset.base64 ?? ''
     if (!fileData || fileData.length * 0.75 > MAX_AVATAR_BYTES) {
-      setError(t.avatarSizeHint)
+      setError(t('dfCharacterCardAvatarSizeHint'))
       return
     }
     setUploading(true)
@@ -180,10 +182,10 @@ export function PortraitPickerSection({
 
   async function removeUserAvatar(assetId: string) {
     const ok = await confirmDestructive({
-      title: t.deleteAvatarTitle,
-      message: t.deleteAvatarMessage,
-      confirmText: t.delete,
-      cancelText: t.cancel,
+      title: t('dfCharacterCardDeleteAvatarTitle'),
+      message: t('dfCharacterCardDeleteAvatarMessage'),
+      confirmText: t('dfCommonDelete'),
+      cancelText: t('dfCommonCancel'),
     })
     if (!ok) return
     try {
@@ -199,7 +201,7 @@ export function PortraitPickerSection({
   return (
     <View className="gap-2">
       <View className="flex-row items-center justify-between">
-        <Text variant="small" className="font-semibold">{t.portrait}</Text>
+        <Text variant="small" className="font-semibold">{t('dfCharacterCardPortrait')}</Text>
         <RemoteAvatar source={currentSource} name={name || '?'} className="h-14 w-14 rounded-full border border-border bg-muted" />
       </View>
 
@@ -207,20 +209,20 @@ export function PortraitPickerSection({
         <Input
           value={prompt}
           onChangeText={setPrompt}
-          placeholder={t.generatePlaceholder}
+          placeholder={t('dfCharacterCardGeneratePlaceholder')}
           className="flex-1"
           returnKeyType="done"
         />
         <Button size="sm" onPress={() => void generate()} disabled={generating}>
           {generating ? <ActivityIndicator size="small" color="white" /> : <Icon as={Sparkles} size={15} />}
-          <Text>{generating ? t.generating : t.generate}</Text>
+          <Text>{generating ? t('dfCharacterCardGenerating') : t('dfCharacterCardGenerate')}</Text>
         </Button>
       </View>
       {/* 原占位文案太长，Android 单行 Input 会折行裁切，说明下沉到这里 */}
-      <Text variant="small" className="text-muted-foreground">{t.generateHint}</Text>
+      <Text variant="small" className="text-muted-foreground">{t('dfCharacterCardGenerateHint')}</Text>
 
       <View className="gap-2 rounded-xl border border-border p-2.5">
-        <Text variant="small" className="text-muted-foreground">{ruleLabel(currentRule)}</Text>
+        <Text variant="small" className="text-muted-foreground">{ruleLabel(currentRule, t)}</Text>
         <BuiltinAvatarGrid
           ruleId={currentRule}
           value={value}
@@ -230,7 +232,7 @@ export function PortraitPickerSection({
           <View className="gap-2 border-t border-border pt-2">
             {BUILTIN_AVATAR_RULE_IDS.filter((rule) => rule !== currentRule).map((rule) => (
               <View key={rule} className="gap-2">
-                <Text variant="small" className="text-muted-foreground">{ruleLabel(rule)}</Text>
+                <Text variant="small" className="text-muted-foreground">{ruleLabel(rule, t)}</Text>
                 <BuiltinAvatarGrid
                   ruleId={rule}
                   value={value}
@@ -245,13 +247,13 @@ export function PortraitPickerSection({
       <View className="flex-row flex-wrap gap-2">
         <Button size="sm" variant="outline" disabled={uploading} onPress={() => void pickAndUpload()}>
           {uploading ? <ActivityIndicator size="small" /> : <Icon as={ImagePlus} size={15} />}
-          <Text>{uploading ? t.uploading : t.upload}</Text>
+          <Text>{uploading ? t('dfCharacterCardUploading') : t('dfCharacterCardUpload')}</Text>
         </Button>
         <Button size="sm" variant="outline" onPress={() => void toggleUserAvatars()}>
-          <Icon as={UserRound} size={15} /><Text>{t.myAvatars}</Text>
+          <Icon as={UserRound} size={15} /><Text>{t('dfCharacterCardMyAvatars')}</Text>
         </Button>
         <Button size="sm" variant="ghost" onPress={() => onChange(null)}>
-          <Text>{t.useDefault}</Text>
+          <Text>{t('dfCharacterCardUseDefault')}</Text>
         </Button>
       </View>
       {/* 补 py-1 扩大点击热区，箭头提示可展开/收起 */}
@@ -260,7 +262,7 @@ export function PortraitPickerSection({
         className="flex-row items-center gap-1 self-start rounded-md py-1 active:opacity-60"
         accessibilityRole="button"
       >
-        <Text variant="small" className="text-muted-foreground underline">{showAllRules ? '收起全部内置头像' : t.allAvatars}</Text>
+        <Text variant="small" className="text-muted-foreground underline">{showAllRules ? t('dfCharacterCardCollapseAvatars') : t('dfCharacterCardAllAvatars')}</Text>
         <Icon as={showAllRules ? ChevronUp : ChevronDown} size={13} className="text-muted-foreground" />
       </Pressable>
 
@@ -280,7 +282,7 @@ export function PortraitPickerSection({
                     >
                       <RemoteAvatar
                         source={libraryAvatarSource({ kind: 'upload', asset_id: avatar.asset_id })}
-                        name="头像"
+                        name={t('dfCharacterCardAvatarA11y')}
                         className="h-full w-full"
                       />
                     </Pressable>
@@ -292,7 +294,7 @@ export function PortraitPickerSection({
               })}
             </View>
           ) : (
-            <Text variant="small" className="text-muted-foreground">还没有上传过头像</Text>
+            <Text variant="small" className="text-muted-foreground">{t('dfCharacterCardNoUploadedAvatars')}</Text>
           )}
         </View>
       ) : null}

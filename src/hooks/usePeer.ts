@@ -1,6 +1,10 @@
+import { getT } from '@/i18n/t'
 import type { Peer } from '@/types'
 
-const UNSUPPORTED_MESSAGE = '当前服务器未提供 P2P 设备发现与连接接口'
+/** 兼容边界的用户可见错误（调用时取即时语言） */
+function unsupportedMessage(): string {
+  return getT()('dfPeerHookUnsupported')
+}
 
 /**
  * 保留给旧路由的兼容边界。服务端提供真实接口前，不生成模拟设备或连接状态。
@@ -9,13 +13,13 @@ export function usePeer() {
   const peers: Peer[] = []
 
   async function unsupported(): Promise<never> {
-    throw new Error(UNSUPPORTED_MESSAGE)
+    throw new Error(unsupportedMessage())
   }
 
   return {
     peers,
     loading: false,
-    error: UNSUPPORTED_MESSAGE,
+    error: unsupportedMessage(),
     refreshPeers: unsupported,
     connectPeer: unsupported,
     disconnectPeer: unsupported,

@@ -13,8 +13,8 @@ import {
 } from 'expo-audio'
 
 import { transcribeAudio } from '@/api/speech'
+import { getT } from '@/i18n/t'
 import { useGameStore } from '@/stores/game'
-import { strings } from '@/lib/strings'
 
 const MAX_RECORDING_MS = 60_000
 /** 低于该大小的录音视为无效（对应 expo-audio 在部分 Android 机型上的零字节文件问题） */
@@ -64,22 +64,23 @@ export function useVoiceInput(gameKey: string, onText: (text: string) => void) {
     stoppingRef.current = true
     setBusy(true)
     setError('')
+    const t = getT()
     try {
       await recorder.stop()
       const uri = recorder.uri
       if (!uri) {
-        setError(strings.errors.recordFailed)
+        setError(t('dfErrorsRecordFailed'))
         return
       }
       const bytes = base64ToBytes(await new File(uri).base64())
       if (bytes.length < MIN_VALID_BYTES) {
-        setError(strings.errors.emptyRecording)
+        setError(t('dfErrorsEmptyRecording'))
         return
       }
       const text = await transcribeAudio(gameKey, bytes, 'audio/mp4')
       if (text.trim()) onText(text.trim())
     } catch (e) {
-      setError(e instanceof Error && e.message ? e.message : strings.errors.asrFailed)
+      setError(e instanceof Error && e.message ? e.message : t('dfErrorsAsrFailed'))
     } finally {
       stoppingRef.current = false
       setBusy(false)
@@ -90,13 +91,13 @@ export function useVoiceInput(gameKey: string, onText: (text: string) => void) {
     setError('')
     const permission = await requestRecordingPermissionsAsync()
     if (!permission.granted) {
-      setError(strings.errors.micDenied)
+      setError(getT()('dfErrorsMicDenied'))
       return
     }
     try {
       recorder.record()
     } catch {
-      setError(strings.errors.recordFailed)
+      setError(getT()('dfErrorsRecordFailed'))
     }
   }
 
