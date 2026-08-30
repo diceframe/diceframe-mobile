@@ -7,6 +7,7 @@ import {
   FileText,
   Gavel,
   Globe2,
+  Languages,
   PackageOpen,
   Palette,
   RefreshCw,
@@ -24,7 +25,7 @@ import { Icon } from '@/components/ui/icon'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import { useT } from '@/i18n/t'
-import type { SettingsSection } from '@/app/(profile)/settings'
+import { LANGUAGE_OPTIONS, type SettingsSection } from '@/app/(profile)/settings'
 import { useSettingsStore } from '@/stores/settings'
 
 interface MenuRowProps {
@@ -73,6 +74,11 @@ export default function ProfileScreen() {
   const t = useT()
   const settings = useSettingsStore()
   const identity = settings.token ? t('dfProfileGmLoggedIn') : settings.share ? settings.share.name || t('dfProfilePlayerJoined') : t('dfSettingsNotLoggedIn')
+  // 语言值用原生名展示（跟设置页同一份列表）；跟随系统时才走文案字典
+  const languageLabel =
+    settings.language === 'system'
+      ? t('dfSettingsFollowSystem')
+      : (LANGUAGE_OPTIONS.find((option) => option.value === settings.language)?.label ?? '')
 
   const openSetting = (section: SettingsSection) => {
     router.push({ pathname: '/settings', params: { section } })
@@ -105,6 +111,7 @@ export default function ProfileScreen() {
             <MenuRow icon={Server} label={t('dfSettingsServer')} detail={settings.baseUrl ? settings.baseUrl.replace(/^https?:\/\//, '') : t('dfProfileServerNotConnected')} onPress={() => openSetting('server')} />
             <MenuRow icon={CircleUserRound} label={t('dfSettingsIdentity')} detail={identity} onPress={() => openSetting('identity')} />
             <MenuRow icon={Palette} label={t('dfSettingsAppearance')} detail={t(THEME_LABEL_KEYS[settings.themeMode])} onPress={() => openSetting('appearance')} />
+            <MenuRow icon={Languages} label={t('dfSettingsLanguage')} detail={languageLabel} onPress={() => openSetting('language')} />
             <MenuRow icon={Volume2} label={t('dfSettingsSpeech')} detail={`${settings.ttsRate.toFixed(2)}x`} onPress={() => openSetting('speech')} />
             <MenuRow icon={Vibrate} label={t('dfSettingsHaptics')} detail={settings.hapticsEnabled ? t('dfProfileHapticsOn') : t('dfProfileHapticsOff')} onPress={() => openSetting('haptics')} />
             <MenuRow icon={RefreshCw} label={t('dfUpdatesTitle')} detail={`v${Constants.expoConfig?.version ?? '-'}`} onPress={() => openSetting('updates')} />

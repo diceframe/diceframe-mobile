@@ -125,7 +125,9 @@ export default function LorebookScreen() {
         </View>
         <Button variant="outline" onPress={() => setWorldEditorOpen(true)}><Text>{t('dfLorebookNewWorld')}</Text></Button>
       </View>
-      <ScrollView horizontal className="mb-3 max-h-10" contentContainerClassName="gap-2" showsHorizontalScrollIndicator={false}>
+      {/* 契约约束：横向 ScrollView 子元素默认被拉伸到容器满高（max-h-10），
+          胶囊会变成鸡蛋形且文字顶置，contentContainer 必须带 items-center 保持自适应高度 */}
+      <ScrollView horizontal className="mb-3 max-h-10" contentContainerClassName="items-center gap-2" showsHorizontalScrollIndicator={false}>
         {/* badge 风格轻量 pill：Button 按钮组在筛选位视觉过重 */}
         {(['all', ...LORE_CATEGORIES] as const).map((item) => {
           const active = category === item

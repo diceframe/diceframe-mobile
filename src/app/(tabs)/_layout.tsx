@@ -1,5 +1,5 @@
 import { ScrollText, UserRound, Users, BookOpen } from 'lucide-react-native'
-import { Pressable, useWindowDimensions, View, type ColorValue } from 'react-native'
+import { useWindowDimensions } from 'react-native'
 import { Tabs } from 'expo-router'
 
 
@@ -8,42 +8,19 @@ import { appLayoutForWidth } from '@/lib/layout'
 import { useThemeToken } from '@/lib/theme'
 
 /**
- * 底栏图标：选中时加同色药丸底。
- * 仅靠 gold 与 mutedForeground 的颜色差区分选中态在浅色主题下对比不足，
- * 药丸底让「停在哪个 tab」一眼可辨（色值均取主题令牌，alpha 拼接仅支持 6 位 hex）。
+ * 一级页面：对局列表 + 我的（选中态用 goldStrong 强化对比，与 Web 同一色族）。
+ * 契约约束：tabBarIcon 必须保持裸 lucide 组件——它渲染在 react-navigation 内部
+ * 31×28 的绝对定位图标容器里，包任何带 padding 的 View 都会布局失准
+ * （实测整体左偏约 33dp），选中态不要用药丸底，靠色差表达。
  */
-function TabBarIcon({
-  icon: Icon,
-  color,
-  focused,
-  pillColor,
-}: {
-  icon: typeof ScrollText
-  color: ColorValue
-  focused: boolean
-  pillColor: string
-}) {
-  return (
-    <View
-      className="items-center justify-center rounded-full px-5 py-0.5"
-      style={focused ? { backgroundColor: pillColor } : undefined}
-    >
-      <Icon size={20} color={color} />
-    </View>
-  )
-}
-
-/** 一级页面：对局列表 + 我的（选中态用 goldStrong 强化对比，与 Web 同一色族） */
 export default function TabsLayout() {
   const t = useT()
   const { width } = useWindowDimensions()
   const { isTablet, navigationSidebarWidth } = appLayoutForWidth(width)
-  const gold = useThemeToken('gold')
   const goldStrong = useThemeToken('goldStrong')
   const mutedForeground = useThemeToken('mutedForeground')
   const card = useThemeToken('card')
   const border = useThemeToken('border')
-  const pillColor = `${gold}24`
 
   return (
     <Tabs
@@ -60,52 +37,37 @@ export default function TabsLayout() {
         tabBarItemStyle: isTablet ? { minHeight: 52 } : undefined,
         tabBarLabelStyle: { fontSize: isTablet ? 14 : 11 },
         sceneStyle: { backgroundColor: card },
-        // 按压缩放反馈：默认高亮在深色药丸上不明显
-        tabBarButton: (props) => (
-          <Pressable
-            {...(props as React.ComponentProps<typeof Pressable>)}
-            style={({ pressed }) => [
-              props.style,
-              pressed ? { opacity: 0.65, transform: [{ scale: 0.96 }] } : null,
-            ]}
-          />
-        ),
+        // 契约约束：不要自定义 tabBarButton。自定义按钮会丢掉导航库默认
+        // PlatformPressable 的内部居中样式，图标整体左偏（5fe6872 引入过，实测左偏 33dp）；
+        // 按压反馈交给默认按钮自带的 android_ripple，不要再包一层。
       }}
     >
       <Tabs.Screen
         name="overview"
         options={{
           title: t('dfTabGames'),
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon icon={ScrollText} color={color} focused={focused} pillColor={pillColor} />
-          ),
+          tabBarIcon: ({ color }) => <ScrollText size={20} color={color} />,
         }}
       />
       <Tabs.Screen
         name="characters"
         options={{
           title: t('navCharacters'),
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon icon={Users} color={color} focused={focused} pillColor={pillColor} />
-          ),
+          tabBarIcon: ({ color }) => <Users size={20} color={color} />,
         }}
       />
       <Tabs.Screen
         name="lorebook"
         options={{
           title: t('dfTabLore'),
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon icon={BookOpen} color={color} focused={focused} pillColor={pillColor} />
-          ),
+          tabBarIcon: ({ color }) => <BookOpen size={20} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: t('dfTabProfile'),
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon icon={UserRound} color={color} focused={focused} pillColor={pillColor} />
-          ),
+          tabBarIcon: ({ color }) => <UserRound size={20} color={color} />,
         }}
       />
     </Tabs>

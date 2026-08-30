@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, StyleSheet, useWindowDimensions, View } from
 import { GlassView } from 'expo-glass-effect'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
-import { Plus, ScrollText, Trash2, Dices, Flame, Users } from 'lucide-react-native'
+import { Plus, ScrollText, Trash2 } from 'lucide-react-native'
 
 import { PageHeader } from '@/components/page-header'
 import { SceneCover } from '@/components/patterns/scene-cover'
@@ -379,35 +379,23 @@ export default function OverviewScreen() {
         }
       />
 
-      {/* 统计条 */}
+      {/* 统计条：窄卡片不放图标，纯「标签 + 数字」两行最透气 */}
       {games !== null && totalGames > 0 && (
         <View className="mb-3 flex-row gap-2">
           <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <View className="flex-row items-center gap-1.5">
-              <Icon as={ScrollText} size={13} className="text-muted-foreground" />
-              <Text variant="small">{t('dfOverviewStatTotal')}</Text>
-            </View>
+            <Text variant="small">{t('dfOverviewStatTotal')}</Text>
             <Text className="font-mono text-lg font-semibold text-primary">{totalGames}</Text>
           </View>
           <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <View className="flex-row items-center gap-1.5">
-              <Icon as={Flame} size={13} className="text-muted-foreground" />
-              <Text variant="small">{t('activeGames')}</Text>
-            </View>
+            <Text variant="small">{t('activeGames')}</Text>
             <Text className="font-mono text-lg font-semibold text-primary">{activeGames}</Text>
           </View>
           <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <View className="flex-row items-center gap-1.5">
-              <Icon as={Users} size={13} className="text-muted-foreground" />
-              <Text variant="small">{t('players')}</Text>
-            </View>
+            <Text variant="small">{t('players')}</Text>
             <Text className="font-mono text-lg font-semibold text-primary">{totalPlayers}</Text>
           </View>
           <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <View className="flex-row items-center gap-1.5">
-              <Icon as={Dices} size={13} className="text-muted-foreground" />
-              <Text variant="small">{t('dfOverviewRound')}</Text>
-            </View>
+            <Text variant="small">{t('dfOverviewRound')}</Text>
             <Text className="font-mono text-lg font-semibold text-primary">{totalRounds}</Text>
           </View>
         </View>

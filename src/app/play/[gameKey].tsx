@@ -457,6 +457,20 @@ export default function PlayScreen() {
     setMenuOpen(true)
   }
 
+  // 手机抽屉：情境行按钮本身就是入口和选中态，抽屉里不再重复一层剧情/地图切换，
+  // 内容直接跟最近点按的入口走（与角色/感知各自独立抽屉同一模式）。
+  const storySheetContent =
+    sidebarTab === 'plot' ? (
+      <View className="min-h-0 flex-1 pt-1">
+        <PlotTracker data={plotTracker} />
+      </View>
+    ) : (
+      <View className="min-h-0 flex-1 pt-1">
+        <MapWorkspace map={map} currentScene={detail?.scene} />
+      </View>
+    )
+
+  // 平板常驻侧栏：宽屏情境行不出现剧情/地图入口，内部切换条是唯一导航，保留 Tabs。
   const storyTools = (
     <Tabs
       value={sidebarTab}
@@ -556,9 +570,10 @@ export default function PlayScreen() {
           </Button>
           {!isWideTablet && (
             <>
+              {/* 高亮只在抽屉打开期间跟随入口；关掉即熄灭，不常驻 */}
               <Button
                 size="sm"
-                variant={sidebarTab === 'plot' ? 'secondary' : 'ghost'}
+                variant={sidebarOpen && sidebarTab === 'plot' ? 'secondary' : 'ghost'}
                 onPress={() => openStoryTool('plot')}
               >
                 <Icon as={Route} size={16} />
@@ -566,7 +581,7 @@ export default function PlayScreen() {
               </Button>
               <Button
                 size="sm"
-                variant={sidebarTab === 'map' ? 'secondary' : 'ghost'}
+                variant={sidebarOpen && sidebarTab === 'map' ? 'secondary' : 'ghost'}
                 onPress={() => openStoryTool('map')}
               >
                 <Icon as={Map} size={16} />
@@ -770,7 +785,7 @@ export default function PlayScreen() {
         </View>
       </Sheet>
 
-      {/* 侧边栏（窄屏抽屉） */}
+      {/* 侧边栏（窄屏抽屉）：内容跟随情境行点按的入口，见 storySheetContent */}
       {!isWideTablet && (
         <Sheet
           open={sidebarOpen}
@@ -778,7 +793,7 @@ export default function PlayScreen() {
           className="h-[80%]"
           scrollable={false}
         >
-          {storyTools}
+          {storySheetContent}
         </Sheet>
       )}
 

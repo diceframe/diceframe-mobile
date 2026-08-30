@@ -35,7 +35,7 @@ import { useThemeToken } from '@/lib/theme'
 import type { LocalePreference } from '@/lib/locale'
 import { useSettingsStore } from '@/stores/settings'
 
-const SECTIONS = ['server', 'identity', 'appearance', 'speech', 'haptics', 'updates'] as const
+const SECTIONS = ['server', 'identity', 'appearance', 'language', 'speech', 'haptics', 'updates'] as const
 
 /** 「我的」页菜单等处复用此类型，避免手写联合类型与 SECTIONS 漂移 */
 export type SettingsSection = (typeof SECTIONS)[number]
@@ -48,6 +48,8 @@ function sectionMeta(section: SettingsSection, t: T): { title: string; subtitle:
       return { title: t('dfSettingsIdentity'), subtitle: t('dfSettingsIdentityHint') }
     case 'appearance':
       return { title: t('dfSettingsAppearance'), subtitle: t('dfSettingsAppearanceHint') }
+    case 'language':
+      return { title: t('dfSettingsLanguage'), subtitle: t('dfSettingsLanguageHint') }
     case 'speech':
       return { title: t('dfSettingsSpeech'), subtitle: t('dfSettingsSpeechHint') }
     case 'haptics':
@@ -84,8 +86,9 @@ const THEME_OPTIONS = [
   { value: 'dark', labelKey: 'dfSettingsThemeDark', descKey: 'dfSettingsThemeDarkDesc', icon: Moon },
 ] as const
 
-// 语言名用各自母语展示（切换语言前也要能认出来），不进文案字典
-const LANGUAGE_OPTIONS: { value: LocalePreference; label: string }[] = [
+// 语言名用各自母语展示（切换语言前也要能认出来），不进文案字典；
+// 「我的」页语言行的值也复用这份列表
+export const LANGUAGE_OPTIONS: { value: LocalePreference; label: string }[] = [
   { value: 'zh-CN', label: '简体中文' },
   { value: 'en', label: 'English' },
   { value: 'ja', label: '日本語' },
@@ -144,49 +147,47 @@ export default function SettingsScreen() {
         ) : null}
 
         {section === 'appearance' ? (
-          <>
-            <Card className="gap-3">
-              <CardHeader><CardTitle>{t('dfSettingsTheme')}</CardTitle></CardHeader>
-              <CardContent className="gap-2">
-                {THEME_OPTIONS.map((option) => {
-                  const active = settings.themeMode === option.value
-                  return <Button key={option.value} variant={active ? 'secondary' : 'outline'} className="h-auto min-h-16 justify-start px-4 py-3" onPress={() => settings.setThemeMode(option.value)} accessibilityState={{ selected: active }}><View className="h-9 w-9 items-center justify-center rounded-full bg-background"><Icon as={option.icon} size={17} /></View><View className="min-w-0 flex-1 items-start gap-1"><Text className="font-semibold">{t(option.labelKey)}</Text><Text variant="small" className="text-left">{t(option.descKey)}</Text></View>{active ? <View className="h-2.5 w-2.5 rounded-full bg-primary" /> : null}</Button>
-                })}
-              </CardContent>
-            </Card>
-            <Card className="gap-3">
-              <CardHeader><CardTitle>{t('dfSettingsLanguage')}</CardTitle></CardHeader>
-              <CardContent className="gap-2">
-                <Button
-                  variant={settings.language === 'system' ? 'secondary' : 'outline'}
-                  className="h-auto min-h-14 justify-start px-4 py-3"
-                  onPress={() => settings.setLanguage('system')}
-                  accessibilityState={{ selected: settings.language === 'system' }}
-                >
-                  <View className="min-w-0 flex-1 items-start gap-0.5">
-                    <Text className="font-semibold">{t('dfSettingsFollowSystem')}</Text>
-                    <Text variant="small" className="text-left">{t('dfSettingsLanguageHint')}</Text>
-                  </View>
-                  {settings.language === 'system' ? <View className="h-2.5 w-2.5 rounded-full bg-primary" /> : null}
-                </Button>
-                {LANGUAGE_OPTIONS.map((option) => {
-                  const active = settings.language === option.value
-                  return (
-                    <Button
-                      key={option.value}
-                      variant={active ? 'secondary' : 'outline'}
-                      className="h-auto min-h-12 justify-start px-4 py-3"
-                      onPress={() => settings.setLanguage(option.value)}
-                      accessibilityState={{ selected: active }}
-                    >
-                      <Text className="font-semibold">{option.label}</Text>
-                      {active ? <View className="h-2.5 w-2.5 rounded-full bg-primary" /> : null}
-                    </Button>
-                  )
-                })}
-              </CardContent>
-            </Card>
-          </>
+          <Card className="gap-3">
+            <CardHeader><CardTitle>{t('dfSettingsTheme')}</CardTitle></CardHeader>
+            <CardContent className="gap-2">
+              {THEME_OPTIONS.map((option) => {
+                const active = settings.themeMode === option.value
+                return <Button key={option.value} variant={active ? 'secondary' : 'outline'} className="h-auto min-h-16 justify-start px-4 py-3" onPress={() => settings.setThemeMode(option.value)} accessibilityState={{ selected: active }}><View className="h-9 w-9 items-center justify-center rounded-full bg-background"><Icon as={option.icon} size={17} /></View><View className="min-w-0 flex-1 items-start gap-1"><Text className="font-semibold">{t(option.labelKey)}</Text><Text variant="small" className="text-left">{t(option.descKey)}</Text></View>{active ? <View className="h-2.5 w-2.5 rounded-full bg-primary" /> : null}</Button>
+              })}
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {section === 'language' ? (
+          <Card className="gap-3">
+            <CardHeader><CardTitle>{t('dfSettingsLanguage')}</CardTitle></CardHeader>
+            <CardContent className="gap-2">
+              <Button
+                variant={settings.language === 'system' ? 'secondary' : 'outline'}
+                className="min-h-12 justify-start px-4 py-3"
+                onPress={() => settings.setLanguage('system')}
+                accessibilityState={{ selected: settings.language === 'system' }}
+              >
+                <Text className="font-semibold">{t('dfSettingsFollowSystem')}</Text>
+                {settings.language === 'system' ? <View className="h-2.5 w-2.5 rounded-full bg-primary" /> : null}
+              </Button>
+              {LANGUAGE_OPTIONS.map((option) => {
+                const active = settings.language === option.value
+                return (
+                  <Button
+                    key={option.value}
+                    variant={active ? 'secondary' : 'outline'}
+                    className="min-h-12 justify-start px-4 py-3"
+                    onPress={() => settings.setLanguage(option.value)}
+                    accessibilityState={{ selected: active }}
+                  >
+                    <Text className="font-semibold">{option.label}</Text>
+                    {active ? <View className="h-2.5 w-2.5 rounded-full bg-primary" /> : null}
+                  </Button>
+                )
+              })}
+            </CardContent>
+          </Card>
         ) : null}
 
         {section === 'haptics' ? (
