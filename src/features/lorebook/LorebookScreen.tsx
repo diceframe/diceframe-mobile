@@ -102,7 +102,7 @@ export default function LorebookScreen() {
   return (
     <Screen className="px-4" style={{ width: '100%', maxWidth: 840, alignSelf: 'center' }}>
       <PageHeader
-        title={t('lorebookKicker')}
+        title={t('dfLorebookTitle')}
         subtitle={loading ? t('dfLorebookSyncing') : t('dfLorebookCountSubtitle', { count: entries.length })}
         className="px-0"
         right={

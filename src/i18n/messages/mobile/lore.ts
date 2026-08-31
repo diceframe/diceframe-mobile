@@ -39,6 +39,8 @@ export const lore = {
     dfWorldsDeleteMessage: '确定删除「{{name}}」？其世界书条目将一并删除，且无法恢复。',
     // useWorlds 错误兜底复用 profile 簇的 dfWorldsCloneFailed/dfWorldsDeleteFailed/dfWorldsSaveStyleFailed
     // 世界书
+    // 页面标题不复用上游 lorebookKicker：上游已改为英文大写 kicker 样式，移动端标题保持本地化措辞
+    dfLorebookTitle: '世界设定',
     dfLorebookSyncing: '正在同步世界书',
     dfLorebookCountSubtitle: '{{count}} 条设定 · 对局中的世界知识',
     dfLorebookNewEntry: '新设定',
@@ -109,6 +111,7 @@ export const lore = {
     dfWorldsDeleteMessage: 'Delete "{{name}}"? Its lorebook entries will be removed with it and cannot be recovered.',
     // useWorlds error fallbacks reuse the profile cluster's dfWorldsCloneFailed/dfWorldsDeleteFailed/dfWorldsSaveStyleFailed
     // Lorebook
+    dfLorebookTitle: 'World Lore',
     dfLorebookSyncing: 'Syncing lorebook',
     dfLorebookCountSubtitle: '{{count}} entries · world knowledge for your games',
     dfLorebookNewEntry: 'New entry',
@@ -179,6 +182,7 @@ export const lore = {
     dfWorldsDeleteMessage: '「{{name}}」を削除しますか？ワールドブックの項目も一緒に削除され、復元できません。',
     // useWorlds のエラーは profile 簇の dfWorldsCloneFailed/dfWorldsDeleteFailed/dfWorldsSaveStyleFailed を再利用
     // 世界書
+    dfLorebookTitle: '世界設定',
     dfLorebookSyncing: '世界書を同期中',
     dfLorebookCountSubtitle: '{{count}} 件の設定 · 対局中の世界知識',
     dfLorebookNewEntry: '新規設定',
