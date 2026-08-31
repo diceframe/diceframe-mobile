@@ -13,16 +13,21 @@ import type {
   GameDetail,
   GameLogResponse,
   GamesResponse,
+  GameMutationResponse,
   GeneratedImageItem,
+  GeneratedRuleResponse,
+  GeneratedWorldResponse,
   HealthResponse,
   JsonObject,
   LuckDecisionResponse,
+  MapBackgroundSelection,
   MapData,
   PaymentResolveResponse,
   PlayerCreateResponse,
   PlayerContextResponse,
   PrivateLogResponse,
   RulesResponse,
+  SceneImageRef,
   WorldCandidate,
   WorldTemplatesResponse,
 } from './types'
@@ -150,24 +155,64 @@ export function fetchWorldTemplates(language = contentLanguage()): Promise<World
   return api<WorldTemplatesResponse>(`/world-templates?language=${encodeURIComponent(language)}`)
 }
 
-/** 冒险包列表（世界图鉴徽章用它映射 recommended_world_id → 冒险包名） */
-export function fetchAdventures(language = contentLanguage()): Promise<{ adventures?: AdventureSummary[] }> {
-  return api<{ adventures?: AdventureSummary[] }>(`/adventures?language=${encodeURIComponent(language)}`)
+/** 冒险包列表（世界图鉴徽章用它映射 recommended_world_id → 冒险包名；创建向导按规则+世界过滤） */
+export function fetchAdventures(
+  language = contentLanguage(),
+  filter?: { ruleId?: string; worldId?: string },
+): Promise<{ adventures?: AdventureSummary[] }> {
+  const params = new URLSearchParams({ language })
+  if (filter?.ruleId) params.set('rule_id', filter.ruleId)
+  if (filter?.worldId) params.set('world_id', filter.worldId)
+  return api<{ adventures?: AdventureSummary[] }>(`/adventures?${params.toString()}`)
 }
 
-export function fetchRules(): Promise<RulesResponse> {
-  return api<RulesResponse>('/rules')
+/** 规则列表（language 决定后端 locale overlay，与世界模板列表保持一致） */
+export function fetchRules(language = contentLanguage()): Promise<RulesResponse> {
+  return api<RulesResponse>(`/rules?language=${encodeURIComponent(language)}`)
 }
 
 // ---------- 对局生命周期（创建/删除/导出/导入/批量） ----------
 
-export async function createGame(payload: JsonObject): Promise<GameObject> {
-  const result = await api<{ ok?: boolean; game_key?: string; error?: string }>('/games/create', {
+export async function createGame(payload: JsonObject): Promise<GameMutationResponse & { ok: true }> {
+  const result = await api<GameMutationResponse>('/games/create', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
   if (!result.ok) throw new Error(result.error ?? '创建对局失败')
-  return { ok: true, game_key: result.game_key }
+  // 多人自动生成密码 / 种子码要透给创建方展示，不能像旧版只留 game_key
+  return { ...result, ok: true }
+}
+
+/** 种子码恢复对局（/games/create-from-seed，payload 与 Web CreateView 一致） */
+export async function createGameFromSeed(payload: JsonObject): Promise<GameMutationResponse & { ok: true }> {
+  const result = await api<GameMutationResponse>('/games/create-from-seed', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  if (!result.ok) throw new Error(result.error ?? '创建对局失败')
+  return { ...result, ok: true }
+}
+
+/** AI 生成世界（/generate-world），返回可直接用于 create payload 的 world_id */
+export async function generateWorld(prompt: string, ruleId: string, language: string): Promise<GeneratedWorldResponse> {
+  const result = await api<GeneratedWorldResponse>('/generate-world', {
+    method: 'POST',
+    body: JSON.stringify({ prompt, rule_id: ruleId, language }),
+  })
+  if (!result.ok && result.error) throw new Error(result.error)
+  if (!result.world_id) throw new Error('生成世界未返回 world_id')
+  return result
+}
+
+/** 按母版 AI 生成本局专属规则（/generate-rule） */
+export async function generateRule(prompt: string, sourceRuleId: string, language: string): Promise<GeneratedRuleResponse> {
+  const result = await api<GeneratedRuleResponse>('/generate-rule', {
+    method: 'POST',
+    body: JSON.stringify({ prompt, source_rule_id: sourceRuleId, language }),
+  })
+  if (!result.ok && result.error) throw new Error(result.error)
+  if (!result.rule_id) throw new Error('生成规则未返回 rule_id')
+  return result
 }
 
 export async function deleteGame(gameKey: string): Promise<void> {
@@ -202,11 +247,6 @@ export async function importGame(fileUri: string, fileName: string): Promise<str
   })
   if (!result.ok) throw new Error(result.error ?? '导入失败')
   return result.game_key ?? ''
-}
-
-export interface GameObject {
-  ok: boolean
-  game_key?: string
 }
 
 // ---------- 健康事件 ----------
@@ -411,6 +451,26 @@ export async function updateSceneImage(gameKey: string, fileData?: string, fileN
     body: JSON.stringify(body),
   })
   if (result.ok === false || result.error) throw new Error(result.error ?? '更新场景图失败')
+}
+
+/** 创建流程的全局场景图上传（对齐 Web POST /scene-images，body 为 base64 JSON） */
+export async function uploadSceneImage(fileName: string, fileData: string): Promise<SceneImageRef> {
+  const result = await api<{ ok?: boolean; error?: string; scene_image?: SceneImageRef }>('/scene-images', {
+    method: 'POST',
+    body: JSON.stringify({ file_data: fileData, file_name: fileName }),
+  })
+  if (!result.ok || !result.scene_image) throw new Error(result.error ?? '上传场景图失败')
+  return result.scene_image
+}
+
+/** 创建流程的地图后台上传（对齐 Web POST /map-backgrounds） */
+export async function uploadMapBackground(fileName: string, fileData: string): Promise<MapBackgroundSelection> {
+  const result = await api<{ ok?: boolean; error?: string; map_background?: MapBackgroundSelection }>('/map-backgrounds', {
+    method: 'POST',
+    body: JSON.stringify({ file_data: fileData, file_name: fileName }),
+  })
+  if (!result.ok || !result.map_background) throw new Error(result.error ?? '上传地图背景失败')
+  return result.map_background
 }
 
 // ---------- 生成图画廊 ----------

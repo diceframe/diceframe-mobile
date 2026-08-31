@@ -1,9 +1,9 @@
 import * as React from 'react'
 import { Pressable, RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { GlassView } from 'expo-glass-effect'
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
+import { useNavigation, useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
-import { Plus, ScrollText, Trash2 } from 'lucide-react-native'
+import { Check, ListChecks, Plus, ScrollText, Trash2, X } from 'lucide-react-native'
 
 import { PageHeader } from '@/components/page-header'
 import { SceneCover } from '@/components/patterns/scene-cover'
@@ -16,7 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
 import { errorMessage } from '@/api/client'
-import { batchDeleteGames, deleteGame, fetchGames } from '@/api/games'
+import { batchDeleteGames, fetchGames } from '@/api/games'
 import { gameSceneCoverSource } from '@/api/assets'
 import type { GameSummary } from '@/api/types'
 import { gameStateLabel, gameStateTone } from '@/lib/game-state'
@@ -24,7 +24,6 @@ import { appLayoutForWidth } from '@/lib/layout'
 import { confirmDestructive } from '@/lib/confirm'
 import { useThemeToken } from '@/lib/theme'
 import { useT } from '@/i18n/t'
-import { CreateGameSheet } from '@/features/overview/CreateGameSheet'
 
 type SortMode = 'recent' | 'oldest' | 'name' | 'round'
 
@@ -74,15 +73,14 @@ function OverviewContent({
   games,
   sorted,
   selected,
+  managing,
   refreshing,
-  busy,
   mutedForeground,
   coverBase,
   columns,
   onRetry,
   onRefresh,
   onSelect,
-  onRemove,
   onCreate,
   onOpen,
 }: {
@@ -90,15 +88,14 @@ function OverviewContent({
   games: GameSummary[] | null
   sorted: GameSummary[]
   selected: Set<string>
+  managing: boolean
   refreshing: boolean
-  busy: boolean
   mutedForeground: string
   coverBase: string
   columns: 1 | 2 | 3
   onRetry: () => void
   onRefresh: () => void
   onSelect: (key: string) => void
-  onRemove: (key: string) => void
   onCreate: () => void
   onOpen: (key: string) => void
 }) {
@@ -148,7 +145,7 @@ function OverviewContent({
       data={sorted}
       numColumns={columns}
       keyExtractor={(item) => item.game_key}
-      contentContainerStyle={{ paddingBottom: 24 }}
+      contentContainerStyle={{ paddingBottom: 32 }}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedForeground} />
       }
@@ -157,26 +154,38 @@ function OverviewContent({
         return (
           <Pressable
             onPress={() => {
-              if (selected.size > 0) {
+              if (managing) {
                 onSelect(item.game_key)
               } else {
                 onOpen(item.game_key)
               }
             }}
-            onLongPress={() => onSelect(item.game_key)}
-            className={`mb-3 flex-1 active:opacity-80 ${isSelected ? 'ring-2 ring-primary' : ''}`}
-            style={
-              columns > 1
-                ? { marginHorizontal: 6 }
-                : undefined
-            }
+            accessibilityRole={managing ? 'checkbox' : 'button'}
+            accessibilityState={managing ? { checked: isSelected } : undefined}
+            accessibilityLabel={item.world_name || item.game_key}
+            className="mb-3 flex-1 active:opacity-80"
+            style={columns > 1 ? { marginHorizontal: 6 } : undefined}
           >
-            <Card className="gap-2 overflow-hidden p-0">
+            <Card
+              className={`gap-2 overflow-hidden p-0 ${isSelected ? 'border-[3px] border-primary' : ''}`}
+            >
               <SceneCover
                 source={gameSceneCoverSource(item.game_key, item.rule_id)}
                 className="absolute inset-0"
                 accessibilityLabel={t('dfOverviewCoverA11y', { name: item.world_name || item.game_key })}
               />
+              {managing && (
+                <View
+                  pointerEvents="none"
+                  className={`absolute left-3 top-3 z-10 h-9 w-9 items-center justify-center rounded-full border-2 shadow-sm shadow-black/20 ${
+                    isSelected ? 'border-primary bg-primary' : 'border-primary bg-card'
+                  }`}
+                >
+                  {isSelected ? (
+                    <Icon as={Check} size={19} className="text-primary-foreground" />
+                  ) : null}
+                </View>
+              )}
               <View className="min-h-[196px] justify-end p-3">
                 <GlassView
                   glassEffectStyle="regular"
@@ -203,15 +212,6 @@ function OverviewContent({
                       {item.last_activity?.slice(0, 10) ?? ''}
                     </Text>
                   </CardContent>
-                  {isSelected && (
-                    <CardContent className="pt-3">
-                      <View className="flex-row gap-2">
-                        <Button size="sm" variant="destructive" disabled={busy} onPress={() => onRemove(item.game_key)}>
-                          <Text>{t('dfCommonDelete')}</Text>
-                        </Button>
-                      </View>
-                    </CardContent>
-                  )}
                 </GlassView>
               </View>
             </Card>
@@ -237,26 +237,12 @@ export default function OverviewScreen() {
   const [reloadToken, setReloadToken] = React.useState(0)
   const [sort, setSort] = React.useState<SortMode>('recent')
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
-  const [createOpen, setCreateOpen] = React.useState(false)
-  // 递增 token 作为 CreateGameSheet 的 key：每次打开都重挂载，表单状态全新
-  const [createToken, setCreateToken] = React.useState(0)
-  const [preselectWorld, setPreselectWorld] = React.useState('')
+  const [managing, setManaging] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
 
-  function openCreate(worldId = '') {
-    setPreselectWorld(worldId)
-    setCreateToken((t) => t + 1)
-    setCreateOpen(true)
+  function openCreate() {
+    router.push('/create')
   }
-
-  // 世界图鉴「用它开团」：带 world 参数进入时打开创建抽屉并预选该世界
-  const params = useLocalSearchParams<{ world?: string; create?: string }>()
-  React.useEffect(() => {
-    if (!params.create || !params.world) return
-    const world = String(params.world)
-    router.setParams({ world: undefined, create: undefined })
-    queueMicrotask(() => openCreate(world))
-  }, [params.create, params.world])
 
   React.useEffect(() => {
     let active = true
@@ -301,29 +287,14 @@ export default function OverviewScreen() {
     setSelected(new Set())
   }
 
-  async function removeGame(key: string) {
-    const confirmed = await confirmDestructive({
-      title: t('dfOverviewDeleteTitle'),
-      message: t('dfOverviewDeleteMessage'),
-      confirmText: t('dfCommonConfirm'),
-      cancelText: t('dfCommonCancel'),
-    })
-    if (!confirmed) return
-    setBusy(true)
-    try {
-      await deleteGame(key)
-      setGames((prev) => prev?.filter((g) => g.game_key !== key) ?? null)
-      setSelected((prev) => {
-        if (!prev.has(key)) return prev
-        const next = new Set(prev)
-        next.delete(key)
-        return next
-      })
-    } catch (e) {
-      setError(errorMessage(e))
-    } finally {
-      setBusy(false)
-    }
+  function toggleManaging() {
+    if (managing) clearSelection()
+    setManaging((value) => !value)
+  }
+
+  function manageSelect(key: string) {
+    setManaging(true)
+    toggleSelect(key)
   }
 
   async function batchRemove() {
@@ -351,11 +322,6 @@ export default function OverviewScreen() {
     }
   }
 
-  function onCreated(gameKey: string) {
-    setReloadToken((t) => t + 1)
-    router.push({ pathname: '/play/[gameKey]', params: { gameKey } })
-  }
-
   // 统计
   const sorted = games ? sortGames(games, sort) : []
   const totalGames = games?.length ?? 0
@@ -372,7 +338,7 @@ export default function OverviewScreen() {
         title={t('dfOverviewTitle')}
         className="px-0"
         right={
-          <Button size="sm" onPress={() => openCreate()} accessibilityLabel={t('dfOverviewCreate')}>
+          <Button size="sm" onPress={openCreate} accessibilityLabel={t('dfOverviewNew')}>
             <Icon as={Plus} size={16} />
             <Text>{t('dfOverviewNew')}</Text>
           </Button>
@@ -401,48 +367,79 @@ export default function OverviewScreen() {
         </View>
       )}
 
-      {/* 排序 + 批量操作 */}
+      {/* 排序与管理态分行：窄屏不让四段排序和操作按钮互相挤压 */}
       {games !== null && totalGames > 0 && (
-        <View className="mb-3 gap-2">
-          <View className="flex-row items-center gap-2">
-            <View className="flex-1">
-              <Tabs value={sort} onValueChange={(v) => setSort(v as SortMode)}>
-                <TabsList>
-                  <TabsTrigger value="recent">
+        <View className="mb-4 gap-3">
+          {!managing ? (
+            <View className="flex-row items-center gap-2">
+              <Tabs
+                value={sort}
+                onValueChange={(v) => setSort(v as SortMode)}
+                className="min-w-0 flex-1"
+              >
+                <TabsList className="mr-0 w-full">
+                  <TabsTrigger value="recent" className="min-w-0 flex-1 px-1">
                     <Text variant="small">{t('dfOverviewSortRecent')}</Text>
                   </TabsTrigger>
-                  <TabsTrigger value="oldest">
+                  <TabsTrigger value="oldest" className="min-w-0 flex-1 px-1">
                     <Text variant="small">{t('dfOverviewSortOldest')}</Text>
                   </TabsTrigger>
-                  <TabsTrigger value="name">
+                  <TabsTrigger value="name" className="min-w-0 flex-1 px-1">
                     <Text variant="small">{t('dfOverviewSortName')}</Text>
                   </TabsTrigger>
-                  <TabsTrigger value="round">
+                  <TabsTrigger value="round" className="min-w-0 flex-1 px-1">
                     <Text variant="small">{t('dfOverviewRound')}</Text>
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
-            </View>
-            {selected.size > 0 && (
               <Button
-                variant="ghost"
-                size="icon"
-                onPress={batchRemove}
-                accessibilityLabel={t('dfOverviewBatchDeleteA11y')}
-                disabled={busy}
+                variant="outline"
+                size="sm"
+                className="h-11 px-3"
+                onPress={toggleManaging}
+                accessibilityLabel={t('dfOverviewManage')}
               >
-                <Icon as={Trash2} size={20} className="text-destructive" />
+                <Icon as={ListChecks} size={16} />
+                <Text>{t('dfOverviewManage')}</Text>
               </Button>
-            )}
-          </View>
-          {selected.size > 0 && (
-            <View className="flex-row items-center justify-between">
-              <Text variant="small">{t('dfOverviewSelectedCount', { count: selected.size })}</Text>
-              <Pressable onPress={clearSelection}>
-                <Text variant="small" className="text-primary">
-                  {t('dfOverviewClearSelection')}
-                </Text>
-              </Pressable>
+            </View>
+          ) : (
+            <View className="gap-3 rounded-xl border border-primary bg-muted p-3">
+              <View className="flex-row items-start gap-3">
+                <View className="mt-0.5 h-9 w-9 items-center justify-center rounded-full bg-primary">
+                  <Icon as={ListChecks} size={18} className="text-primary-foreground" />
+                </View>
+                <View className="min-w-0 flex-1 gap-0.5">
+                  <Text className="font-semibold">
+                    {selected.size > 0
+                      ? t('dfOverviewSelectedCount', { count: selected.size })
+                      : t('dfOverviewManage')}
+                  </Text>
+                  <Text variant="small">{t('dfOverviewManageHint')}</Text>
+                </View>
+                <Button variant="secondary" size="sm" onPress={toggleManaging}>
+                  <Text>{t('finish')}</Text>
+                </Button>
+              </View>
+
+              {selected.size > 0 && (
+                <View className="flex-row justify-end gap-2 border-t border-border pt-3">
+                  <Button variant="outline" size="sm" onPress={clearSelection}>
+                    <Icon as={X} size={16} />
+                    <Text>{t('clearSelection')}</Text>
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onPress={batchRemove}
+                    accessibilityLabel={t('dfOverviewBatchDeleteA11y')}
+                    disabled={busy}
+                  >
+                    <Icon as={Trash2} size={16} />
+                    <Text>{t('dfCommonDelete')}</Text>
+                  </Button>
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -453,25 +450,16 @@ export default function OverviewScreen() {
         games={games}
         sorted={sorted}
         selected={selected}
+        managing={managing}
         refreshing={refreshing}
-        busy={busy}
         mutedForeground={mutedForeground}
         coverBase={coverBase}
         columns={gameListColumns}
         onRetry={() => setReloadToken((t) => t + 1)}
         onRefresh={refresh}
-        onSelect={toggleSelect}
-        onRemove={(key) => void removeGame(key)}
-        onCreate={() => openCreate()}
+        onSelect={manageSelect}
+        onCreate={openCreate}
         onOpen={(key) => router.push({ pathname: '/play/[gameKey]', params: { gameKey: key } })}
-      />
-
-      <CreateGameSheet
-        key={createToken}
-        open={createOpen}
-        preselectedWorldId={preselectWorld}
-        onClose={() => setCreateOpen(false)}
-        onCreated={onCreated}
       />
     </Screen>
   )

@@ -9,6 +9,7 @@
 import type { auth } from './messages/mobile/auth'
 import type { characters } from './messages/mobile/characters'
 import type { common } from './messages/mobile/common'
+import type { create } from './messages/mobile/create'
 import type { lore } from './messages/mobile/lore'
 import type { overview } from './messages/mobile/overview'
 import type { play } from './messages/mobile/play'
@@ -24,6 +25,7 @@ export type AppTranslation = WidenValues<
     (typeof settings)['zh'] &
     (typeof auth)['zh'] &
     (typeof overview)['zh'] &
+    (typeof create)['zh'] &
     (typeof profile)['zh'] &
     (typeof play)['zh'] &
     (typeof characters)['zh'] &

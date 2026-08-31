@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils'
 export type SheetSelectOption = {
   value: string
   label: string
+  /** 置灰不可选（如兼容性不通过的冒险包） */
+  disabled?: boolean
 }
 
 type SheetSelectProps = {
@@ -58,16 +60,22 @@ export function SheetSelect({
         <View className="gap-1 pb-4">
           {options.map((option) => {
             const active = option.value === value
+            const labelClass = cn(
+              'flex-1 text-base',
+              active && 'font-semibold text-foreground',
+              option.disabled && 'text-muted-foreground/60',
+            )
             return (
               <Pressable
                 key={option.value}
-                onPress={() => {
+                onPress={option.disabled ? undefined : () => {
                   onValueChange(option.value)
                   setOpen(false)
                 }}
                 className="flex-row items-center justify-between rounded-md px-3 py-3 active:bg-accent"
+                accessibilityState={{ disabled: option.disabled, selected: active }}
               >
-                <Text className={cn('text-base', active && 'font-semibold text-foreground')}>
+                <Text className={labelClass} numberOfLines={1}>
                   {option.label}
                 </Text>
                 {active && <Check size={18} className="text-primary" />}

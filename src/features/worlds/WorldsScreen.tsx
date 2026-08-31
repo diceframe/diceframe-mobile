@@ -74,7 +74,8 @@ export default function WorldsScreen() {
   }
 
   function startGame(card: WorldGalleryCard) {
-    router.push({ pathname: '/overview', params: { world: card.id, create: '1' } })
+    // 直接进创建向导并预选该世界（原来绕道 /overview 打开创建抽屉）
+    router.push({ pathname: '/create', params: { world: card.id } })
   }
 
   async function cloneCard(card: WorldGalleryCard) {
