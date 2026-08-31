@@ -49,6 +49,11 @@ export interface MarketplacePlugin {
 
 export interface MemoryRecord {
   id: number
+  /** 服务端 memory_entries 列：entity/relation/value/confidence 四字段可经 PUT 编辑 */
+  entity?: string
+  relation?: string
+  value?: string
+  confidence?: number
   content?: string
   text?: string
   summary?: string
