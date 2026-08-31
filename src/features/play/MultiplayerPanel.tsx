@@ -79,7 +79,7 @@ export function MultiplayerPanel({
         const label = statusLabel(player, detail, t)
 
         return (
-          <View key={player.user_id} className="rounded-lg border border-border bg-card p-3 gap-2">
+          <View key={player.user_id} className="rounded-xl border border-border bg-card p-3 gap-2">
             <View className="flex-row items-center gap-2">
               <View className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: tone }} />
               <Text className="flex-1 font-medium" numberOfLines={1}>
@@ -91,7 +91,7 @@ export function MultiplayerPanel({
                 </Text>
               )}
               {isGmPlayer && (
-                <Text variant="small" className="rounded bg-primary px-1.5 py-0.5 text-primary-foreground">
+                <Text variant="small" className="rounded-sm bg-primary px-1.5 py-0.5 text-primary-foreground">
                   GM
                 </Text>
               )}

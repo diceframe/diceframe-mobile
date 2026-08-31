@@ -103,7 +103,7 @@ export function PlotTracker({ data }: { data?: PlotTrackerData | null }) {
   }
 
   return (
-    <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-5 pb-8">
+    <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-4 pb-8">
       {activeQuests.length > 0 && (
         <Section title={t('dfPlotActiveQuests')} count={activeQuests.length}>
           <View className="gap-2">

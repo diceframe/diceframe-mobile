@@ -43,7 +43,7 @@ function MenuRow({ icon, label, detail, onPress }: MenuRowProps) {
       accessibilityRole="button"
       accessibilityLabel={detail ? `${label}，${detail}` : label}
     >
-      <View className="h-9 w-9 items-center justify-center rounded-lg border border-border bg-muted">
+      <View className="h-9 w-9 items-center justify-center rounded-md border border-border bg-muted">
         <Icon as={icon} size={17} />
       </View>
       <Text className="flex-1 font-medium">{label}</Text>
@@ -87,10 +87,10 @@ export default function ProfileScreen() {
   return (
     <Screen className="px-4" style={{ width: '100%', maxWidth: 760, alignSelf: 'center' }}>
       <PageHeader title={t('dfTabProfile')} subtitle={t('dfProfileSubtitle')} className="px-0" />
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-5 pb-8">
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-4 pb-8">
         {/* 身份摘要卡：点击直达「身份与登录」，通用偏好仍走下方设置组，避免重复入口 */}
         <Pressable
-          className="flex-row items-center gap-4 rounded-2xl border border-border bg-card px-5 py-5 active:bg-accent"
+          className="flex-row items-center gap-4 rounded-xl border border-border bg-card px-5 py-5 active:bg-accent"
           onPress={() => openSetting('identity')}
           accessibilityRole="button"
           accessibilityLabel={t('dfProfileCardA11y')}
@@ -99,7 +99,7 @@ export default function ProfileScreen() {
             <Icon as={CircleUserRound} size={27} />
           </View>
           <View className="min-w-0 flex-1 gap-1">
-            <Text variant="h3" className="border-b-0 pb-0" numberOfLines={1}>{t('dfProfileAdventurerCard')}</Text>
+            <Text variant="h3" numberOfLines={1}>{t('dfProfileAdventurerCard')}</Text>
             <Text variant="small" numberOfLines={1}>{identity} · {settings.baseUrl || t('dfProfileNoServer')}</Text>
           </View>
           <Icon as={ChevronRight} size={18} className="text-muted-foreground" />

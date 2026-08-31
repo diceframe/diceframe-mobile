@@ -28,7 +28,7 @@ function GalleryImage({ item, gameKey }: { item: GeneratedImageItem; gameKey: st
   }, [item.asset_id, gameKey])
 
   return (
-    <View className="rounded-lg border border-border overflow-hidden gap-2">
+    <View className="rounded-xl border border-border overflow-hidden gap-2">
       {uri ? (
         <ExpoImage
           source={{ uri }}

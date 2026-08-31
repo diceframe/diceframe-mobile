@@ -24,7 +24,7 @@ export function RuleHelpModal({ open, meta, onClose }: RuleHelpModalProps) {
       <View className="flex-1 gap-4 pt-1">
         <Text variant="h3">{t('ruleHelp')}</Text>
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="gap-5 pb-6">
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerClassName="gap-4 pb-6">
           <View className="flex-row gap-3">
             <View className="flex-1 rounded-md border border-border bg-muted p-3 gap-1">
               <Text variant="small" className="text-muted-foreground">

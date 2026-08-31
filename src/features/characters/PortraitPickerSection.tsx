@@ -61,7 +61,7 @@ function BuiltinAvatarGrid({
           <Pressable
             key={choice.id}
             onPress={() => onPick(choice.id)}
-            className={`h-12 w-12 overflow-hidden rounded-lg border-2 ${selected ? 'border-primary' : 'border-transparent'}`}
+            className={`h-12 w-12 overflow-hidden rounded-md border-2 ${selected ? 'border-primary' : 'border-transparent'}`}
             accessibilityLabel={t('dfCharacterCardBuiltinAvatarA11y', { index: choice.index + 1 })}
           >
             <Image

@@ -144,7 +144,7 @@ export default function LoginScreen() {
         />
         <View className="items-center gap-3">
           <View
-            className="h-20 w-20 items-center justify-center rounded-3xl"
+            className="h-20 w-20 items-center justify-center rounded-xl"
             style={{ backgroundColor: `${primary}1A`, borderWidth: 1, borderColor: `${gold}66` }}
           >
             <Dices size={38} color={gold} />

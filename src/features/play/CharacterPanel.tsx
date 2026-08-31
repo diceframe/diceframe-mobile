@@ -101,7 +101,7 @@ export function CharacterPanel({
       className="flex-1"
       nestedScrollEnabled
       showsVerticalScrollIndicator={false}
-      contentContainerClassName="gap-5 pb-8"
+      contentContainerClassName="gap-4 pb-8"
     >
       <View className="flex-row items-center gap-3">
         <RemoteAvatar
@@ -126,7 +126,7 @@ export function CharacterPanel({
 
       {specialStats.length > 0 && (
         <Section title={t('dfCharacterSectionSpecial')}>
-          <View className="gap-2.5">
+          <View className="gap-2">
             {specialStats.map((stat) => (
               <ResourceRow
                 key={stat.key}

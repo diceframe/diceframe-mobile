@@ -76,7 +76,7 @@ export function GmNarration({
   const block = parseGMText(text, { gold: t('goldCurrency'), decision: t('dfPlayKeyDecision') })
   if (!block.paragraphs.length && !block.states.length && !block.tags.length && !image) return null
   return (
-    <View className={cn('gap-2.5', className)}>
+    <View className={cn('gap-2', className)}>
       {block.paragraphs.map((paragraph, index) => (
         <Text key={index} className="leading-6 text-foreground">
           {renderInline(paragraph.replace(/^[#>\s]+/, '').replace(/^[-•*]\s+/, '• '))}

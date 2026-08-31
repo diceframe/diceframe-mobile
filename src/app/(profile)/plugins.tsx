@@ -41,7 +41,7 @@ export default function PluginsScreen() {
       </Tabs>
       <View className="mb-3 flex-row items-center gap-2 rounded-xl border border-border bg-card px-3">
         <Icon as={Search} size={18} className="text-muted-foreground" />
-        <Input value={query} onChangeText={setQuery} placeholder={t('dfPluginsSearchPlaceholder')} className="flex-1 border-0 px-0" />
+        <Input value={query} onChangeText={setQuery} placeholder={t('dfPluginsSearchPlaceholder')} className="flex-1 rounded-none border-0 bg-transparent px-0 shadow-none" />
       </View>
       <FlatList
         data={filtered}

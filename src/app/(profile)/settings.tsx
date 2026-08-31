@@ -228,8 +228,8 @@ export default function SettingsScreen() {
         {section === 'speech' ? (
           <Card className="gap-3">
             <CardHeader><CardTitle>{t('dfSettingsTtsSpeed')}</CardTitle></CardHeader>
-            <CardContent className="gap-5">
-              <View className="items-center gap-1 rounded-xl border border-border bg-muted/50 py-5"><Text variant="h2" className="border-b-0 pb-0 font-mono">{settings.ttsRate.toFixed(2)}x</Text><Text variant="small">{t('dfSettingsTtsRateLabel')}</Text></View>
+            <CardContent className="gap-4">
+              <View className="items-center gap-1 rounded-xl border border-border bg-muted/50 py-5"><Text className="font-mono text-3xl font-semibold tracking-tight">{settings.ttsRate.toFixed(2)}x</Text><Text variant="small">{t('dfSettingsTtsRateLabel')}</Text></View>
               <Slider minimumValue={0.5} maximumValue={2} step={0.25} value={settings.ttsRate} onValueChange={(value) => settings.setTtsRate(Number(value))} minimumTrackTintColor={gold} maximumTrackTintColor={border} />
               <View className="flex-row justify-between"><Text variant="small">{t('dfSettingsTtsSlow')}</Text><Text variant="small">{t('dfSettingsTtsStandard')}</Text><Text variant="small">{t('dfSettingsTtsFast')}</Text></View>
               <Text variant="small">{t('dfSettingsTtsApplyHint')}</Text>
@@ -266,7 +266,7 @@ export default function SettingsScreen() {
                       <Text variant="small" className="text-muted-foreground">{t('dfUpdatesApkHint')}</Text>
                       {updates.result.apks.length > 1 ? (
                         <View className="gap-1 rounded-xl border border-border p-2">
-                          <Text variant="small" className="px-1 pt-1 font-semibold">{t('dfUpdatesManualPick')}</Text>
+                          <Text variant="small" className="px-1 font-semibold text-foreground">{t('dfUpdatesManualPick')}</Text>
                           {updates.result.apks.map((apk) => (
                             <Button key={apk.url} size="sm" variant="ghost" onPress={() => void Linking.openURL(apk.url)}>
                               <Text numberOfLines={1}>{apkOptionLabel(apk.name, t)}</Text>

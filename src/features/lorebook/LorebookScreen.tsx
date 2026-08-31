@@ -160,7 +160,7 @@ export default function LorebookScreen() {
             <Card className="gap-3 py-4">
               <CardContent className="gap-3 px-4">
                 <View className="flex-row items-start gap-3">
-                  <View className="h-10 w-10 items-center justify-center rounded-lg border border-border bg-muted">
+                  <View className="h-10 w-10 items-center justify-center rounded-md border border-border bg-muted">
                     <Icon as={BookMarked} size={19} />
                   </View>
                   <View className="min-w-0 flex-1 gap-1">
