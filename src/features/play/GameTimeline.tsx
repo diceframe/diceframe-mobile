@@ -77,9 +77,12 @@ export function GameTimeline({
   gmThinking,
   submittedActions,
   ttsEnabled,
+  isGm,
   onLoadOlder,
   onDecideLuck,
   onSpeak,
+  onSwipeTo,
+  onReroll,
 }: {
   gameKey: string
   log: LogEntry[]
@@ -95,9 +98,12 @@ export function GameTimeline({
   gmThinking: boolean
   submittedActions: PublicAction[]
   ttsEnabled: boolean
+  isGm?: boolean
   onLoadOlder: () => void
   onDecideLuck: (check: CheckResult, spend: boolean) => void
   onSpeak: (text: string) => void
+  onSwipeTo?: (round: number, swipeIndex: number) => Promise<void>
+  onReroll?: (round: number) => Promise<void>
 }) {
   const t = useT()
   const hasOlder = logPage < logTotalPages
@@ -153,7 +159,7 @@ export function GameTimeline({
           <NativeOnlyAnimatedView
             key={action.user_id + action.text}
             entering={FadeIn.duration(200)}
-            className={mine ? 'flex-row-reverse items-center gap-2.5 opacity-70' : 'flex-row items-center gap-2.5 opacity-70'}
+            className={mine ? 'flex-row-reverse items-center gap-2 opacity-70' : 'flex-row items-center gap-2 opacity-70'}
           >
             <Avatar alt={action.character_name || action.user_id} className="h-8 w-8">
               <AvatarFallback>
@@ -217,12 +223,15 @@ export function GameTimeline({
             currentUserId={currentUserId}
             ttsEnabled={ttsEnabled}
             onSpeak={onSpeak}
+            isGm={isGm}
+            onSwipeTo={onSwipeTo}
+            onReroll={onReroll}
           />
         </NativeOnlyAnimatedView>
       )}
       ListFooterComponent={footer}
       ListHeaderComponent={header}
-      contentContainerStyle={{ paddingBottom: 12 }}
+      contentContainerClassName="pb-3"
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     />

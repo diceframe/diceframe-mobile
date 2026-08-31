@@ -22,7 +22,7 @@ import { Icon } from '@/components/ui/icon'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
 import { errorMessage, fetchAppConfig } from '@/api/client'
-import { exportGame, fetchBotBindToken, setGameRoomPassword } from '@/api/games'
+import { exportGame, fetchBotBindToken, regenerateSwipe, setGameRoomPassword, switchSwipe } from '@/api/games'
 import type { GeneratedImageItem } from '@/api/types'
 import { ActionComposer } from '@/features/play/ActionComposer'
 import { CharacterCardsModal } from '@/features/play/CharacterCardsModal'
@@ -393,6 +393,17 @@ export default function PlayScreen() {
     }
   }
 
+  /** 切换/重生成叙事分支后必须刷新：服务端把选中分支写回了 gm_response */
+  async function handleSwipeTo(round: number, swipeIndex: number) {
+    await switchSwipe(gameKey, round, swipeIndex)
+    await useGameStore.getState().refresh()
+  }
+
+  async function handleRerollSwipe(round: number) {
+    await regenerateSwipe(gameKey, round)
+    await useGameStore.getState().refresh()
+  }
+
   async function handleCopyLink(uid: string) {
     if (!gameKey) return
     try {
@@ -643,6 +654,9 @@ export default function PlayScreen() {
                 }
                 ttsEnabled={ttsEnabled}
                 onSpeak={(text) => void speaker.speak(text)}
+                isGm={isGm}
+                onSwipeTo={handleSwipeTo}
+                onReroll={handleRerollSwipe}
               />
             </View>
 

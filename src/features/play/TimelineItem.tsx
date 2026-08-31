@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { ActivityIndicator, Pressable, View } from 'react-native'
 import { Image as ExpoImage } from 'expo-image'
-import { Volume2 } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, RotateCcw, Volume2 } from 'lucide-react-native'
 
 import { Card } from '@/components/ui/card'
 import { Text } from '@/components/ui/text'
@@ -62,7 +62,7 @@ function SceneImageFigure({ source, prompt }: { source: AssetSource; prompt?: st
   const uri = useAssetUri(source)
   if (!uri) {
     return (
-      <View className="aspect-video w-full items-center justify-center rounded-lg border border-border bg-muted">
+      <View className="aspect-video w-full items-center justify-center rounded-xl border border-border bg-muted">
         <ActivityIndicator />
       </View>
     )
@@ -70,10 +70,79 @@ function SceneImageFigure({ source, prompt }: { source: AssetSource; prompt?: st
   return (
     <ExpoImage
       source={{ uri }}
-      className="aspect-video w-full rounded-lg border border-border"
+      className="aspect-video w-full rounded-xl border border-border"
       contentFit="cover"
       accessibilityLabel={prompt || t('dfPlaySceneImageA11y')}
     />
+  )
+}
+
+/**
+ * GM 叙事分支条：switch_swipe 由服务端把选中分支写回 gm_response，故操作后必须刷新日志。
+ * 服务端上限 5 条（swipe_generator）；Web 端分支条只在 count > 1 时渲染，首次重roll无入口，
+ * 移动端只要有叙事就显示整条，补上这个冷启动死角。
+ */
+const SWIPE_MAX = 5
+
+function SwipeBar({
+  round,
+  swipeCount,
+  swipeCur,
+  busy,
+  onSwipeTo,
+  onReroll,
+}: {
+  round: number
+  swipeCount: number
+  swipeCur: number
+  busy: boolean
+  onSwipeTo: (round: number, swipeIndex: number) => Promise<void>
+  onReroll: (round: number) => Promise<void>
+}) {
+  const t = useT()
+  return (
+    <View className="mt-2 flex-row items-center gap-1.5 border-t border-border pt-2">
+      {swipeCount > 1 ? (
+        <>
+          <Pressable
+            onPress={() => void onSwipeTo(round, swipeCur - 1)}
+            disabled={busy || swipeCur <= 0}
+            className="h-7 w-7 items-center justify-center rounded-md active:bg-accent"
+            accessibilityLabel={t('dfPlaySwipePrev')}
+          >
+            <Icon as={ChevronLeft} size={15} className="text-muted-foreground" />
+          </Pressable>
+          <Text variant="small" className="min-w-9 text-center text-muted-foreground">
+            {swipeCur + 1}/{swipeCount}
+          </Text>
+          <Pressable
+            onPress={() => void onSwipeTo(round, swipeCur + 1)}
+            disabled={busy || swipeCur >= swipeCount - 1}
+            className="h-7 w-7 items-center justify-center rounded-md active:bg-accent"
+            accessibilityLabel={t('dfPlaySwipeNext')}
+          >
+            <Icon as={ChevronRight} size={15} className="text-muted-foreground" />
+          </Pressable>
+        </>
+      ) : null}
+      {swipeCount < SWIPE_MAX ? (
+        <Pressable
+          onPress={() => void onReroll(round)}
+          disabled={busy}
+          className="ml-auto h-7 flex-row items-center gap-1 rounded-md px-2 active:bg-accent"
+          accessibilityLabel={t('regenerate')}
+        >
+          {busy ? (
+            <ActivityIndicator size="small" className="text-muted-foreground" />
+          ) : (
+            <Icon as={RotateCcw} size={13} className="text-muted-foreground" />
+          )}
+          <Text variant="small" className="text-muted-foreground">
+            {t('regenerate')}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
   )
 }
 
@@ -84,6 +153,9 @@ export function TimelineItem({
   currentUserId,
   ttsEnabled,
   onSpeak,
+  isGm,
+  onSwipeTo,
+  onReroll,
 }: {
   entry: LogEntry
   players: Player[]
@@ -91,11 +163,34 @@ export function TimelineItem({
   currentUserId: string
   ttsEnabled: boolean
   onSpeak: (text: string) => void
+  isGm?: boolean
+  onSwipeTo?: (round: number, swipeIndex: number) => Promise<void>
+  onReroll?: (round: number) => Promise<void>
 }) {
   const t = useT()
   const actions = actionsOf(entry)
   const checks = Array.isArray(entry.check_results) ? entry.check_results : []
   const scene = roundSceneImageSource(gameKey, entry.scene_image)
+  const swipes = Array.isArray(entry.swipes) ? entry.swipes : []
+  const swipeCount = swipes.length
+  const swipeCur = Math.min(Math.max(Number(entry.current_swipe) || 0, 0), Math.max(swipeCount - 1, 0))
+  const [swipeBusy, setSwipeBusy] = React.useState(false)
+  const [swipeError, setSwipeError] = React.useState('')
+
+  async function runSwipe(op: () => Promise<void>) {
+    if (swipeBusy) return
+    setSwipeBusy(true)
+    setSwipeError('')
+    try {
+      await op()
+    } catch (cause) {
+      setSwipeError(
+        (cause instanceof Error ? cause.message : String(cause)) || t('branchOperationFailed'),
+      )
+    } finally {
+      setSwipeBusy(false)
+    }
+  }
 
   return (
     <View className="gap-3 px-4 py-3">
@@ -107,7 +202,7 @@ export function TimelineItem({
         return (
           <View
             key={action.uid + action.text}
-            className={mine ? 'flex-row-reverse items-start gap-2.5' : 'flex-row items-start gap-2.5'}
+            className={mine ? 'flex-row-reverse items-start gap-2' : 'flex-row items-start gap-2'}
           >
             <RemoteAvatar
               key={`${action.uid}-${avatar?.uri ?? 'fallback'}`}
@@ -163,6 +258,23 @@ export function TimelineItem({
               ) : undefined
             }
           />
+          {isGm && onSwipeTo && onReroll ? (
+            <>
+              <SwipeBar
+                round={entry.round ?? 0}
+                swipeCount={swipeCount}
+                swipeCur={swipeCur}
+                busy={swipeBusy}
+                onSwipeTo={(round, swipeIndex) => runSwipe(() => onSwipeTo(round, swipeIndex))}
+                onReroll={(round) => runSwipe(() => onReroll(round))}
+              />
+              {swipeError ? (
+                <Text variant="small" className="text-destructive" numberOfLines={2}>
+                  {swipeError}
+                </Text>
+              ) : null}
+            </>
+          ) : null}
         </Card>
       ) : null}
 

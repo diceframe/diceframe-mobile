@@ -96,6 +96,22 @@ export function gmCommand(gameKey: string, command: string): Promise<CommandResp
   })
 }
 
+/** 切换回合叙事分支（GM 专属）：服务端把选中分支写回 gm_response，调用后需刷新日志 */
+export function switchSwipe(gameKey: string, round: number, swipeIndex: number): Promise<{ ok?: boolean }> {
+  return api<{ ok?: boolean }>(gamePath(gameKey, `/swipe/${round}`), {
+    method: 'POST',
+    body: JSON.stringify({ swipe_index: swipeIndex }),
+  })
+}
+
+/** 重新生成本回合叙事分支（GM 专属，服务端上限 5 条，满额时 narration 返回空且不生效） */
+export function regenerateSwipe(gameKey: string, round: number): Promise<{ ok?: boolean; narration?: string | null }> {
+  return api<{ ok?: boolean; narration?: string | null }>(gamePath(gameKey, `/swipe/${round}`), {
+    method: 'PUT',
+    body: '{}',
+  })
+}
+
 export function resolveLuck(
   gameKey: string,
   checkId: string,
