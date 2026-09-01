@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { FlatList, Pressable, ScrollView, View } from 'react-native'
-import { BookMarked, Eye, EyeOff, Plus } from 'lucide-react-native'
+import { BookMarked, Eye, EyeOff, Plus, Users } from 'lucide-react-native'
 
 import { PageHeader } from '@/components/page-header'
 import { Sheet } from '@/components/patterns/sheet'
@@ -13,28 +13,63 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
-import { LORE_CATEGORIES, useLorebook, type LoreCategory } from '@/hooks/useLorebook'
+import { useLorebook } from '@/hooks/useLorebook'
 import { useT, type T } from '@/i18n/t'
+import {
+  LORE_TIERS,
+  LORE_TYPE_ORDER,
+  parseVisibilityTargets,
+  type LoreType,
+  type LoreTier,
+  type LoreVisibilityMode,
+  type LorebookEntryView,
+} from '@/lib/lorebook'
 import { cn } from '@/lib/utils'
-import type { LorebookEntry } from '@/types'
 
 /** 分类筛选值：'all' 之外直接用服务端类型 key，展示名经 t() 翻译 */
-type CategoryFilter = 'all' | LoreCategory
+type CategoryFilter = 'all' | LoreType
 
-/** 模块级常量只存 key，渲染时经 t() 取文案 */
+/** 模块级常量只存 key，渲染时经 t() 取文案；9 类与上游 loreTypeOrder 一一同名 */
 const CATEGORY_LABEL_KEYS = {
   npc: 'dfLorebookCatNpc',
   location: 'dfLorebookCatLocation',
-  item: 'dfLorebookCatItem',
   faction: 'dfLorebookCatFaction',
+  item: 'dfLorebookCatItem',
   event: 'dfLorebookCatEvent',
+  puzzle: 'dfLorebookCatPuzzle',
+  spell: 'dfLorebookCatSpell',
+  class: 'dfLorebookCatClass',
   other: 'dfLorebookCatOther',
 } as const
 
-function categoryLabel(category: string, t: T): string {
-  return (LORE_CATEGORIES as readonly string[]).includes(category)
-    ? t(CATEGORY_LABEL_KEYS[category as LoreCategory])
-    : category
+/** tier 只表示条目重要度（与可见性无关），文案直接复用上游 key */
+const TIER_LABEL_KEYS = { core: 'core', background: 'background', archived: 'archived' } as const
+
+/** 编辑表单的可见性三档，与 Web 编辑弹窗同一组上游 key：仅 GM / 全队公开 / 指定成员 */
+const VISIBILITY_LABEL_KEYS = {
+  gm: 'loreAudienceGmSecret',
+  public: 'loreVisibilityPublic',
+  characters: 'loreVisibilityCharacters',
+} as const
+
+const VISIBILITY_MODES: readonly LoreVisibilityMode[] = ['gm', 'public', 'characters']
+
+function categoryLabel(category: LoreType, t: T): string {
+  return t(CATEGORY_LABEL_KEYS[category])
+}
+
+/** 列表徽章按 visible_to 派生的档位取文案，复用 Web 徽章的上游 key（三态与徽章派生同源） */
+function visibilityBadgeLabel(mode: LoreVisibilityMode, t: T): string {
+  if (mode === 'public') return t('loreAudiencePublic')
+  if (mode === 'characters') return t('loreAudienceCharacterOnlyShort')
+  return t('loreAudienceGmSecret')
+}
+
+/** 徽章图标随档位切换；characters 用「多人」图标与仅 GM/全队区分 */
+function visibilityBadgeIcon(mode: LoreVisibilityMode) {
+  if (mode === 'public') return Eye
+  if (mode === 'characters') return Users
+  return EyeOff
 }
 
 export default function LorebookScreen() {
@@ -44,13 +79,15 @@ export default function LorebookScreen() {
   const [worldEditorOpen, setWorldEditorOpen] = React.useState(false)
   const [worldName, setWorldName] = React.useState('')
   const [sheetOpen, setSheetOpen] = React.useState(false)
-  const [editing, setEditing] = React.useState<LorebookEntry | null>(null)
+  const [editing, setEditing] = React.useState<LorebookEntryView | null>(null)
   const [title, setTitle] = React.useState('')
   const [content, setContent] = React.useState('')
-  const [formCategory, setFormCategory] = React.useState<LoreCategory>('other')
-  const [isPublic, setIsPublic] = React.useState(false)
+  const [formCategory, setFormCategory] = React.useState<LoreType>('other')
+  const [formTier, setFormTier] = React.useState<LoreTier>('background')
+  const [visibility, setVisibility] = React.useState<LoreVisibilityMode>('gm')
+  const [visibleToText, setVisibleToText] = React.useState('')
 
-  const filtered = category === 'all' ? entries : entries.filter((entry) => entry.category === category)
+  const filtered = category === 'all' ? entries : entries.filter((entry) => entry.type === category)
 
   function closeEditor() {
     setSheetOpen(false)
@@ -58,7 +95,9 @@ export default function LorebookScreen() {
     setTitle('')
     setContent('')
     setFormCategory('other')
-    setIsPublic(false)
+    setFormTier('background')
+    setVisibility('gm')
+    setVisibleToText('')
   }
 
   function openCreate() {
@@ -66,16 +105,23 @@ export default function LorebookScreen() {
     setTitle('')
     setContent('')
     setFormCategory(category === 'all' ? 'other' : category)
-    setIsPublic(false)
+    // 新条目默认值与 Web 一致：tier=background，仅 GM 可见
+    setFormTier('background')
+    setVisibility('gm')
+    setVisibleToText('')
     setSheetOpen(true)
   }
 
-  function openEdit(entry: LorebookEntry) {
+  function openEdit(entry: LorebookEntryView) {
     setEditing(entry)
     setTitle(entry.title)
     setContent(entry.content)
-    setFormCategory((LORE_CATEGORIES as readonly string[]).includes(entry.category) ? (entry.category as LoreCategory) : 'other')
-    setIsPublic(entry.isPublic)
+    // 保留条目原始 type（9 类全集内），保存时原样写回，不再折叠成 other
+    setFormCategory(entry.type)
+    setFormTier(entry.tier)
+    // 可见性从真实 visible_to 派生，tier 不参与可见性判定
+    setVisibility(entry.visibility)
+    setVisibleToText(entry.visibleTo.join(', '))
     setSheetOpen(true)
   }
 
@@ -91,8 +137,11 @@ export default function LorebookScreen() {
     const payload = {
       title: title.trim(),
       content: content.trim(),
-      category: formCategory,
-      isPublic,
+      type: formCategory,
+      tier: formTier,
+      visibility,
+      // 指定成员档以手输名单为准，保存前统一过 sanitize（剥公开标记/去重）
+      visibleTo: visibility === 'characters' ? parseVisibilityTargets(visibleToText) : [],
     }
     if (editing) await updateEntry(editing.id, payload)
     else await addEntry(payload)
@@ -129,7 +178,7 @@ export default function LorebookScreen() {
           胶囊会变成鸡蛋形且文字顶置，contentContainer 必须带 items-center 保持自适应高度 */}
       <ScrollView horizontal className="mb-3 max-h-10" contentContainerClassName="items-center gap-2" showsHorizontalScrollIndicator={false}>
         {/* badge 风格轻量 pill：Button 按钮组在筛选位视觉过重 */}
-        {(['all', ...LORE_CATEGORIES] as const).map((item) => {
+        {(['all', ...LORE_TYPE_ORDER] as const).map((item) => {
           const active = category === item
           return (
             <Pressable
@@ -142,7 +191,7 @@ export default function LorebookScreen() {
               accessibilityState={{ selected: active }}
             >
               <Text variant="small" className={active ? 'font-semibold text-primary' : 'text-muted-foreground'}>
-                {item === 'all' ? t('dfLorebookAll') : t(CATEGORY_LABEL_KEYS[item])}
+                {item === 'all' ? t('dfLorebookAll') : categoryLabel(item, t)}
               </Text>
             </Pressable>
           )
@@ -166,12 +215,15 @@ export default function LorebookScreen() {
                   <View className="min-w-0 flex-1 gap-1">
                     <View className="flex-row items-center gap-2">
                       <Text className="flex-1 font-semibold" numberOfLines={1}>{item.title}</Text>
+                      {/* 可见性徽章由 visible_to 派生（gm/characters/public 三态），不再用 tier 冒充 */}
                       <View className="flex-row items-center gap-1 rounded-full bg-muted px-2 py-1">
-                        <Icon as={item.isPublic ? Eye : EyeOff} size={12} />
-                        <Text variant="small">{item.isPublic ? t('dfLorebookVisibilityPublic') : t('dfLorebookVisibilityGm')}</Text>
+                        <Icon as={visibilityBadgeIcon(item.visibility)} size={12} />
+                        <Text variant="small" numberOfLines={1}>{visibilityBadgeLabel(item.visibility, t)}</Text>
                       </View>
                     </View>
-                    <Text variant="small">{categoryLabel(item.category, t)}</Text>
+                    <Text variant="small" numberOfLines={1}>
+                      {categoryLabel(item.type, t)} · {t(TIER_LABEL_KEYS[item.tier])}
+                    </Text>
                   </View>
                 </View>
                 <Text className="leading-6 text-muted-foreground" numberOfLines={3}>{item.content}</Text>
@@ -217,25 +269,50 @@ export default function LorebookScreen() {
           <View className="gap-1.5">
             <Text variant="small" className="font-semibold">{t('dfLorebookCategoryLabel')}</Text>
             <SheetSelect
-              options={LORE_CATEGORIES.map((item) => ({ label: t(CATEGORY_LABEL_KEYS[item]), value: item }))}
+              options={LORE_TYPE_ORDER.map((item) => ({ label: categoryLabel(item, t), value: item }))}
               value={formCategory}
-              onValueChange={(value) => setFormCategory(value as LoreCategory)}
+              onValueChange={(value) => setFormCategory(value as LoreType)}
               placeholder={t('dfLorebookCategoryPlaceholder')}
+            />
+          </View>
+          {/* tier 与可见性是独立维度：这里只选重要度，选「归档」不会把条目变成仅 GM */}
+          <View className="gap-1.5">
+            <Text variant="small" className="font-semibold">{t('tier')}</Text>
+            <SheetSelect
+              options={LORE_TIERS.map((tier) => ({ label: t(TIER_LABEL_KEYS[tier]), value: tier }))}
+              value={formTier}
+              onValueChange={(value) => setFormTier(value as LoreTier)}
+              placeholder={t('tier')}
             />
           </View>
           <View className="gap-1.5">
             <Text variant="small" className="font-semibold">{t('dfLorebookContentLabel')}</Text>
             <Textarea value={content} onChangeText={setContent} placeholder={t('dfLorebookContentPlaceholder')} className="min-h-36" />
           </View>
-          <Pressable className="flex-row items-center gap-3 rounded-xl border border-border bg-muted p-3" onPress={() => setIsPublic((value) => !value)}>
-            <View className={cn('h-9 w-9 items-center justify-center rounded-full', isPublic ? 'bg-primary/15' : 'bg-background')}>
-              <Icon as={isPublic ? Eye : EyeOff} size={18} />
+          {/* 可见性写入 visible_to：gm=[]、public=['*']；指定成员档目前提供与 Web
+              文本框等价的手输路径，成员快捷点选（Web 的 player chips）待对局成员
+              列表接入世界书场景后再补——不做点半套的错误语义 */}
+          <View className="gap-1.5">
+            <Text variant="small" className="font-semibold">{t('loreVisibilityLabel')}</Text>
+            <SheetSelect
+              options={VISIBILITY_MODES.map((mode) => ({ label: t(VISIBILITY_LABEL_KEYS[mode]), value: mode }))}
+              value={visibility}
+              onValueChange={(value) => setVisibility(value as LoreVisibilityMode)}
+              placeholder={t('loreVisibilityLabel')}
+            />
+          </View>
+          {visibility === 'characters' ? (
+            <View className="gap-1.5">
+              <Text variant="small" className="font-semibold">{t('visibleCharacters')}</Text>
+              <Input
+                value={visibleToText}
+                onChangeText={setVisibleToText}
+                placeholder={t('visibleCharactersPlaceholder')}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
             </View>
-            <View className="flex-1">
-              <Text className="font-semibold">{isPublic ? t('dfLorebookVisibilityPublic') : t('dfLorebookVisibilityGmLong')}</Text>
-              <Text variant="small">{t('dfLorebookVisibilityHint')}</Text>
-            </View>
-          </Pressable>
+          ) : null}
           <View className="flex-row gap-2">
             <Button variant="outline" className="flex-1" onPress={closeEditor}><Text>{t('dfCommonCancel')}</Text></Button>
             <Button className="flex-1" disabled={!title.trim() || !content.trim()} onPress={() => void save()}><Text>{t('dfCommonSave')}</Text></Button>

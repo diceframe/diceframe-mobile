@@ -1,5 +1,12 @@
 import * as React from 'react'
-import { AppState, Pressable, ScrollView, Share, useWindowDimensions, View } from 'react-native'
+import {
+  AppState,
+  Pressable,
+  ScrollView,
+  Share,
+  useWindowDimensions,
+  View,
+} from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   ChevronLeft,
@@ -22,16 +29,24 @@ import { Icon } from '@/components/ui/icon'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
 import { errorMessage, fetchAppConfig } from '@/api/client'
-import { exportGame, fetchBotBindToken, regenerateSwipe, setGameRoomPassword, switchSwipe } from '@/api/games'
-import type { GeneratedImageItem } from '@/api/types'
+import {
+  exportGame,
+  fetchBotBindToken,
+  regenerateSwipe,
+  setGameRoomPassword,
+  switchSwipe,
+} from '@/api/games'
+import type { CharacterPortrait, GeneratedImageItem } from '@/api/types'
 import { ActionComposer } from '@/features/play/ActionComposer'
 import { CharacterCardsModal } from '@/features/play/CharacterCardsModal'
 import { CharacterPanel } from '@/features/play/CharacterPanel'
+import { CharacterPortraitSheet } from '@/features/play/CharacterPortraitSheet'
 import { GameTimeline } from '@/features/play/GameTimeline'
 import { GmSheet } from '@/features/play/GmSheet'
 import { GAME_STATE_LABEL_KEYS, HealthPanel } from '@/features/play/HealthPanel'
 import { MapWorkspace } from '@/features/play/MapWorkspace'
 import { MultiplayerPanel } from '@/features/play/MultiplayerPanel'
+import { PaymentModal } from '@/features/play/PaymentModal'
 import { PlotTracker } from '@/features/play/PlotTracker'
 import { PrivateMessagePanel } from '@/features/play/PrivateMessagePanel'
 import { RoomPasswordModal } from '@/features/play/RoomPasswordModal'
@@ -42,6 +57,7 @@ import { sceneImageSource } from '@/api/assets'
 import { WorldSwitchModal } from '@/features/play/WorldSwitchModal'
 import { useSpeaker } from '@/features/play/useSpeaker'
 import { useAutoSpeak } from '@/features/play/useAutoSpeak'
+import { ttsAvailableOf } from '@/features/play/tts-options'
 import { useGameHaptics, playGameHaptic } from '@/features/play/useHaptics'
 import { useVoiceInput } from '@/features/play/useVoiceInput'
 import { useT, type T } from '@/i18n/t'
@@ -51,13 +67,16 @@ import { appLayoutForWidth } from '@/lib/layout'
 import { buildShareLink } from '@/lib/share-link'
 import { shareExportBlob } from '@/lib/share-export'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
-import { selectGmThinking, useGameStore } from '@/stores/game'
+import {
+  selectGmThinking,
+  selectMyPendingPayment,
+  useGameStore,
+} from '@/stores/game'
 import { useSettingsStore } from '@/stores/settings'
-
+import Clipboard from '@react-native-clipboard/clipboard'
 /** 简单的剪贴板工具（优先使用 React Native 内置 Clipboard） */
 async function copyToClipboard(text: string): Promise<void> {
   try {
-    const { Clipboard } = await import('react-native')
     if (Clipboard?.setString) {
       Clipboard.setString(text)
       return
@@ -108,16 +127,20 @@ export default function PlayScreen() {
   const plotTracker = useGameStore((s) => s.detail?.plot_tracker)
   const actionBusy = useGameStore((s) => s.actionBusy)
   const gmBusy = useGameStore((s) => s.gmBusy)
-  const ttsEnabled = useGameStore((s) => s.ttsEnabled)
+  // 服务器配置了非 browser TTS 引擎（game store 字段，勿与本地朗读可用性混淆）
+  const serverTtsEnabled = useGameStore((s) => s.ttsEnabled)
   const health = useGameStore((s) => s.health)
   const gmThinking = useGameStore(selectGmThinking)
+  const myPendingPayment = useGameStore(selectMyPendingPayment)
 
   const [draft, setDraft] = React.useState('')
   const [characterOpen, setCharacterOpen] = React.useState(false)
   const [menuOpen, setMenuOpen] = React.useState(false)
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
   const [sidebarTab, setSidebarTab] = React.useState<'plot' | 'map'>('plot')
-  const [gmPanelTab, setGmPanelTab] = React.useState<'controls' | 'players' | 'health'>('controls')
+  const [gmPanelTab, setGmPanelTab] = React.useState<
+    'controls' | 'players' | 'health'
+  >('controls')
   const [utilityOpen, setUtilityOpen] = React.useState(false)
   const [privateMessageOpen, setPrivateMessageOpen] = React.useState(false)
   const [luckBusyId, setLuckBusyId] = React.useState('')
@@ -129,9 +152,13 @@ export default function PlayScreen() {
   const [worldLoading, setWorldLoading] = React.useState(false)
   const [roomPasswordOpen, setRoomPasswordOpen] = React.useState(false)
   const [cardsOpen, setCardsOpen] = React.useState(false)
-  const [cards, setCards] = React.useState<import('@/api/types').CharacterCard[]>([])
+  const [cards, setCards] = React.useState<
+    import('@/api/types').CharacterCard[]
+  >([])
   const [cardsLoading, setCardsLoading] = React.useState(false)
   const [ruleHelpOpen, setRuleHelpOpen] = React.useState(false)
+  // 对局内换头像抽屉（对齐 Web PlayView 的 showPortraitEditor：面板发事件、屏幕持有弹窗）
+  const [portraitOpen, setPortraitOpen] = React.useState(false)
   const [sceneGalleryOpen, setSceneGalleryOpen] = React.useState(false)
   const [sceneImages, setSceneImages] = React.useState<GeneratedImageItem[]>([])
   const [sceneImagesLoading, setSceneImagesLoading] = React.useState(false)
@@ -140,8 +167,12 @@ export default function PlayScreen() {
     setDraft((current) => appendActionText(current, text))
   })
   const speaker = useSpeaker(gameKey)
-  // 服务器开启语音合成（ttsEnabled）时，新 GM 叙事到达自动朗读；首次加载只记基线不回放历史
-  useAutoSpeak(ttsEnabled, log, (text) => void speaker.speak(text))
+  // 朗读可用性 = 用户选的引擎能出声（system 引擎随设备自带 TTS 恒可用，
+  // server 引擎跟随服务器 TTS 配置 serverTtsEnabled）；首次加载只记基线不回放历史
+  const ttsEngine = useSettingsStore((s) => s.ttsEngine)
+  const ttsAuto = useSettingsStore((s) => s.ttsAuto)
+  const ttsAvailable = ttsAvailableOf(ttsEngine, serverTtsEnabled)
+  useAutoSpeak(ttsAuto && ttsAvailable, log, (text) => void speaker.speak(text))
   // 叙事落地/检定结果/私密感知的震动反馈（开关在设置页，默认开启）
   useGameHaptics()
   const keyboardHeight = useKeyboardHeight()
@@ -172,7 +203,8 @@ export default function PlayScreen() {
     return () => subscription.remove()
   }, [])
 
-  // 玩家身份失效（被踢/存档重置）时清掉本地身份、回加入页重新加入
+  // 玩家身份失效（被踢/存档重置）时只清该局的身份槽位、回加入页重新加入；
+  // 多局身份各自独立，不能连坐其他局的保存身份
   React.useEffect(() => {
     if (isGm || !userId || !detail?.multiplayer) return
     const members = [
@@ -181,7 +213,7 @@ export default function PlayScreen() {
       ...(detail.multiplayer.away_players ?? []),
     ]
     if (!members.some((player) => player.user_id === userId)) {
-      useSettingsStore.getState().setShare(null)
+      useSettingsStore.getState().removeShare(gameKey)
       router.replace({ pathname: '/join' })
     }
   }, [isGm, userId, detail, router])
@@ -230,6 +262,7 @@ export default function PlayScreen() {
     if (!gameKey) return
     try {
       const token = await fetchBotBindToken(gameKey)
+      // 「绑定」是 Bot 端协议命令字，不随界面语言变化，故不做 i18n
       const command = `绑定 ${gameKey} ${token}`
       await copyToClipboard(command)
     } catch {
@@ -258,7 +291,8 @@ export default function PlayScreen() {
     if (!gameKey) return
     try {
       const blob = await exportGame(gameKey)
-      const safeKey = gameKey.replace(/[^a-z0-9._-]+/gi, '_').slice(0, 80) || 'game'
+      const safeKey =
+        gameKey.replace(/[^a-z0-9._-]+/gi, '_').slice(0, 80) || 'game'
       await shareExportBlob(
         blob,
         `diceframe-${safeKey}-${Date.now()}.zip`,
@@ -322,8 +356,13 @@ export default function PlayScreen() {
       await useGameStore.getState().applyCharacterCard(card)
       setCardsOpen(false)
     } catch {
-      // 错误由 store 处理
+      // 错误由 game store 显示在顶部横幅。
     }
+  }
+
+  /** 提交头像草稿（store 内按 rules-aware 能力自动分流 PUT/PATCH）；失败时抛回抽屉保持打开 */
+  async function handleSavePortrait(portrait: CharacterPortrait | null) {
+    await useGameStore.getState().updatePortrait(portrait)
   }
 
   async function openSceneGallery() {
@@ -535,14 +574,19 @@ export default function PlayScreen() {
   return (
     <Screen className="gap-0">
       {/* 键盘避让：底部垫高键盘实际高度，输入区始终可见 */}
-      <View className="flex-1" style={{ paddingBottom: keyboardHeight + insets.bottom }}>
+      <View
+        className="flex-1"
+        style={{ paddingBottom: keyboardHeight + insets.bottom }}
+      >
         {/* 顶栏 */}
         <View className="flex-row items-center gap-2 border-b border-border px-3 py-2">
           <Button
             variant="ghost"
             size="icon"
             className="h-9 w-9"
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/overview'))}
+            onPress={() =>
+              router.canGoBack() ? router.back() : router.replace('/overview')
+            }
             accessibilityLabel={t('dfCommonBack')}
             hitSlop={8}
           >
@@ -553,7 +597,10 @@ export default function PlayScreen() {
               {detail?.world_name || gameKey}
             </Text>
             <Text variant="small" numberOfLines={1}>
-              {t('dfPlayRoundState', { round: detail?.round_number ?? '?', state: stateLabel })}
+              {t('dfPlayRoundState', {
+                round: detail?.round_number ?? '?',
+                state: stateLabel,
+              })}
             </Text>
           </View>
           {statusBadge}
@@ -575,7 +622,11 @@ export default function PlayScreen() {
           contentContainerClassName="items-center gap-1 px-3 py-1"
           showsHorizontalScrollIndicator={false}
         >
-          <Button size="sm" variant="ghost" onPress={() => setCharacterOpen(true)}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onPress={() => setCharacterOpen(true)}
+          >
             <Icon as={User} size={16} />
             <Text>{t('dfPlayTabCharacter')}</Text>
           </Button>
@@ -584,7 +635,9 @@ export default function PlayScreen() {
               {/* 高亮只在抽屉打开期间跟随入口；关掉即熄灭，不常驻 */}
               <Button
                 size="sm"
-                variant={sidebarOpen && sidebarTab === 'plot' ? 'secondary' : 'ghost'}
+                variant={
+                  sidebarOpen && sidebarTab === 'plot' ? 'secondary' : 'ghost'
+                }
                 onPress={() => openStoryTool('plot')}
               >
                 <Icon as={Route} size={16} />
@@ -592,7 +645,9 @@ export default function PlayScreen() {
               </Button>
               <Button
                 size="sm"
-                variant={sidebarOpen && sidebarTab === 'map' ? 'secondary' : 'ghost'}
+                variant={
+                  sidebarOpen && sidebarTab === 'map' ? 'secondary' : 'ghost'
+                }
                 onPress={() => openStoryTool('map')}
               >
                 <Icon as={Map} size={16} />
@@ -601,12 +656,18 @@ export default function PlayScreen() {
             </>
           )}
           {privateMessages.length > 0 && (
-            <Button size="sm" variant="ghost" onPress={() => setPrivateMessageOpen(true)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onPress={() => setPrivateMessageOpen(true)}
+            >
               <View>
                 <Icon as={Mail} size={16} />
                 <View className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-destructive" />
               </View>
-              <Text>{t('dfPlayTabPerception', { count: privateMessages.length })}</Text>
+              <Text>
+                {t('dfPlayTabPerception', { count: privateMessages.length })}
+              </Text>
             </Button>
           )}
           {isGm && (
@@ -652,7 +713,7 @@ export default function PlayScreen() {
                 onDecideLuck={(check, spend) =>
                   void decideLuck(check.check_id ?? '', spend)
                 }
-                ttsEnabled={ttsEnabled}
+                ttsAvailable={ttsAvailable}
                 onSpeak={(text) => void speaker.speak(text)}
                 isGm={isGm}
                 onSwipeTo={handleSwipeTo}
@@ -698,6 +759,7 @@ export default function PlayScreen() {
             player={myPlayer}
             ruleAttrs={ruleAttrs}
             ruleMeta={ruleMeta}
+            onEditPortrait={() => setPortraitOpen(true)}
           />
           {isGm && (
             <Button variant="outline" onPress={() => void openCards()}>
@@ -708,16 +770,27 @@ export default function PlayScreen() {
       </Sheet>
 
       {/* GM 桌面管理：流程、玩家和健康事件各自成组，不与剧情地图混放。 */}
-      <Sheet open={menuOpen} onClose={() => setMenuOpen(false)} className="h-[85%]" scrollable={false}>
+      <Sheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        className="h-[85%]"
+        scrollable={false}
+      >
         <Tabs
           value={gmPanelTab}
           onValueChange={(value) => setGmPanelTab(value as typeof gmPanelTab)}
           className="min-h-0 flex-1"
         >
           <TabsList>
-            <TabsTrigger value="controls"><Text variant="small">{t('dfPlayTabControls')}</Text></TabsTrigger>
-            <TabsTrigger value="players"><Text variant="small">{t('players')}</Text></TabsTrigger>
-            <TabsTrigger value="health"><Text variant="small">{t('dfPlayStatus')}</Text></TabsTrigger>
+            <TabsTrigger value="controls">
+              <Text variant="small">{t('dfPlayTabControls')}</Text>
+            </TabsTrigger>
+            <TabsTrigger value="players">
+              <Text variant="small">{t('players')}</Text>
+            </TabsTrigger>
+            <TabsTrigger value="health">
+              <Text variant="small">{t('dfPlayStatus')}</Text>
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="controls" className="min-h-0 flex-1 pt-2">
             <GmSheet
@@ -726,14 +799,24 @@ export default function PlayScreen() {
               busy={busy}
               showFlowControls={false}
               showPlayerRoster={false}
-              onAdvance={() => void runGm(() => useGameStore.getState().advance())}
-              onRollback={() => void runGm(() => useGameStore.getState().rollback())}
-              onCommand={(text) => void runGm(() => useGameStore.getState().command(text))}
+              onAdvance={() =>
+                void runGm(() => useGameStore.getState().advance())
+              }
+              onRollback={() =>
+                void runGm(() => useGameStore.getState().rollback())
+              }
+              onCommand={(text) =>
+                void runGm(() => useGameStore.getState().command(text))
+              }
               onRecap={() => void handleRecap()}
               onBotBind={() => void handleBotBind()}
               onInvite={() => void handleInvite()}
-              onToggleMode={() => void runGm(() => useGameStore.getState().toggleMode())}
-              onToggleAccess={() => void runGm(() => useGameStore.getState().toggleAccess())}
+              onToggleMode={() =>
+                void runGm(() => useGameStore.getState().toggleMode())
+              }
+              onToggleAccess={() =>
+                void runGm(() => useGameStore.getState().toggleAccess())
+              }
               onRoomPassword={() => {
                 setMenuOpen(false)
                 setRoomPasswordOpen(true)
@@ -771,7 +854,11 @@ export default function PlayScreen() {
       </Sheet>
 
       {/* 低频页面工具：与情境行重复的入口（角色/感知/桌面管理）不在这里重复出现 */}
-      <Sheet open={utilityOpen} onClose={() => setUtilityOpen(false)} className="h-auto">
+      <Sheet
+        open={utilityOpen}
+        onClose={() => setUtilityOpen(false)}
+        className="h-auto"
+      >
         <View className="gap-2 pt-1">
           <Text variant="h4">{t('dfPlayMoreActions')}</Text>
           <Button
@@ -841,6 +928,17 @@ export default function PlayScreen() {
         onSave={(password) => void handleRoomPassword(password)}
       />
 
+      {/* 对局内换头像：PortraitPicker 五来源 + 草稿保存，busy/错误由 store 与抽屉内管理 */}
+      <CharacterPortraitSheet
+        open={portraitOpen}
+        onClose={() => setPortraitOpen(false)}
+        ruleId={ruleMeta?.rule_id ?? ''}
+        name={myPlayer?.character_name ?? ''}
+        value={myPlayer?.character_sheet?.portrait ?? null}
+        busy={busy}
+        onSave={handleSavePortrait}
+      />
+
       {/* 角色卡选择 */}
       <CharacterCardsModal
         open={cardsOpen}
@@ -865,6 +963,15 @@ export default function PlayScreen() {
         images={sceneImages}
         loading={sceneImagesLoading}
         onClose={() => setSceneGalleryOpen(false)}
+      />
+
+      {/* GM 支付决议：selectMyPendingPayment 只取当前玩家名下的待决议请求，
+          弹出/稍后/请求中与失败态由弹窗内部管理 */}
+      <PaymentModal
+        payment={myPendingPayment}
+        onResolve={(paymentId, accepted) =>
+          useGameStore.getState().decidePayment(paymentId, accepted)
+        }
       />
     </Screen>
   )

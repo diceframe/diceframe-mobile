@@ -39,16 +39,19 @@ import {
   submitAction,
   switchGameWorld,
   updateCharacterPortrait,
+  updateRulesetCharacterProfile,
 } from '@/api/games'
 import type {
   CharacterCard,
   CharacterCardsResponse,
   CharacterSheet,
+  CheckResult,
   GameDetail,
   GeneratedImageItem,
   HealthResponse,
   LogEntry,
   MapData,
+  PendingPayment,
   Player,
   PrivateMessage,
   RuleAttribute,
@@ -63,6 +66,7 @@ import {
   type StreamStatus,
 } from '@/stream/gameStream'
 import { hasNewRound } from '@/lib/game-state'
+import { mergePendingLuck } from '@/lib/check-details'
 
 interface GameStore {
   gameKey: string
@@ -575,11 +579,19 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     async updatePortrait(portrait) {
-      const { gameKey, userId } = get()
+      const { gameKey, userId, detail } = get()
       if (!gameKey || !userId) return
+      // rules-aware 局的角色由规则集托管，PUT 整卡会被拒，portrait 须走 profile
+      // 补丁端点（对齐 Web savePortrait 的 hasRulesAwareCharacters 分支）
+      const rulesAware =
+        detail?.ruleset_runtime?.capabilities?.character_lifecycle === 'rules_aware'
       set({ gmBusy: true })
       try {
-        await updateCharacterPortrait(gameKey, userId, portrait)
+        if (rulesAware) {
+          await updateRulesetCharacterProfile(gameKey, userId, portrait)
+        } else {
+          await updateCharacterPortrait(gameKey, userId, portrait)
+        }
         if (get().gameKey === gameKey) await get().refresh()
       } catch (error) {
         if (get().gameKey === gameKey) set({ error: errorMessage(error) })
@@ -616,7 +628,32 @@ export const useGameStore = create<GameStore>((set, get) => {
   }
 })
 
-/** 当前用户角色卡（玩家模式） */
+/**
+ * 待运气决议的统一来源：pending_luck_decisions + round_check_results 内 pending 项。
+ * 服务端在结算阶段把两条都挂在 detail 上（后者是本轮全部检定），离开结算阶段后
+ * round_check_results 被清空，仅靠前者会漏掉部分可决议检定；并集去重后 LuckCard
+ * 与检定卡内嵌按钮对同一条决议看到同一份数据。
+ *
+ * 归并结果按 detail 引用做缓存：zustand v5 的快照用 Object.is 比较，selector 每次
+ * 返回新数组会触发 React 无限重渲染，必须保证 detail 不变时返回同一引用。
+ */
+let pendingLuckCache: { detail: GameDetail | null; result: CheckResult[] } = {
+  detail: null,
+  result: [],
+}
+export function selectPendingLuck(state: GameStore): CheckResult[] {
+  const detail = state.detail
+  if (pendingLuckCache.detail === detail) return pendingLuckCache.result
+  const result = detail
+    ? mergePendingLuck(detail.pending_luck_decisions ?? [], detail.round_check_results ?? [])
+    : []
+  pendingLuckCache = { detail, result }
+  return result
+}
+
+/**
+ * 当前用户角色卡（玩家模式）
+ */
 export function selectMySheet(state: GameStore) {
   if (!state.userId) return null
   return state.players.find((player) => player.user_id === state.userId)?.character_sheet ?? null
@@ -625,4 +662,19 @@ export function selectMySheet(state: GameStore) {
 /** “GM 思考中”：判定阶段 或 正在流式输出 */
 export function selectGmThinking(state: GameStore) {
   return state.detail?.state === 'active_judgment' || state.liveNarration.length > 0
+}
+
+/**
+ * 当前用户名下最早一条未决议的支付请求（对齐 Web PlayView 的 watch 语义）。
+ *
+ * - 目标匹配：pending_payments[].uid 是被请求支付的玩家 id，与 Web 一致只认
+ *   `uid === 当前会话用户`（GM 与无关玩家不命中，不弹窗）；uid 缺失的服务端
+ *   旧数据无法确认归属，同样不弹。
+ * - 排队从简：一次只取数组顺序里的第一条（服务端按产生顺序追加），决议后
+ *   refresh 带回下一条，key 变化时弹窗自然轮到它。
+ */
+export function selectMyPendingPayment(state: GameStore): PendingPayment | null {
+  if (!state.userId) return null
+  const list = state.detail?.pending_payments ?? []
+  return list.find((p) => p.status === 'pending' && p.uid === state.userId) ?? null
 }

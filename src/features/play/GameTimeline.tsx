@@ -1,7 +1,8 @@
 import * as React from 'react'
 import { ActivityIndicator, FlatList, Pressable, View } from 'react-native'
-import { FadeIn, FadeInDown } from 'react-native-reanimated'
-import { ScrollText } from 'lucide-react-native'
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
+import { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated'
+import { ArrowDown, ScrollText } from 'lucide-react-native'
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -12,18 +13,32 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Text } from '@/components/ui/text'
 import type { CheckResult, LogEntry, Player, PublicAction } from '@/api/types'
 import { useT } from '@/i18n/t'
+import { canDecideLuckOf, checkKeyOf, mergePendingLuck } from '@/lib/check-details'
+import { useGameStore, selectPendingLuck } from '@/stores/game'
 
+import { CheckCard } from './CheckCard'
 import { GmNarration } from './GmNarration'
 import { TimelineItem } from './TimelineItem'
 
-/** 运气决策卡（CoC 推骰） */
+/** detail 未就绪时的稳定空数组：内联 selector 返回字面量 [] 会让 zustand v5 快照每次都变 */
+const NO_CHECKS: CheckResult[] = []
+
+/** 视觉上翻离最新消息超过该偏移（倒置列表 contentOffset.y）才显示回底按钮 */
+const SCROLL_AWAY_THRESHOLD = 160
+
+/**
+ * 运气决策卡（CoC 推骰）：数据与 CheckCard 内嵌按钮同源（同一份 check 数据），
+ * 只是置顶醒目。非归属者（且非 GM）只展示等待文案，不给出决议按钮。
+ */
 function LuckCard({
   check,
   busy,
+  canDecide,
   onDecide,
 }: {
   check: CheckResult
   busy: boolean
+  canDecide: boolean
   onDecide: (check: CheckResult, spend: boolean) => void
 }) {
   const t = useT()
@@ -40,23 +55,29 @@ function LuckCard({
             cost: check.luck_cost ?? '?',
           })}
         </Text>
-        <View className="flex-row gap-2">
-          <Button
-            size="sm"
-            disabled={busy}
-            onPress={() => onDecide(check, true)}
-          >
-            <Text>{t('dfPlayLuckSpend')}</Text>
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onPress={() => onDecide(check, false)}
-          >
-            <Text>{t('dfPlayLuckDecline')}</Text>
-          </Button>
-        </View>
+        {canDecide ? (
+          <View className="flex-row gap-2">
+            <Button
+              size="sm"
+              disabled={busy}
+              onPress={() => onDecide(check, true)}
+            >
+              <Text>{t('dfPlayLuckSpend')}</Text>
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onPress={() => onDecide(check, false)}
+            >
+              <Text>{t('dfPlayLuckDecline')}</Text>
+            </Button>
+          </View>
+        ) : (
+          <Text variant="small" className="text-warning">
+            {t('waitLuckDecision', { name: check.actor_name || check.actor_uid || '' })}
+          </Text>
+        )}
       </Card>
     </NativeOnlyAnimatedView>
   )
@@ -76,7 +97,7 @@ export function GameTimeline({
   liveNarration,
   gmThinking,
   submittedActions,
-  ttsEnabled,
+  ttsAvailable,
   isGm,
   onLoadOlder,
   onDecideLuck,
@@ -97,7 +118,7 @@ export function GameTimeline({
   liveNarration: string
   gmThinking: boolean
   submittedActions: PublicAction[]
-  ttsEnabled: boolean
+  ttsAvailable: boolean
   isGm?: boolean
   onLoadOlder: () => void
   onDecideLuck: (check: CheckResult, spend: boolean) => void
@@ -106,8 +127,32 @@ export function GameTimeline({
   onReroll?: (round: number) => Promise<void>
 }) {
   const t = useT()
+  // 待运气决议统一来源：页面传入的 pending_luck_decisions + store 里 round_check_results
+  // 的 pending 项做并集去重（服务端两处同源，但结算阶段外后者为空，仅取一处会漏）
+  const storePendingLuck = useGameStore(selectPendingLuck)
+  const pendingChecks = mergePendingLuck(pendingLuck, storePendingLuck)
+  // 本轮揭示卡（对齐 Web revealChecks）：结算阶段的 round_check_results 里非运气决议项，
+  // 带 720ms 骰子揭示动画；pending 运气项已由顶部 LuckCard 承接，不重复渲染
+  const roundCheckResults = useGameStore(
+    (state) => state.detail?.round_check_results ?? NO_CHECKS,
+  )
+  const pendingKeys = new Set(pendingChecks.map(checkKeyOf))
+  const revealChecks = roundCheckResults.filter(
+    (check) => check.luck_decision !== 'pending' && !pendingKeys.has(checkKeyOf(check)),
+  )
   const hasOlder = logPage < logTotalPages
-  const liveIdle = !gmThinking && submittedActions.length === 0 && pendingLuck.length === 0
+  const liveIdle = !gmThinking && submittedActions.length === 0 && pendingChecks.length === 0
+
+  // 倒置列表 offset 0 = 最新消息处；向上翻旧记录时 y 单调增大。
+  // setState 收到相同布尔值时 React 自动跳过重渲染，滚动高频回调无需手动节流
+  const listRef = React.useRef<FlatList<LogEntry>>(null)
+  const [awayFromBottom, setAwayFromBottom] = React.useState(false)
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setAwayFromBottom(event.nativeEvent.contentOffset.y > SCROLL_AWAY_THRESHOLD)
+  }
+  const scrollToLatest = () => {
+    listRef.current?.scrollToOffset({ offset: 0, animated: true })
+  }
 
   // inverted 列表：视觉上的头部（列表 Footer）放"加载更早"，尾部（列表 Header）放实时区
   const footer = hasOlder ? (
@@ -144,12 +189,25 @@ export function GameTimeline({
         </View>
       ) : null}
 
-      {pendingLuck.map((check) => (
+      {pendingChecks.map((check) => (
         <LuckCard
           key={check.check_id ?? check.label}
           check={check}
           busy={luckBusy}
+          canDecide={canDecideLuckOf(check, currentUserId, isGm)}
           onDecide={onDecideLuck}
+        />
+      ))}
+
+      {/* 本轮揭示卡：结算阶段刚掷出的检定，带揭示动画，运气决议入口内嵌卡内 */}
+      {revealChecks.map((check) => (
+        <CheckCard
+          key={check.check_id ?? check.label}
+          check={check}
+          animate
+          canDecideLuck={canDecideLuckOf(check, currentUserId, isGm)}
+          busy={luckBusy}
+          onDecideLuck={onDecideLuck}
         />
       ))}
 
@@ -210,30 +268,59 @@ export function GameTimeline({
   // 服务端 log 是升序（旧→新），这里反转为降序（新→旧）再交给列表。
   // FlashList v2 移除了 inverted 支持，聊天场景先用核心 FlatList。
   return (
-    <FlatList
-      inverted
-      data={[...log].reverse()}
-      keyExtractor={(item, index) => String(item.round ?? index)}
-      renderItem={({ item }) => (
-        <NativeOnlyAnimatedView entering={FadeIn.duration(220)}>
-          <TimelineItem
-            entry={item}
-            players={players}
-            gameKey={gameKey}
-            currentUserId={currentUserId}
-            ttsEnabled={ttsEnabled}
-            onSpeak={onSpeak}
-            isGm={isGm}
-            onSwipeTo={onSwipeTo}
-            onReroll={onReroll}
-          />
-        </NativeOnlyAnimatedView>
-      )}
-      ListFooterComponent={footer}
-      ListHeaderComponent={header}
-      contentContainerClassName="pb-3"
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-    />
+    <View className="flex-1">
+      <FlatList
+        ref={listRef}
+        inverted
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        data={[...log].reverse()}
+        keyExtractor={(item, index) => String(item.round ?? index)}
+        renderItem={({ item }) => (
+          <NativeOnlyAnimatedView entering={FadeIn.duration(220)}>
+            <TimelineItem
+              entry={item}
+              players={players}
+              gameKey={gameKey}
+              currentUserId={currentUserId}
+              ttsAvailable={ttsAvailable}
+              onSpeak={onSpeak}
+              isGm={isGm}
+              luckBusy={luckBusy}
+              onDecideLuck={onDecideLuck}
+              onSwipeTo={onSwipeTo}
+              onReroll={onReroll}
+            />
+          </NativeOnlyAnimatedView>
+        )}
+        ListFooterComponent={footer}
+        ListHeaderComponent={header}
+        contentContainerClassName="pb-3"
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      />
+      {/* 翻阅旧记录时的"回到底部"悬浮按钮：外层常驻 + box-none 让空白处透传触摸，
+          动画收在内层（NativeOnlyAnimatedView 在 web 端不透传 className，定位不能放它身上） */}
+      <View pointerEvents="box-none" className="absolute inset-x-0 bottom-3 items-end px-4">
+        {awayFromBottom ? (
+          <NativeOnlyAnimatedView
+            entering={FadeInDown.duration(200)}
+            exiting={FadeOut.duration(150)}
+          >
+            <Pressable
+              onPress={scrollToLatest}
+              /* 透明度用整体 opacity 实现：NativeWind 对 CSS 变量色值的 /NN 修饰符
+                 在 Android 上不生效（背景会被丢弃），参见错误横幅 bg-destructive opacity-10 的先例 */
+              className="flex-row items-center gap-1.5 rounded-full bg-foreground px-3 py-2 opacity-80 active:opacity-60"
+            >
+              <Icon as={ArrowDown} size={14} className="text-background" />
+              <Text variant="small" className="text-background">
+                {t('dfPlayScrollToBottom')}
+              </Text>
+            </Pressable>
+          </NativeOnlyAnimatedView>
+        ) : null}
+      </View>
+    </View>
   )
 }

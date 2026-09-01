@@ -46,6 +46,7 @@ export const play = {
     dfPlayRoundShort: '回合',
     dfPlayRoundLabel: '第 {{round}} 回合',
     dfPlayLoadMore: '加载更早的回合',
+    dfPlayScrollToBottom: '回到底部',
     dfPlayGmRoundLabel: 'GM · 第 {{round}} 回合',
     dfPlayReadAloud: '朗读本回合',
     dfPlaySwipeNext: '下一版叙事',
@@ -58,13 +59,13 @@ export const play = {
     dfPlayLuckDecisionBody: '初始结果 {{roll}}（{{verdict}}）。花费 {{cost}} 点运气重骰，或接受当前结果？',
     dfPlayLuckSpend: '花费运气重骰',
     dfPlayLuckDecline: '接受结果',
-    // 检定卡
+    // 检定卡（运气按钮等文案复用上游 key：spendLuckForSuccess/keepFailure/
+    // waitLuckDecision/luckSpent/luckDeclined/diceRolling/checkDetails/check*）
     dfCheckDefaultLabel: '检定',
     dfCheckCritical: '大成功',
     dfCheckFumble: '大失败',
     dfCheckOpposed: '对抗：{{name}} d20={{roll}} = {{total}}',
     dfCheckOpponent: '对手',
-    dfCheckLuckAvailable: '可花费运气 {{cost}} 重骰',
     // GM 桌面管理
     dfPlayFlow: '流程',
     dfPlayAdvance: '推进回合',
@@ -88,10 +89,10 @@ export const play = {
     dfPlayExportDialogTitle: '分享 DiceFrame 存档',
     dfPlayRestart: '重启对局',
     dfPlayRestartTitle: '重启对局？',
-    dfPlayRestartMessage: '这会重新启动当前对局流程。',
+    dfPlayRestartMessage: '这会重新启动当前对局流程，并清除本局记忆。',
     dfPlayReset: '重置进度',
     dfPlayResetTitle: '重置对局进度？',
-    dfPlayResetMessage: '这会清除当前对局进度，且无法恢复。',
+    dfPlayResetMessage: '这会清除当前对局进度与本局记忆，且无法恢复。',
     dfPlayPerception: '私信',
     dfPlayPerceptionPlaceholder: '向角色发送私信…',
     dfPlayNoPlayers: '暂无玩家',
@@ -130,7 +131,9 @@ export const play = {
     dfRelationNeutral: '中立',
     dfRelationUnfriendly: '不友善',
     dfRelationHostile: '敌对',
-    // 角色面板
+    // 角色面板（状态/物品/头像文案复用上游 key：unavailable/statusDowned/statusStable/
+    // deathSaves/changeAvatar/clickToChangeAvatar/savingAvatar/saveAction/itemType*/
+    // itemSlot*/damage/effect，不在此重复）
     dfCharacterNotFound: '未找到角色',
     dfCharacterSectionLife: '生命',
     dfCharacterSectionSpecial: '特殊状态',
@@ -140,7 +143,7 @@ export const play = {
     dfCharacterSectionEquipment: '装备',
     dfCharacterSectionInventory: '背包',
     dfCharacterSectionKeyItems: '关键物品',
-    dfCharacterEditHint: '详细角色编辑请使用角色卡功能（GM 或设置中的角色管理）',
+    dfCharacterEditHint: '属性与状态为只读；点按头像可更换，详细编辑请使用角色卡功能',
     // 角色卡
     dfCharacterCardSelect: '选择角色卡',
     dfCharacterCardsTitle: '角色卡库',
@@ -175,6 +178,8 @@ export const play = {
     dfErrorsEmptyRecording: '录音太短，请重试',
     dfErrorsTranscribeEmpty: '转写失败：服务器未返回文本',
     dfPlayTtsFailed: '语音合成失败',
+    // GM 支付决议（其余文案复用上游 key：gmPayment*/later/reject/confirmPurchase）
+    dfPlayPaymentResolving: '处理中…',
   },
   en: {
     // Header & connection status
@@ -214,6 +219,7 @@ export const play = {
     dfPlayRoundShort: 'Round',
     dfPlayRoundLabel: 'Round {{round}}',
     dfPlayLoadMore: 'Load Earlier Rounds',
+    dfPlayScrollToBottom: 'Back to Bottom',
     dfPlayGmRoundLabel: 'GM · Round {{round}}',
     dfPlayReadAloud: 'Read This Round Aloud',
     dfPlaySwipeNext: 'Next narration variant',
@@ -226,13 +232,13 @@ export const play = {
     dfPlayLuckDecisionBody: 'Initial roll {{roll}} ({{verdict}}). Spend {{cost}} Luck to reroll, or keep the current result?',
     dfPlayLuckSpend: 'Spend Luck to Reroll',
     dfPlayLuckDecline: 'Keep Result',
-    // Check card
+    // Check card (luck buttons reuse upstream keys: spendLuckForSuccess/keepFailure/
+    // waitLuckDecision/luckSpent/luckDeclined/diceRolling/checkDetails/check*)
     dfCheckDefaultLabel: 'Check',
     dfCheckCritical: 'Critical Success',
     dfCheckFumble: 'Critical Failure',
     dfCheckOpposed: 'Opposed: {{name}} d20={{roll}} = {{total}}',
     dfCheckOpponent: 'Opponent',
-    dfCheckLuckAvailable: 'Spend {{cost}} Luck to reroll',
     // GM console
     dfPlayFlow: 'Flow',
     dfPlayAdvance: 'Advance Round',
@@ -256,10 +262,10 @@ export const play = {
     dfPlayExportDialogTitle: 'Share DiceFrame Save',
     dfPlayRestart: 'Restart Game',
     dfPlayRestartTitle: 'Restart the game?',
-    dfPlayRestartMessage: 'This restarts the current game flow.',
+    dfPlayRestartMessage: 'This restarts the current game flow and clears the session memory.',
     dfPlayReset: 'Reset Progress',
     dfPlayResetTitle: 'Reset game progress?',
-    dfPlayResetMessage: 'This clears the current game progress and cannot be undone.',
+    dfPlayResetMessage: 'This clears the current game progress and session memory, and cannot be undone.',
     dfPlayPerception: 'Private Message',
     dfPlayPerceptionPlaceholder: 'Send a private message to a character…',
     dfPlayNoPlayers: 'No players yet',
@@ -298,7 +304,9 @@ export const play = {
     dfRelationNeutral: 'Neutral',
     dfRelationUnfriendly: 'Unfriendly',
     dfRelationHostile: 'Hostile',
-    // Character panel
+    // Character panel (status/item/portrait strings reuse upstream keys: unavailable/
+    // statusDowned/statusStable/deathSaves/changeAvatar/clickToChangeAvatar/savingAvatar/
+    // saveAction/itemType*/itemSlot*/damage/effect)
     dfCharacterNotFound: 'No character found',
     dfCharacterSectionLife: 'Vitality',
     dfCharacterSectionSpecial: 'Special Stats',
@@ -308,7 +316,7 @@ export const play = {
     dfCharacterSectionEquipment: 'Equipment',
     dfCharacterSectionInventory: 'Backpack',
     dfCharacterSectionKeyItems: 'Key Items',
-    dfCharacterEditHint: 'Use Character Cards to edit character details (via the GM or character management in Settings)',
+    dfCharacterEditHint: 'Attributes and status are read-only. Tap the portrait to change it; use Character Cards for detailed edits.',
     // Character cards
     dfCharacterCardSelect: 'Choose a Character Card',
     dfCharacterCardsTitle: 'Character Card Library',
@@ -343,6 +351,8 @@ export const play = {
     dfErrorsEmptyRecording: 'The recording is too short. Please try again.',
     dfErrorsTranscribeEmpty: 'Transcription failed: the server returned no text',
     dfPlayTtsFailed: 'Speech synthesis failed',
+    // GM payment modal (other strings reuse upstream keys: gmPayment*/later/reject/confirmPurchase)
+    dfPlayPaymentResolving: 'Working…',
   },
   ja: {
     // ヘッダーと接続状態
@@ -382,6 +392,7 @@ export const play = {
     dfPlayRoundShort: 'ラウンド',
     dfPlayRoundLabel: '第{{round}}ラウンド',
     dfPlayLoadMore: '前のラウンドを読み込む',
+    dfPlayScrollToBottom: '一番下へ戻る',
     dfPlayGmRoundLabel: 'GM · 第{{round}}ラウンド',
     dfPlayReadAloud: 'このラウンドを読み上げる',
     dfPlaySwipeNext: '次のナラティブバリアント',
@@ -394,13 +405,13 @@ export const play = {
     dfPlayLuckDecisionBody: '初期出目 {{roll}}（{{verdict}}）。{{cost}}ポイントの幸運を消費して振り直すか、現在の結果を受け入れますか？',
     dfPlayLuckSpend: '幸運を消費して振り直す',
     dfPlayLuckDecline: '結果を受け入れる',
-    // 判定カード
+    // 判定カード（幸運ボタン等の文言は上流キーを流用：spendLuckForSuccess/keepFailure/
+    // waitLuckDecision/luckSpent/luckDeclined/diceRolling/checkDetails/check*）
     dfCheckDefaultLabel: '判定',
     dfCheckCritical: '大成功',
     dfCheckFumble: '大失敗',
     dfCheckOpposed: '対抗：{{name}} d20={{roll}} = {{total}}',
     dfCheckOpponent: '相手',
-    dfCheckLuckAvailable: '幸運 {{cost}} を消費して振り直せます',
     // GMコンソール
     dfPlayFlow: 'フロー',
     dfPlayAdvance: 'ラウンドを進める',
@@ -424,10 +435,10 @@ export const play = {
     dfPlayExportDialogTitle: 'DiceFrameのセーブデータを共有',
     dfPlayRestart: 'セッションを再起動',
     dfPlayRestartTitle: 'セッションを再起動しますか？',
-    dfPlayRestartMessage: '現在のセッションのフローをやり直します。',
+    dfPlayRestartMessage: '現在のセッションのフローをやり直し、セッションの記憶も消去します。',
     dfPlayReset: '進行をリセット',
     dfPlayResetTitle: 'セッションの進行をリセットしますか？',
-    dfPlayResetMessage: '現在のセッションの進行が消去され、元に戻せません。',
+    dfPlayResetMessage: '現在のセッションの進行とセッションの記憶が消去され、元に戻せません。',
     dfPlayPerception: '私信',
     dfPlayPerceptionPlaceholder: 'キャラクターへ私信を送信…',
     dfPlayNoPlayers: 'プレイヤーがいません',
@@ -466,7 +477,9 @@ export const play = {
     dfRelationNeutral: '中立',
     dfRelationUnfriendly: '不友好',
     dfRelationHostile: '敵対',
-    // キャラクターパネル
+    // キャラクターパネル（状態/アイテム/肖像の文言は上流キーを流用：unavailable/
+    // statusDowned/statusStable/deathSaves/changeAvatar/clickToChangeAvatar/savingAvatar/
+    // saveAction/itemType*/itemSlot*/damage/effect）
     dfCharacterNotFound: 'キャラクターが見つかりません',
     dfCharacterSectionLife: '生命',
     dfCharacterSectionSpecial: '特殊状態',
@@ -476,7 +489,7 @@ export const play = {
     dfCharacterSectionEquipment: '装備',
     dfCharacterSectionInventory: 'バックパック',
     dfCharacterSectionKeyItems: '重要アイテム',
-    dfCharacterEditHint: 'キャラクターの詳細編集はキャラクターカード機能（GMまたは設定のキャラクター管理）をご利用ください',
+    dfCharacterEditHint: '能力値と状態は閲覧のみです。アイコンをタップすると変更できます。詳細編集はキャラクターカード機能をご利用ください',
     // キャラクターカード
     dfCharacterCardSelect: 'キャラクターカードを選択',
     dfCharacterCardsTitle: 'キャラクターカードライブラリ',
@@ -511,5 +524,7 @@ export const play = {
     dfErrorsEmptyRecording: '録音が短すぎます。もう一度お試しください',
     dfErrorsTranscribeEmpty: '文字起こしに失敗しました：サーバーがテキストを返しませんでした',
     dfPlayTtsFailed: '音声合成に失敗しました',
+    // GM支払いダイアログ（その他の文言は上流キーを流用：gmPayment*/later/reject/confirmPurchase）
+    dfPlayPaymentResolving: '処理中…',
   },
 } as const

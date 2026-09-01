@@ -456,6 +456,22 @@ export async function updateCharacterPortrait(gameKey: string, userId: string, p
   if (result.ok === false) throw new Error(result.error ?? '更新肖像失败')
 }
 
+/**
+ * rules-aware 局的角色资料补丁（PATCH /character/{uid}/profile）：
+ * 角色由规则集托管，PUT 整卡会被拒，portrait 这类非机械字段只能走 profile 端点
+ * （对齐 Web savePortrait 的 hasRulesAwareCharacters 分支）。
+ */
+export async function updateRulesetCharacterProfile(gameKey: string, userId: string, portrait: CharacterSheet['portrait']): Promise<void> {
+  const result = await api<{ ok?: boolean; error?: string }>(
+    gamePath(gameKey, `/character/${encodeURIComponent(userId)}/profile`),
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ portrait }),
+    },
+  )
+  if (result.ok === false) throw new Error(result.error ?? '更新肖像失败')
+}
+
 // ---------- 场景图 ----------
 
 export async function updateSceneImage(gameKey: string, fileData?: string, fileName?: string): Promise<void> {

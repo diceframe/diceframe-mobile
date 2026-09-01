@@ -1,15 +1,28 @@
 import * as React from 'react'
-import { ScrollView, View } from 'react-native'
+import { Image } from 'expo-image'
+import { Pressable, ScrollView, View } from 'react-native'
 
 import { RemoteAvatar } from '@/components/patterns/remote-avatar'
+import { StatusBadge } from '@/components/patterns/status-badge'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
-import type { CharacterSheet, Player, RuleAttribute, RuleMeta } from '@/api/types'
-import { avatarSource } from '@/api/assets'
-import { useT } from '@/i18n/t'
+import type { CharacterItem, CharacterSheet, Player, RuleAttribute, RuleMeta } from '@/api/types'
+import { assetSource, avatarSource } from '@/api/assets'
+import { useT, type T } from '@/i18n/t'
+import {
+  characterItemDetail,
+  characterItemGroups,
+  characterItemImageAssetId,
+  characterItemName,
+  characterItemQty,
+  type CharacterItemGroup,
+  type CharacterItemLabels,
+} from '@/lib/character-items'
+import { characterStatusFlags, deathSaveCounts } from '@/lib/character-status'
 
 import { characterAttributeRows } from './characterAttributes'
+import { useAssetUri } from './useAssetUri'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -68,33 +81,111 @@ function skillList(sheet: CharacterSheet | null): string[] {
   )
 }
 
-function itemList(items?: CharacterSheet['equipment']): string[] {
-  return (items ?? [])
-    .map((item) => item.name ?? '')
-    .filter(Boolean)
+/** 物品详情里需要本地化的词（组合逻辑在 lib/character-items，这里只供 t 值） */
+function itemLabels(t: T): CharacterItemLabels {
+  return {
+    weapon: t('itemTypeWeapon'),
+    armor: t('itemTypeArmor'),
+    item: t('itemTypeItem'),
+    mainHand: t('itemSlotMainHand'),
+    offHand: t('itemSlotOffHand'),
+    armorSlot: t('itemSlotArmor'),
+    head: t('itemSlotHead'),
+    noSlot: t('itemSlotNone'),
+    damage: t('damage'),
+    effect: t('effect'),
+  }
 }
 
-/** 角色面板（对齐 Web CharacterPanel 的 v1 子集，只读） */
+/**
+ * 条目生成图缩略图：与 Web GeneratedImageThumbnail 同一资源端点，经 apiBlob
+ * 鉴权下载转 data URI；加载中/失败返回 null（整图兜底隐藏，不留占位框）。
+ */
+function ItemThumbnail({ gameKey, assetId, name }: { gameKey: string; assetId: string; name: string }) {
+  const uri = useAssetUri(
+    assetSource(`/games/${encodeURIComponent(gameKey)}/generated-images/${encodeURIComponent(assetId)}`),
+  )
+  if (!uri) return null
+  return (
+    <Image
+      source={{ uri }}
+      className="h-10 w-10 rounded-md border border-border"
+      contentFit="cover"
+      accessibilityLabel={name}
+    />
+  )
+}
+
+/** 物品条目行：名称×数量，点击展开类型/槽位/伤害/效果等详情（无详情的条目不可展开） */
+function ItemRow({
+  item,
+  group,
+  gameKey,
+  labels,
+}: {
+  item: CharacterItem
+  group: CharacterItemGroup
+  gameKey: string
+  labels: CharacterItemLabels
+}) {
+  const [expanded, setExpanded] = React.useState(false)
+  const name = characterItemName(item)
+  const qty = characterItemQty(item)
+  const assetId = characterItemImageAssetId(item)
+  const detail = characterItemDetail(item, group, labels)
+
+  return (
+    <View className="gap-0.5">
+      <Pressable
+        onPress={detail ? () => setExpanded(!expanded) : undefined}
+        className="flex-row items-center gap-2 rounded-md py-0.5 active:opacity-60"
+        accessibilityRole="button"
+        accessibilityLabel={name}
+      >
+        {assetId ? <ItemThumbnail gameKey={gameKey} assetId={assetId} name={name} /> : null}
+        <Text className="flex-1 text-sm" numberOfLines={2}>
+          {name}
+          {qty ? ` ×${qty}` : ''}
+        </Text>
+      </Pressable>
+      {expanded && detail ? (
+        <Text variant="small" className="pl-12 text-muted-foreground">
+          {detail}
+        </Text>
+      ) : null}
+    </View>
+  )
+}
+
+/**
+ * 角色面板（对齐 Web CharacterPanel）：状态徽章只读展示，物品按 装备/背包/
+ * 关键物品 分组并可展开详情；头像经 onEditPortrait 走对局内更换。
+ */
 export function CharacterPanel({
   gameKey,
   player,
   ruleAttrs,
   ruleMeta,
+  onEditPortrait,
 }: {
   gameKey: string
   player: Player | null
   ruleAttrs: RuleAttribute[]
   ruleMeta: RuleMeta | null
+  onEditPortrait?: () => void
 }) {
   const sheet = player?.character_sheet ?? null
   const avatar = avatarSource(gameKey, sheet?.portrait)
   const specialStats = ruleMeta?.rule_special_stats ?? []
   const attributes = characterAttributeRows(sheet?.attributes, ruleAttrs)
   const skills = skillList(sheet)
-  const equipment = itemList(sheet?.equipment)
-  const inventory = itemList(sheet?.inventory)
-  const keyItems = itemList(sheet?.key_items)
+  const groups = characterItemGroups(sheet)
+  const status = characterStatusFlags(sheet)
+  const deathSaves = deathSaveCounts(sheet)
   const t = useT()
+  const labels = itemLabels(t)
+  const portraitEditable = !!player && !!onEditPortrait
+  const showStatusBadge = status.deceased || status.downed || status.stable || !!status.raw
 
   return (
     <ScrollView
@@ -104,12 +195,32 @@ export function CharacterPanel({
       contentContainerClassName="gap-4 pb-8"
     >
       <View className="flex-row items-center gap-3">
-        <RemoteAvatar
-          key={avatar?.uri ?? 'fallback'}
-          source={avatar}
-          name={player?.character_name ?? '?'}
-          className="h-14 w-14 rounded-full"
-        />
+        {/* 头像可点（对齐 Web portrait-edit-button）；有玩家身份才给入口 */}
+        {portraitEditable ? (
+          <Pressable
+            onPress={onEditPortrait}
+            className="items-center gap-0.5 active:opacity-60"
+            accessibilityRole="button"
+            accessibilityLabel={t('clickToChangeAvatar')}
+          >
+            <RemoteAvatar
+              key={avatar?.uri ?? 'fallback'}
+              source={avatar}
+              name={player?.character_name ?? '?'}
+              className="h-14 w-14 rounded-full"
+            />
+            <Text variant="small" className="text-muted-foreground">
+              {t('changeAvatar')}
+            </Text>
+          </Pressable>
+        ) : (
+          <RemoteAvatar
+            key={avatar?.uri ?? 'fallback'}
+            source={avatar}
+            name={player?.character_name ?? '?'}
+            className="h-14 w-14 rounded-full"
+          />
+        )}
         <View className="flex-1 gap-0.5">
           <Text variant="h3">{player?.character_name ?? t('dfCharacterNotFound')}</Text>
           <Text variant="small">
@@ -117,11 +228,35 @@ export function CharacterPanel({
               .filter(Boolean)
               .join(' · ')}
           </Text>
+          {/* 角色状态徽章（倒地/稳定/死亡不可操作，对齐 Web 的 tag 行） */}
+          {showStatusBadge ? (
+            <View className="flex-row flex-wrap gap-1 pt-0.5">
+              {status.deceased ? (
+                <StatusBadge tone="destructive">{t('unavailable')}</StatusBadge>
+              ) : null}
+              {status.downed ? <StatusBadge tone="warning">{t('statusDowned')}</StatusBadge> : null}
+              {status.stable ? <StatusBadge tone="warning">{t('statusStable')}</StatusBadge> : null}
+              {!status.downed && !status.stable && status.raw ? (
+                <StatusBadge>{status.raw}</StatusBadge>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       </View>
 
       <Section title={t('dfCharacterSectionLife')}>
-        <ResourceRow label="HP" current={sheet?.hp} max={sheet?.max_hp ?? undefined} />
+        <View className="gap-2">
+          <ResourceRow label="HP" current={sheet?.hp} max={sheet?.max_hp ?? undefined} />
+          {/* 死亡豁免计数（仅在倒地时出现，对齐 Web vitals 的 stat-row） */}
+          {status.downed && deathSaves ? (
+            <View className="flex-row items-center justify-between">
+              <Text variant="small">{t('deathSaves')}</Text>
+              <Text variant="small" className="font-mono">
+                {deathSaves.success}✓ / {deathSaves.failure}✗
+              </Text>
+            </View>
+          ) : null}
+        </View>
       </Section>
 
       {specialStats.length > 0 && (
@@ -179,49 +314,56 @@ export function CharacterPanel({
         </Section>
       )}
 
-      {equipment.length > 0 && (
+      {/* 物品三组分栏：装备/背包/关键物品，行内可展开详情（对齐 Web item-groups + 详情弹窗） */}
+      {groups.equipment.length > 0 && (
         <Section title={t('dfCharacterSectionEquipment')}>
-          <View className="flex-row flex-wrap gap-2">
-            {equipment.map((name, index) => (
-              <PanelCard key={`${name}-${index}`}>
-                <Text className="text-sm" numberOfLines={2}>
-                  {name}
-                </Text>
-              </PanelCard>
+          <View className="gap-1">
+            {groups.equipment.map((item, index) => (
+              <ItemRow
+                key={`equipment-${index}`}
+                item={item}
+                group="equipment"
+                gameKey={gameKey}
+                labels={labels}
+              />
             ))}
           </View>
         </Section>
       )}
 
-      {inventory.length > 0 && (
+      {groups.inventory.length > 0 && (
         <Section title={t('dfCharacterSectionInventory')}>
-          <View className="flex-row flex-wrap gap-2">
-            {inventory.map((name, index) => (
-              <PanelCard key={`${name}-${index}`}>
-                <Text className="text-sm" numberOfLines={2}>
-                  {name}
-                </Text>
-              </PanelCard>
+          <View className="gap-1">
+            {groups.inventory.map((item, index) => (
+              <ItemRow
+                key={`inventory-${index}`}
+                item={item}
+                group="inventory"
+                gameKey={gameKey}
+                labels={labels}
+              />
             ))}
           </View>
         </Section>
       )}
 
-      {keyItems.length > 0 && (
+      {groups.keyItems.length > 0 && (
         <Section title={t('dfCharacterSectionKeyItems')}>
-          <View className="flex-row flex-wrap gap-2">
-            {keyItems.map((name, index) => (
-              <PanelCard key={`${name}-${index}`}>
-                <Text className="text-sm" numberOfLines={2}>
-                  🔑 {name}
-                </Text>
-              </PanelCard>
+          <View className="gap-1">
+            {groups.keyItems.map((item, index) => (
+              <ItemRow
+                key={`key-items-${index}`}
+                item={item}
+                group="key_items"
+                gameKey={gameKey}
+                labels={labels}
+              />
             ))}
           </View>
         </Section>
       )}
 
-      <Separator />
+      <Separator className="my-1" />
       <Text variant="small" className="text-center text-muted-foreground">
         {t('dfCharacterEditHint')}
       </Text>

@@ -15,13 +15,15 @@ function GalleryImage({ item, gameKey }: { item: GeneratedImageItem; gameKey: st
   React.useEffect(() => {
     let active = true
     const path = `/games/${encodeURIComponent(gameKey)}/generated-images/${encodeURIComponent(item.asset_id)}`
-    apiAssetDataUri(path)
-      .then((dataUri) => {
+    async function load() {
+      try {
+        const dataUri = await apiAssetDataUri(path)
         if (active) setUri(dataUri)
-      })
-      .catch(() => {
+      } catch {
         // 加载失败时保持 null，显示占位
-      })
+      }
+    }
+    void load()
     return () => {
       active = false
     }

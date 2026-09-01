@@ -22,13 +22,15 @@ export function useAssetUri(source: AssetSource | null): string | null {
       cancelled = true
     }
 
-    const load = source.apiPath
-      ? apiAssetDataUri(source.apiPath).catch(() => null)
-      : Promise.resolve(source.uri)
-
-    void load.then((value) => {
-      if (!cancelled && value) setLoaded({ key, uri: value })
-    })
+    async function resolveUri(asset: AssetSource) {
+      try {
+        const value = asset.apiPath ? await apiAssetDataUri(asset.apiPath) : asset.uri
+        if (!cancelled && value) setLoaded({ key, uri: value })
+      } catch {
+        // 失败保持未加载态（本 hook 对外返回 null）
+      }
+    }
+    void resolveUri(source)
 
     return () => {
       cancelled = true

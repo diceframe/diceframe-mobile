@@ -7,9 +7,10 @@ import { Card } from '@/components/ui/card'
 import { Text } from '@/components/ui/text'
 import { RemoteAvatar } from '@/components/patterns/remote-avatar'
 import { Icon } from '@/components/ui/icon'
-import type { CharacterSheet, LogEntry, Player } from '@/api/types'
+import type { CharacterSheet, CheckResult, LogEntry, Player } from '@/api/types'
 import type { AssetSource } from '@/api/assets'
 import { avatarSource } from '@/api/assets'
+import { canDecideLuckOf } from '@/lib/check-details'
 import { useT } from '@/i18n/t'
 import { useAssetUri } from './useAssetUri'
 
@@ -151,9 +152,11 @@ export function TimelineItem({
   players,
   gameKey,
   currentUserId,
-  ttsEnabled,
+  ttsAvailable,
   onSpeak,
   isGm,
+  luckBusy,
+  onDecideLuck,
   onSwipeTo,
   onReroll,
 }: {
@@ -161,9 +164,12 @@ export function TimelineItem({
   players: Player[]
   gameKey: string
   currentUserId: string
-  ttsEnabled: boolean
+  ttsAvailable: boolean
   onSpeak: (text: string) => void
   isGm?: boolean
+  /** 运气决议请求进行中：内嵌按钮统一禁用（与顶部 LuckCard 共用同一 busy 语义） */
+  luckBusy?: boolean
+  onDecideLuck?: (check: CheckResult, spend: boolean) => void
   onSwipeTo?: (round: number, swipeIndex: number) => Promise<void>
   onReroll?: (round: number) => Promise<void>
 }) {
@@ -230,7 +236,13 @@ export function TimelineItem({
       })}
 
       {checks.map((check, index) => (
-        <CheckCard key={check.check_id ?? index} check={check} />
+        <CheckCard
+          key={check.check_id ?? index}
+          check={check}
+          canDecideLuck={canDecideLuckOf(check, currentUserId, isGm)}
+          busy={!!luckBusy}
+          onDecideLuck={onDecideLuck}
+        />
       ))}
 
       {entry.gm_response ? (
@@ -239,7 +251,7 @@ export function TimelineItem({
             <Text variant="small" className="flex-1 text-muted-foreground">
               {t('dfPlayGmRoundLabel', { round: entry.round ?? '?' })}
             </Text>
-            {ttsEnabled ? (
+            {ttsAvailable ? (
               <Pressable
                 onPress={() => onSpeak(String(entry.gm_response ?? ''))}
                 className="h-7 w-7 items-center justify-center rounded-md active:bg-accent"

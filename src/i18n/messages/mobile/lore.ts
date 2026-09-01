@@ -52,10 +52,11 @@ export const lore = {
     dfLorebookCatItem: '物品',
     dfLorebookCatFaction: '组织',
     dfLorebookCatEvent: '事件',
+    // 谜题/法术/职业与上游 loreTypePuzzle/Spell/Class 同词，补齐 9 类全集
+    dfLorebookCatPuzzle: '谜题',
+    dfLorebookCatSpell: '法术',
+    dfLorebookCatClass: '职业',
     dfLorebookCatOther: '其他',
-    dfLorebookVisibilityPublic: '玩家可见',
-    dfLorebookVisibilityGm: '仅 GM',
-    dfLorebookVisibilityGmLong: '仅 GM 可见',
     dfLorebookEmptyTitle: '这个分类还没有设定',
     dfLorebookEmptyDesc: '记录地点、组织和关键物品，供后续对局使用。',
     // 创建世界书弹窗
@@ -72,7 +73,6 @@ export const lore = {
     dfLorebookCategoryPlaceholder: '选择分类',
     dfLorebookContentLabel: '内容',
     dfLorebookContentPlaceholder: '描述这条设定，以及它在故事中的作用',
-    dfLorebookVisibilityHint: '点击切换这条设定在对局中的可见范围',
     // useLorebook 错误兜底复用 profile 簇的 dfLoreCreateWorldFirst/dfLoreCreateWorldFailed/dfLoreSaveEntryFailed/dfLoreUpdateEntryFailed/dfLoreDeleteEntryFailed
   },
   en: {
@@ -123,10 +123,10 @@ export const lore = {
     dfLorebookCatItem: 'Items',
     dfLorebookCatFaction: 'Factions',
     dfLorebookCatEvent: 'Events',
+    dfLorebookCatPuzzle: 'Puzzles',
+    dfLorebookCatSpell: 'Spells',
+    dfLorebookCatClass: 'Classes',
     dfLorebookCatOther: 'Other',
-    dfLorebookVisibilityPublic: 'Visible to players',
-    dfLorebookVisibilityGm: 'GM only',
-    dfLorebookVisibilityGmLong: 'GM only',
     dfLorebookEmptyTitle: 'No entries in this category yet',
     dfLorebookEmptyDesc: 'Record locations, factions and key items for future games.',
     // Create lorebook sheet
@@ -143,7 +143,6 @@ export const lore = {
     dfLorebookCategoryPlaceholder: 'Choose a category',
     dfLorebookContentLabel: 'Content',
     dfLorebookContentPlaceholder: 'Describe this entry and its role in the story',
-    dfLorebookVisibilityHint: 'Tap to switch who can see this entry during the game',
     // useLorebook error fallbacks reuse the profile cluster's dfLoreCreateWorldFirst/dfLoreCreateWorldFailed/dfLoreSaveEntryFailed/dfLoreUpdateEntryFailed/dfLoreDeleteEntryFailed
   },
   ja: {
@@ -194,10 +193,10 @@ export const lore = {
     dfLorebookCatItem: 'アイテム',
     dfLorebookCatFaction: '組織',
     dfLorebookCatEvent: 'イベント',
+    dfLorebookCatPuzzle: '謎',
+    dfLorebookCatSpell: '呪文',
+    dfLorebookCatClass: 'クラス',
     dfLorebookCatOther: 'その他',
-    dfLorebookVisibilityPublic: 'プレイヤーに公開',
-    dfLorebookVisibilityGm: 'GM のみ',
-    dfLorebookVisibilityGmLong: 'GM のみに公開',
     dfLorebookEmptyTitle: 'このカテゴリにはまだ設定がありません',
     dfLorebookEmptyDesc: '場所・組織・重要アイテムを記録し、今後の対局で活用しましょう。',
     // 世界書作成シート
@@ -214,7 +213,6 @@ export const lore = {
     dfLorebookCategoryPlaceholder: 'カテゴリを選択',
     dfLorebookContentLabel: '内容',
     dfLorebookContentPlaceholder: 'この設定と、物語の中での役割を記述してください',
-    dfLorebookVisibilityHint: 'タップして、対局中のこの設定の公開範囲を切り替えます',
     // useLorebook のエラーは profile 簇の dfLoreCreateWorldFirst/dfLoreCreateWorldFailed/dfLoreSaveEntryFailed/dfLoreUpdateEntryFailed/dfLoreDeleteEntryFailed を再利用
   },
 } as const

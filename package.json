@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo/ui": "~57.0.12",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-clipboard/clipboard": "^1.16.3",
     "@react-native-community/slider": "5.2.0",
     "@react-native-picker/picker": "^2.11.4",
     "@rn-primitives/accordion": "^1.5.2",
@@ -44,6 +45,7 @@
     "expo-localization": "~57.0.1",
     "expo-router": "~57.0.15",
     "expo-sharing": "~57.0.15",
+    "expo-speech": "~57.0.2",
     "expo-splash-screen": "~57.0.7",
     "expo-status-bar": "~57.0.1",
     "expo-symbols": "~57.0.2",

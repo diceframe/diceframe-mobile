@@ -31,9 +31,15 @@ import { Switch } from '@/components/ui/switch'
 import { Text } from '@/components/ui/text'
 import { playGameHaptic } from '@/features/play/useHaptics'
 import { useAppUpdates } from '@/hooks/useAppUpdates'
+import { listIdentities } from '@/lib/player-identity'
 import { useThemeToken } from '@/lib/theme'
 import type { LocalePreference } from '@/lib/locale'
 import { useSettingsStore } from '@/stores/settings'
+/** 朗读引擎选项：server 对齐 Web 的服务器合成，system 用设备自带 TTS（零配置离线） */
+const TTS_ENGINE_OPTIONS = [
+  { value: 'server', labelKey: 'dfSettingsTtsEngineServer', hintKey: 'dfSettingsTtsEngineServerHint' },
+  { value: 'system', labelKey: 'dfSettingsTtsEngineSystem', hintKey: 'dfSettingsTtsEngineSystemHint' },
+] as const
 
 const SECTIONS = ['server', 'identity', 'appearance', 'language', 'speech', 'haptics', 'updates'] as const
 
@@ -103,6 +109,8 @@ export default function SettingsScreen() {
   const params = useLocalSearchParams<{ section?: string }>()
   const t = useT()
   const settings = useSettingsStore()
+  // 身份槽位列表（插入序 = 加入顺序）；进入某局时的注入由启动分流/play 页负责
+  const identities = listIdentities(settings.shares)
   const updates = useAppUpdates()
   const gold = useThemeToken('gold')
   const border = useThemeToken('border')
@@ -140,7 +148,31 @@ export default function SettingsScreen() {
             <CardContent className="gap-4">
               <View className="flex-row items-center justify-between gap-3"><View className="min-w-0 flex-1 gap-1"><Text className="font-semibold">{t('dfSettingsGmRole')}</Text><Text variant="small">{settings.token ? t('dfSettingsGmSaved') : t('dfSettingsNotLoggedIn')}</Text></View>{settings.token ? <Button size="sm" variant="destructive" onPress={() => settings.setToken(null)}><Text>{t('dfSettingsLogoutButton')}</Text></Button> : <Button size="sm" variant="outline" onPress={() => router.push('/login')}><Icon as={LogIn} size={15} /><Text>{t('dfSettingsLogin')}</Text></Button>}</View>
               <Separator />
-              <View className="flex-row items-center justify-between gap-3"><View className="min-w-0 flex-1 gap-1"><Text className="font-semibold">{t('dfSettingsPlayerIdentity')}</Text><Text variant="small" numberOfLines={2}>{settings.share ? `${settings.share.name || settings.share.user} · ${settings.share.game}` : t('dfSettingsNoShare')}</Text></View>{settings.share ? <Button size="sm" variant="outline" onPress={() => settings.setShare(null)}><Text>{t('dfSettingsClear')}</Text></Button> : <Button size="sm" variant="outline" onPress={() => router.push('/join')}><Text>{t('dfSettingsJoinGame')}</Text></Button>}</View>
+              {/* 玩家身份按局分槽保存：一局一行，只移除所选局，不影响其他局的保存身份 */}
+              <View className="gap-3">
+                <Text className="font-semibold">{t('dfSettingsPlayerIdentity')}</Text>
+                {identities.length === 0 ? (
+                  <View className="flex-row items-center justify-between gap-3">
+                    <Text variant="small" className="flex-1">{t('dfSettingsNoShare')}</Text>
+                    <Button size="sm" variant="outline" onPress={() => router.push('/join')}><Text>{t('dfSettingsJoinGame')}</Text></Button>
+                  </View>
+                ) : (
+                  <>
+                    {identities.map((identity) => (
+                      <View key={identity.game} className="flex-row items-center justify-between gap-3">
+                        <View className="min-w-0 flex-1 gap-1">
+                          <Text className="font-semibold" numberOfLines={1}>{identity.worldName || identity.game}</Text>
+                          <Text variant="small" numberOfLines={2}>{[identity.name || identity.user, identity.server].filter(Boolean).join(' · ')}</Text>
+                        </View>
+                        <Button size="sm" variant="outline" onPress={() => settings.removeShare(identity.game)}><Text>{t('dfCommonDelete')}</Text></Button>
+                      </View>
+                    ))}
+                    <View className="flex-row">
+                      <Button size="sm" variant="outline" onPress={() => router.push('/join')}><Text>{t('dfSettingsJoinGame')}</Text></Button>
+                    </View>
+                  </>
+                )}
+              </View>
               <Text variant="small">{t('dfSettingsIdentityIndependence')}</Text>
             </CardContent>
           </Card>
@@ -227,8 +259,41 @@ export default function SettingsScreen() {
 
         {section === 'speech' ? (
           <Card className="gap-3">
-            <CardHeader><CardTitle>{t('dfSettingsTtsSpeed')}</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t('dfSettingsSpeech')}</CardTitle></CardHeader>
             <CardContent className="gap-4">
+              <View className="flex-row items-center justify-between gap-3">
+                <View className="min-w-0 flex-1 gap-1">
+                  <Text className="font-semibold">{t('dfSettingsTtsAuto')}</Text>
+                  <Text variant="small">{t('dfSettingsTtsAutoDesc')}</Text>
+                </View>
+                <Switch checked={settings.ttsAuto} onCheckedChange={settings.setTtsAuto} />
+              </View>
+              <Separator />
+              <View className="gap-2">
+                <Text className="font-semibold">{t('dfSettingsTtsEngine')}</Text>
+                {TTS_ENGINE_OPTIONS.map((option) => {
+                  const active = settings.ttsEngine === option.value
+                  return (
+                    <Button
+                      key={option.value}
+                      variant={active ? 'secondary' : 'outline'}
+                      className="min-h-12 justify-start px-4 py-3"
+                      onPress={() => settings.setTtsEngine(option.value)}
+                      accessibilityState={{ selected: active }}
+                    >
+                      <Text className="font-semibold">{t(option.labelKey)}</Text>
+                      {active ? <View className="h-2.5 w-2.5 rounded-full bg-primary" /> : null}
+                    </Button>
+                  )
+                })}
+                {/* 提示跟随所选引擎切换（system 需知悉 iOS 静音键与系统 TTS 依赖） */}
+                <Text variant="small">
+                  {settings.ttsEngine === 'system'
+                    ? t('dfSettingsTtsEngineSystemHint')
+                    : t('dfSettingsTtsEngineServerHint')}
+                </Text>
+              </View>
+              <Separator />
               <View className="items-center gap-1 rounded-xl border border-border bg-muted/50 py-5"><Text className="font-mono text-3xl font-semibold tracking-tight">{settings.ttsRate.toFixed(2)}x</Text><Text variant="small">{t('dfSettingsTtsRateLabel')}</Text></View>
               <Slider minimumValue={0.5} maximumValue={2} step={0.25} value={settings.ttsRate} onValueChange={(value) => settings.setTtsRate(Number(value))} minimumTrackTintColor={gold} maximumTrackTintColor={border} />
               <View className="flex-row justify-between"><Text variant="small">{t('dfSettingsTtsSlow')}</Text><Text variant="small">{t('dfSettingsTtsStandard')}</Text><Text variant="small">{t('dfSettingsTtsFast')}</Text></View>

@@ -38,17 +38,19 @@ export function SceneCover({
     let cancelled = false
     if (!source) return () => { cancelled = true }
 
-    void loadSourceUri(source)
-      .then((uri) => Image.loadAsync({ uri }))
-      .then((loaded) => {
+    async function loadImage(asset: AssetSource) {
+      try {
+        const uri = await loadSourceUri(asset)
+        const loaded = await Image.loadAsync({ uri })
         if (!cancelled) {
           setFailed(false)
           setImage(loaded)
         }
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setFailed(true)
-      })
+      }
+    }
+    void loadImage(source)
 
     return () => {
       cancelled = true

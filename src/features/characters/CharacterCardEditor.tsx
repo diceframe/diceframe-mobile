@@ -57,16 +57,18 @@ export function CharacterCardEditor({
   React.useEffect(() => {
     if (isEditing) return
     let cancelled = false
-    void fetchRuleLibrary()
-      .then((result) => {
+    async function loadRules() {
+      try {
+        const result = await fetchRuleLibrary()
         if (cancelled) return
         const list = result.rules ?? []
         setRules(list)
         setRuleId((current) => current || String(list[0]?.rule_id || ''))
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setRules([])
-      })
+      }
+    }
+    void loadRules()
     return () => { cancelled = true }
   }, [isEditing])
 
@@ -75,8 +77,9 @@ export function CharacterCardEditor({
   React.useEffect(() => {
     if (!ruleId) return
     let cancelled = false
-    void fetchCharacterSchema(ruleId)
-      .then((result) => {
+    async function loadSchema() {
+      try {
+        const result = await fetchCharacterSchema(ruleId)
         if (cancelled) return
         setSchemaError('')
         setSchema({
@@ -84,12 +87,13 @@ export function CharacterCardEditor({
           meta: result.rule_meta ?? null,
           pool: result.skill_pool ?? [],
         })
-      })
-      .catch((cause) => {
+      } catch (cause) {
         if (cancelled) return
         setSchema(null)
         setSchemaError(cause instanceof Error ? cause.message : String(cause))
-      })
+      }
+    }
+    void loadSchema()
     return () => { cancelled = true }
   }, [ruleId])
 
