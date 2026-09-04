@@ -5,13 +5,11 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 
 import {
   configureApiClient,
-  currentSessionToken,
   generateSessionToken,
   normalizeBaseUrl,
   type ShareIdentity,
 } from '@/api/client'
 import {
-  migrateShareSlots,
   removeIdentity,
   resolveActiveIdentity,
   upsertIdentity,
@@ -19,8 +17,7 @@ import {
   type PlayerIdentity,
 } from '@/lib/player-identity'
 import type { LocalePreference } from '@/lib/locale'
-
-const SESSION_KEY = 'diceframe-session'
+import { updateRecentServers } from '@/lib/recent-servers'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
 export type ResolvedTheme = 'light' | 'dark'
@@ -31,6 +28,8 @@ export type TtsEngine = 'server' | 'system'
 /** persist 落盘形状（不含运行时派生字段 share 与各 action） */
 interface PersistedSettings {
   baseUrl: string
+  recentBaseUrls: string[]
+  serverSessionTokens: Record<string, string>
   token: string | null
   shares: IdentitySlots
   activeShareGame: string | null
@@ -46,22 +45,13 @@ function systemTheme(): ResolvedTheme {
   return Appearance.getColorScheme() === 'light' ? 'light' : 'dark'
 }
 
-/**
- * 启动时恢复/生成自管理的会话 token（跨重启保持身份稳定）。
- * RN 读不到 set-cookie，token 由客户端生成并持久化，请求时主动携带。
- */
-export async function bootstrapSession(): Promise<void> {
-  let token = await AsyncStorage.getItem(SESSION_KEY)
-  if (!token) {
-    token = currentSessionToken() ?? generateSessionToken()
-    await AsyncStorage.setItem(SESSION_KEY, token)
-  }
-  configureApiClient({ sessionToken: token })
-}
-
 interface SettingsState {
   /** 服务器地址，如 http://192.168.1.5:18000 */
   baseUrl: string
+  /** 已验证成功的最近服务器地址，按最近使用排序；不包含密码或玩家凭据 */
+  recentBaseUrls: string[]
+  /** 每台服务器独立的原生会话，防止跨实例串用 claim-gm/rebind 身份 */
+  serverSessionTokens: Record<string, string>
   /** Owner 访问密码（Bearer token）；null 表示未登录 */
   token: string | null
   /** 玩家身份槽位，按 gameKey 一局一份（多局并行，加入不再互相覆盖） */
@@ -90,6 +80,7 @@ interface SettingsState {
   systemTheme: ResolvedTheme
   hydrated: boolean
   setBaseUrl: (url: string) => void
+  removeRecentServer: (url: string) => void
   setToken: (token: string | null) => void
   /** 写入/更新一局身份并设为当前注入（join 成功路径） */
   upsertShare: (identity: PlayerIdentity) => void
@@ -114,9 +105,13 @@ interface SettingsState {
   markHydrated: () => void
 }
 
-function syncApiClient(state: Pick<SettingsState, 'baseUrl' | 'token' | 'share'>): void {
+function syncApiClient(
+  state: Pick<SettingsState, 'baseUrl' | 'serverSessionTokens' | 'token' | 'share'>,
+): void {
+  const baseUrl = normalizeBaseUrl(state.baseUrl)
   configureApiClient({
-    baseUrl: normalizeBaseUrl(state.baseUrl),
+    baseUrl,
+    sessionToken: baseUrl ? state.serverSessionTokens[baseUrl] ?? null : null,
     token: state.token,
     share: state.share,
   })
@@ -126,6 +121,8 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
       baseUrl: '',
+      recentBaseUrls: [],
+      serverSessionTokens: {},
       token: null,
       shares: {},
       activeShareGame: null,
@@ -139,8 +136,28 @@ export const useSettingsStore = create<SettingsState>()(
       systemTheme: systemTheme(),
       hydrated: false,
       setBaseUrl: (url) => {
-        set({ baseUrl: normalizeBaseUrl(url) })
+        const previous = get().baseUrl
+        const baseUrl = normalizeBaseUrl(url)
+        set((state) => ({
+          baseUrl,
+          recentBaseUrls: updateRecentServers(state.recentBaseUrls, baseUrl, previous),
+          serverSessionTokens: baseUrl && !state.serverSessionTokens[baseUrl]
+            ? { ...state.serverSessionTokens, [baseUrl]: generateSessionToken() }
+            : state.serverSessionTokens,
+        }))
         syncApiClient(get())
+      },
+      removeRecentServer: (url) => {
+        const target = normalizeBaseUrl(url)
+        set((state) => {
+          if (!target || target === state.baseUrl) return state
+          const serverSessionTokens = { ...state.serverSessionTokens }
+          delete serverSessionTokens[target]
+          return {
+            recentBaseUrls: state.recentBaseUrls.filter((item) => item !== target),
+            serverSessionTokens,
+          }
+        })
       },
       setToken: (token) => {
         set({ token })
@@ -187,11 +204,13 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'diceframe-settings',
-      // v1：share（全局单份）→ shares（按局槽位）+ activeShareGame
-      version: 1,
+      // v2 重置旧版连接域：多服务器模型不继承单服务器凭据，升级后重新连接一次。
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         baseUrl: state.baseUrl,
+        recentBaseUrls: state.recentBaseUrls,
+        serverSessionTokens: state.serverSessionTokens,
         token: state.token,
         shares: state.shares,
         activeShareGame: state.activeShareGame,
@@ -203,12 +222,22 @@ export const useSettingsStore = create<SettingsState>()(
         language: state.language,
       }),
       migrate: (persisted) => {
-        // v0 只有全局一份 share：搬进对应槽位并保持活跃，升级不能丢玩家身份。
-        // 旧 share 字段必须剔除，否则 persist 浅合并会把它盖回派生字段 share，
-        // 与迁移出的 activeShareGame 不一致。
-        const legacy = { ...(persisted as Record<string, unknown>) }
-        delete legacy.share
-        return { ...legacy, ...migrateShareSlots(persisted) } as PersistedSettings
+        // 多服务器切换不能沿用旧版单服务器凭据；白名单保留设备偏好，连接域重新建立。
+        const saved = persisted as Partial<PersistedSettings>
+        return {
+          baseUrl: '',
+          recentBaseUrls: [],
+          serverSessionTokens: {},
+          token: null,
+          shares: {},
+          activeShareGame: null,
+          ttsRate: saved.ttsRate ?? 1,
+          ttsEngine: saved.ttsEngine ?? 'server',
+          ttsAuto: saved.ttsAuto ?? true,
+          hapticsEnabled: saved.hapticsEnabled ?? true,
+          themeMode: saved.themeMode ?? 'system',
+          language: saved.language ?? 'system',
+        }
       },
       onRehydrateStorage: () => (state) => {
         if (state) {

@@ -146,6 +146,7 @@ function OverviewContent({
       numColumns={columns}
       keyExtractor={(item) => item.game_key}
       contentContainerStyle={{ paddingBottom: 32 }}
+      showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedForeground} />
       }

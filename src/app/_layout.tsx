@@ -14,7 +14,7 @@ import { ErrorBoundary } from '@/components/error-boundary'
 import { configureApiClient } from '@/api/client'
 import { useLocaleSync } from '@/hooks/useLocaleSync'
 import { useResolvedTheme, useThemeToken } from '@/lib/theme'
-import { bootstrapSession, useSettingsStore } from '@/stores/settings'
+import { useSettingsStore } from '@/stores/settings'
 
 // NativeWind 只对 RN 核心组件自动生效；不注册的话 expo-image 的 className
 // 不映射到 style，RemoteAvatar 会渲染成无尺寸的隐形图
@@ -43,10 +43,9 @@ export default function RootLayout() {
     if (hydrated) setColorScheme(themeMode)
   }, [hydrated, setColorScheme, themeMode])
 
-  // Owner 模式下任何 API 401 都回到登录页（对齐 Web client.ts 的跳转行为）；
-  // 同时恢复自管理会话 token（身份稳定是 claim-gm 的前提）
+  // Owner 模式下任何 API 401 都回到登录页（对齐 Web client.ts 的跳转行为）。
+  // 每台服务器的原生会话由 settings rehydrate 时同步到 API client。
   React.useEffect(() => {
-    void bootstrapSession()
     configureApiClient({
       onUnauthorized: () => router.replace('/login'),
     })

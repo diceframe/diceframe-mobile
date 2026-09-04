@@ -97,12 +97,22 @@ function ensureSessionToken(): string {
   return context.sessionToken
 }
 
-/** 补全协议、去尾部斜杠：`192.168.1.5:18000` → `http://192.168.1.5:18000` */
+/**
+ * 生成服务器唯一键：补协议、规范主机与默认端口、去尾斜杠及地址栏凭据。
+ * 当前连接、历史列表和原生会话映射必须共同使用这一份规范化结果。
+ */
 export function normalizeBaseUrl(input: string): string {
-  let url = input.trim()
-  if (!url) return ''
-  if (!/^https?:\/\//i.test(url)) url = `http://${url}`
-  return url.replace(/\/+$/, '')
+  let value = input.trim()
+  if (!value) return ''
+  if (!/^https?:\/\//i.test(value)) value = `http://${value}`
+  try {
+    const url = new URL(value)
+    url.username = ''
+    url.password = ''
+    return url.toString().replace(/\/$/, '')
+  } catch {
+    return value.replace(/\/+$/, '')
+  }
 }
 
 /** 玩家模式下需要拼到 /games/... 请求上的 query 参数（对齐 Web shareQuery） */
@@ -149,14 +159,14 @@ function isRawBody(body: unknown): body is RawBody {
   )
 }
 
-function buildHeaders(init: RequestInit): Headers {
+function buildHeaders(init: RequestInit, anonymous = false): Headers {
   const headers = new Headers(init.headers)
   const rawBody = isRawBody(init.body)
   if (!rawBody && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
-  if (context.token) headers.set('Authorization', `Bearer ${context.token}`)
+  if (!anonymous && context.token) headers.set('Authorization', `Bearer ${context.token}`)
   // Web 浏览器会静默丢弃 JS 设置的 Cookie 头，交给服务端 Set-Cookie +
   // cookie jar 自动管理；不引入 react-native 依赖以保证 node 测试环境可用
-  if (typeof document === 'undefined' && !headers.has('Cookie')) {
+  if (!anonymous && typeof document === 'undefined' && !headers.has('Cookie')) {
     headers.set('Cookie', `trpg_session=${ensureSessionToken()}`)
   }
   if (init.method && init.method !== 'GET') headers.set('X-TRPG-Confirm', 'true')
@@ -192,11 +202,16 @@ function handleUnauthorized(response: Response, isPlayerShare: boolean): void {
   }
 }
 
-export async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
-  const url = buildUrl(path, shareQuery() ?? undefined)
-  const response = await fetch(url, { ...init, headers: buildHeaders(init) })
+export async function api<T = unknown>(
+  path: string,
+  init: RequestInit = {},
+  options: { anonymous?: boolean } = {},
+): Promise<T> {
+  const anonymous = options.anonymous === true
+  const url = buildUrl(path, anonymous ? undefined : shareQuery() ?? undefined)
+  const response = await fetch(url, { ...init, headers: buildHeaders(init, anonymous) })
   const data = (await readJson(response)) as T & Record<string, unknown>
-  handleUnauthorized(response, !!context.share)
+  handleUnauthorized(response, anonymous ? false : !!context.share)
   if (!response.ok) throw errorFrom(data, response.status)
   return data
 }
@@ -240,7 +255,8 @@ export async function checkOwnerAccess(): Promise<OwnerAccessStatus> {
 
 /** GET /api/config（公开接口，敏感字段已脱敏） */
 export async function fetchAppConfig(): Promise<import('./types').AppConfig> {
-  return api<import('./types').AppConfig>('/config')
+  // 公开配置探测用于登录与服务器切换，不应携带任一实例的凭据或会话。
+  return api<import('./types').AppConfig>('/config', {}, { anonymous: true })
 }
 
 export function errorMessage(error: unknown): string {

@@ -55,7 +55,15 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
   })
 
   beforeEach(() => {
-    useSettingsStore.setState({ baseUrl: '', token: null, share: null })
+    useSettingsStore.setState({
+      baseUrl: '',
+      recentBaseUrls: [],
+      serverSessionTokens: {},
+      token: null,
+      shares: {},
+      activeShareGame: null,
+      share: null,
+    })
     configureApiClient({ baseUrl: '', token: null, share: null })
   })
 
@@ -78,6 +86,28 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     expect(currentToken()).toBe('secret2')
   })
 
+  it('只把成功保存的服务器地址加入最近列表，并保留上一个地址', () => {
+    const store = useSettingsStore.getState()
+    store.setBaseUrl('a:18000')
+    useSettingsStore.getState().setBaseUrl('http://b:18000/')
+
+    expect(useSettingsStore.getState().recentBaseUrls).toEqual([
+      'http://b:18000',
+      'http://a:18000',
+    ])
+  })
+
+  it('可从本机列表主动移除服务器且不影响当前连接', () => {
+    const store = useSettingsStore.getState()
+    store.setBaseUrl('http://a:18000')
+    useSettingsStore.getState().setBaseUrl('http://b:18000')
+    useSettingsStore.getState().removeRecentServer('http://a:18000/')
+
+    expect(useSettingsStore.getState().recentBaseUrls).toEqual(['http://b:18000'])
+    expect(useSettingsStore.getState().serverSessionTokens).not.toHaveProperty('http://a:18000')
+    expect(useSettingsStore.getState().baseUrl).toBe('http://b:18000')
+  })
+
   it('换服务器清空 token 与玩家身份', () => {
     const store = useSettingsStore.getState()
     store.setBaseUrl('http://a:18000')
@@ -92,5 +122,31 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     expect(state.baseUrl).toBe('http://b:18000')
     expect(state.token).toBeNull()
     expect(state.share).toBeNull()
+  })
+
+  it('v2 升级只保留设备偏好并清空旧连接域', async () => {
+    const migrate = useSettingsStore.persist.getOptions().migrate
+    expect(migrate).toBeTypeOf('function')
+    const result = await migrate!({
+      baseUrl: 'http://old:18000',
+      token: 'secret',
+      share: { game: 'old-game', user: 'old-user' },
+      shares: { 'old-game': { game: 'old-game', user: 'old-user' } },
+      activeShareGame: 'old-game',
+      themeMode: 'light',
+      language: 'ja',
+    }, 1) as Record<string, unknown>
+
+    expect(result).toMatchObject({
+      baseUrl: '',
+      recentBaseUrls: [],
+      serverSessionTokens: {},
+      token: null,
+      shares: {},
+      activeShareGame: null,
+      themeMode: 'light',
+      language: 'ja',
+    })
+    expect(result).not.toHaveProperty('share')
   })
 })

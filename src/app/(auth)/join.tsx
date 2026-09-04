@@ -7,7 +7,13 @@ import { Screen } from '@/components/screen'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
-import { configureApiClient, errorMessage } from '@/api/client'
+import {
+  configureApiClient,
+  currentSessionToken,
+  errorMessage,
+  generateSessionToken,
+  normalizeBaseUrl,
+} from '@/api/client'
 import { fetchCharacterCards, fetchGameDetail, joinGame, verifyRoomPassword } from '@/api/games'
 import type { CharacterCard, CharacterPortrait, GameDetail } from '@/api/types'
 import { JoinCharacterForm } from '@/features/join/JoinCharacterForm'
@@ -27,6 +33,8 @@ export default function JoinScreen() {
   const router = useRouter()
   const t = useT()
   const setBaseUrl = useSettingsStore((s) => s.setBaseUrl)
+  const setToken = useSettingsStore((s) => s.setToken)
+  const clearShares = useSettingsStore((s) => s.clearShares)
   const upsertShare = useSettingsStore((s) => s.upsertShare)
 
   const [link, setLink] = React.useState('')
@@ -47,6 +55,16 @@ export default function JoinScreen() {
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
   const keyboardHeight = useKeyboardHeight()
+  const mountedRef = React.useRef(true)
+  const pendingClientRestoreRef = React.useRef<Parameters<typeof configureApiClient>[0] | null>(null)
+
+  React.useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (pendingClientRestoreRef.current) configureApiClient(pendingClientRestoreRef.current)
+    }
+  }, [])
 
   // 进入建卡步骤后拉一次本局共享卡库（对齐 Web JoinView loadGameData 的
   // /character-cards 预取）；拉取失败按 Web 语义降级为空列表 → 入口整体隐藏
@@ -68,26 +86,49 @@ export default function JoinScreen() {
       return
     }
     setBusy(true)
+    const targetBaseUrl = normalizeBaseUrl(result.baseUrl)
+    const current = useSettingsStore.getState()
+    pendingClientRestoreRef.current = {
+      baseUrl: current.baseUrl,
+      token: current.token,
+      share: current.share,
+      sessionToken: currentSessionToken(),
+    }
     try {
-      // 先用候选身份直连探测，成功后再持久化
+      // 候选服务器使用一次性会话探测，绝不携带当前实例的 Owner/玩家凭据。
       configureApiClient({
-        baseUrl: result.baseUrl,
-        share: { game: result.game, user: result.user ?? '', name: result.name },
+        baseUrl: targetBaseUrl,
+        token: null,
+        sessionToken: generateSessionToken(),
+        share: {
+          game: result.game,
+          user: result.user ?? '',
+          name: result.name,
+          delegate: result.delegate,
+        },
       })
       const gameDetail = await fetchGameDetail(result.game)
+      if (!mountedRef.current) return
       setParsed(result)
       setDetail(gameDetail)
-      setBaseUrl(result.baseUrl)
+      if (targetBaseUrl !== current.baseUrl) {
+        setToken(null)
+        clearShares()
+      }
+      setBaseUrl(targetBaseUrl)
+      configureApiClient({ share: shareOf(result) })
+      pendingClientRestoreRef.current = null
       if (gameDetail.has_room_password) {
         setStep('room')
       } else {
         setStep('identity')
       }
     } catch (e) {
-      configureApiClient({ share: null })
-      setError(errorMessage(e))
+      if (pendingClientRestoreRef.current) configureApiClient(pendingClientRestoreRef.current)
+      pendingClientRestoreRef.current = null
+      if (mountedRef.current) setError(errorMessage(e))
     } finally {
-      setBusy(false)
+      if (mountedRef.current) setBusy(false)
     }
   }
 

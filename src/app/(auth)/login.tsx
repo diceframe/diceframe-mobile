@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { ActivityIndicator, Platform, Pressable, ScrollView, View } from 'react-native'
-import { Dices } from 'lucide-react-native'
+import { Dices, Server, X } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useT } from '@/i18n/t'
@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import {
   configureApiClient,
+  currentSessionToken,
   errorMessage,
   fetchAppConfig,
   normalizeBaseUrl,
@@ -36,11 +37,20 @@ export default function LoginScreen() {
   const [password, setPassword] = React.useState('')
   const [busy, setBusy] = React.useState<'server' | 'login' | null>(null)
   const [error, setError] = React.useState('')
+  const mountedRef = React.useRef(true)
+  const pendingClientRestoreRef = React.useRef<Parameters<typeof configureApiClient>[0] | null>(null)
+
+  React.useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (pendingClientRestoreRef.current) configureApiClient(pendingClientRestoreRef.current)
+    }
+  }, [])
 
   // Web 端服务器地址可留空 = 使用当前站点（同源相对路径，dev 下由 Metro
   // 的反向代理转发到后端）；原生端必须显式填写局域网地址。
   const isWeb = Platform.OS === 'web'
-
   // 进入页面时的模式快照：已有服务器 = “换服务器”流程。
   // 用快照而不是响应式读取，避免首次连接成功保存 baseUrl 后页面中途翻转。
   const [switching] = React.useState(() => settings.baseUrl !== '')
@@ -68,30 +78,61 @@ export default function LoginScreen() {
     }
   }, [settings.baseUrl, switchingServer, isWeb])
 
-  async function connectServer() {
-    const normalized = normalizeBaseUrl(serverUrl)
+  function selectServerUrl(url: string) {
+    setServerUrl(url)
+    setPassword('')
+    setPasswordNeeded(null)
+    setError('')
+  }
+
+  function prepareCandidateClient() {
+    pendingClientRestoreRef.current = {
+      baseUrl: normalizeBaseUrl(settings.baseUrl),
+      sessionToken: currentSessionToken(),
+      token: settings.token,
+      share: settings.share,
+    }
+  }
+
+  function restoreCurrentClient() {
+    if (pendingClientRestoreRef.current) configureApiClient(pendingClientRestoreRef.current)
+    pendingClientRestoreRef.current = null
+  }
+
+  async function connectServer(candidateUrl = serverUrl) {
+    const normalized = normalizeBaseUrl(candidateUrl)
+    setServerUrl(normalized)
     if (!normalized && !isWeb) {
       setError(t('dfCommonNetworkError'))
       return
     }
     setBusy('server')
+    setPasswordNeeded(null)
     setError('')
     try {
-      configureApiClient({ baseUrl: normalized })
+      // 跨服务器探测绝不能携带当前实例的 Owner token 或玩家分享身份。
+      prepareCandidateClient()
+      configureApiClient({ baseUrl: normalized, token: null, share: null })
       const config = await fetchAppConfig()
+      if (!mountedRef.current) return
       if (normalized !== settings.baseUrl) {
         // 新服务器：本机的 GM 密码与玩家身份一律作废
         settings.setToken(null)
         settings.setShare(null)
       }
       settings.setBaseUrl(normalized)
+      pendingClientRestoreRef.current = null
       setPasswordNeeded(!!config.access_password?.configured)
     } catch (e) {
-      const detail = errorMessage(e)
-      const target = normalized || t('dfLoginCurrentAddress')
-      setError(detail ? `${t('dfCommonNetworkError')}（${target}：${detail}）` : t('dfCommonNetworkError'))
+      // 候选服务器探测失败后恢复当前已连接实例，不能让 API 内存态停在坏地址上。
+      restoreCurrentClient()
+      if (mountedRef.current) {
+        const detail = errorMessage(e)
+        const target = normalized || t('dfLoginCurrentAddress')
+        setError(detail ? `${t('dfCommonNetworkError')}（${target}：${detail}）` : t('dfCommonNetworkError'))
+      }
     } finally {
-      setBusy(null)
+      if (mountedRef.current) setBusy(null)
     }
   }
 
@@ -103,16 +144,22 @@ export default function LoginScreen() {
     setBusy('login')
     setError('')
     try {
-      configureApiClient({ baseUrl: normalized })
+      prepareCandidateClient()
+      configureApiClient({ baseUrl: normalized, token: null, share: null })
       await validateAccessToken(password)
+      if (!mountedRef.current) return
       settings.setBaseUrl(normalized)
       settings.setToken(password)
       settings.setShare(null)
+      pendingClientRestoreRef.current = null
       router.replace('/overview')
     } catch (e) {
-      setError(e instanceof Error && e.message ? e.message : t('dfLoginWrongPassword'))
+      restoreCurrentClient()
+      if (mountedRef.current) {
+        setError(e instanceof Error && e.message ? e.message : t('dfLoginWrongPassword'))
+      }
     } finally {
-      setBusy(null)
+      if (mountedRef.current) setBusy(null)
     }
   }
 
@@ -159,16 +206,73 @@ export default function LoginScreen() {
 
         <View className="gap-3">
           <Text variant="small">{t('serverAddress')}</Text>
+          {settings.recentBaseUrls.length > 0 ? (
+            <View className="gap-2">
+              <Text variant="small" className="text-muted-foreground">
+                {t('dfLoginRecentServers')}
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerClassName="gap-2"
+                keyboardShouldPersistTaps="handled"
+              >
+                {settings.recentBaseUrls.map((url) => {
+                  const current = url === settings.baseUrl
+                  return (
+                    <View
+                      key={url}
+                      className={`max-w-80 flex-row items-center overflow-hidden rounded-full border ${
+                        current ? 'border-primary bg-primary/10' : 'border-border bg-muted/60'
+                      } ${busy !== null ? 'opacity-50' : ''}`}
+                    >
+                      <Pressable
+                        onPress={() => {
+                          selectServerUrl(url)
+                          void connectServer(url)
+                        }}
+                        disabled={busy !== null}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: current, disabled: busy !== null }}
+                        className="min-w-0 flex-row items-center gap-2 py-2 pl-3 pr-2 active:opacity-70"
+                      >
+                        <Server size={14} color={current ? primary : gold} />
+                        <Text variant="small" numberOfLines={1} className="max-w-48">
+                          {url.replace(/^https?:\/\//, '')}
+                        </Text>
+                        {current ? (
+                          <Text variant="small" className="font-semibold text-primary">
+                            {t('dfLoginCurrentServer')}
+                          </Text>
+                        ) : null}
+                      </Pressable>
+                      {!current ? (
+                        <Pressable
+                          onPress={() => settings.removeRecentServer(url)}
+                          disabled={busy !== null}
+                          accessibilityRole="button"
+                          accessibilityLabel={t('dfLoginForgetServer', { address: url })}
+                          className="h-9 w-9 items-center justify-center border-l border-border active:bg-muted"
+                        >
+                          <X size={14} color={gold} />
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  )
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
           <Input
             value={serverUrl}
-            onChangeText={setServerUrl}
+            onChangeText={selectServerUrl}
             placeholder={isWeb ? t('dfLoginServerPlaceholderWeb') : t('dfLoginServerPlaceholder')}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
             editable={busy === null}
           />
-          <Button onPress={connectServer} disabled={busy !== null}>
+          <Button onPress={() => void connectServer()} disabled={busy !== null}>
             {busy === 'server' ? (
               <ActivityIndicator className="text-primary-foreground" />
             ) : (

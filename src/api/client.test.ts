@@ -9,6 +9,7 @@ import {
   checkOwnerAccess,
   configureApiClient,
   errorMessage,
+  fetchAppConfig,
   normalizeBaseUrl,
   shareQuery,
 } from './client'
@@ -30,6 +31,8 @@ describe('normalizeBaseUrl', () => {
     expect(normalizeBaseUrl('192.168.1.5:18000')).toBe('http://192.168.1.5:18000')
     expect(normalizeBaseUrl('http://127.0.0.1:18000/')).toBe('http://127.0.0.1:18000')
     expect(normalizeBaseUrl('  https://a.b/  ')).toBe('https://a.b')
+    expect(normalizeBaseUrl('HTTP://HOST:80/')).toBe('http://host')
+    expect(normalizeBaseUrl('https://user:secret@HOST:443/')).toBe('https://host')
     expect(normalizeBaseUrl('')).toBe('')
   })
 })
@@ -98,6 +101,23 @@ describe('api()', () => {
     await api('/games', { method: 'POST', body: '{}' })
     const postHeaders = new Headers(fetchMock.mock.calls[1][1].headers)
     expect(postHeaders.get('X-TRPG-Confirm')).toBe('true')
+  })
+
+  it('公开配置探测不携带任何服务器凭据、分享参数或会话', async () => {
+    configureApiClient({
+      baseUrl: 'http://candidate',
+      token: 'old-secret',
+      sessionToken: 'deadbeef'.repeat(4),
+      share: { game: 'old-game', user: 'old-user', roomToken: 'old-room' },
+    })
+    fetchMock.mockResolvedValue(jsonResponse({ asr_provider: 'disabled' }))
+
+    await fetchAppConfig()
+
+    expect(fetchMock.mock.calls[0][0]).toBe('http://candidate/api/config')
+    const headers = new Headers(fetchMock.mock.calls[0][1].headers)
+    expect(headers.get('Authorization')).toBeNull()
+    expect(headers.get('Cookie')).toBeNull()
   })
 
   it('玩家模式下请求 URL 带分享参数', async () => {

@@ -10,6 +10,7 @@
 import { create } from 'zustand'
 
 import { ApiError, currentShare, errorMessage, fetchAppConfig } from '@/api/client'
+import { asrAvailable } from '@/lib/speech-config'
 import {
   advanceGame,
   claimGm,
@@ -233,7 +234,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       const config = await fetchAppConfig()
       if (isCurrent(gameKey, version) && !suspended) {
         set({
-          asrEnabled: config.asr_provider === 'openai-compatible' && !!config.asr_base_url,
+          asrEnabled: asrAvailable(config),
           ttsEnabled: !!config.tts_provider && config.tts_provider !== 'browser',
         })
       }
