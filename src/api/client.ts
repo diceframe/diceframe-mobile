@@ -13,6 +13,9 @@
  * - 玩家分享链接鉴权：query 参数 game/user/name/share/delegate/room_token。
  */
 
+import { getT } from '@/i18n/t'
+import type { TKey } from '@/i18n/keyset'
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -29,9 +32,10 @@ export function isNotFoundError(error: unknown): boolean {
 }
 
 export function errorCodeOf(data: unknown): string | undefined {
-  if (data && typeof data === 'object' && 'error_code' in data) {
-    const code = (data as { error_code?: unknown }).error_code
-    return typeof code === 'string' && code ? code : undefined
+  if (!data || typeof data !== 'object') return undefined
+  const payload = data as { error_code?: unknown; code?: unknown }
+  for (const code of [payload.error_code, payload.code]) {
+    if (typeof code === 'string' && code) return code
   }
   return undefined
 }
@@ -240,5 +244,11 @@ export async function fetchAppConfig(): Promise<import('./types').AppConfig> {
 }
 
 export function errorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.code) {
+    // 服务端错误码通常为大写，镜像文案 key 为小写；未知码保留服务端原文。
+    const key = `apiErrors.${error.code.toLowerCase()}`
+    const translated = getT()(key as TKey)
+    if (translated !== key) return translated
+  }
   return error instanceof Error ? error.message : String(error)
 }

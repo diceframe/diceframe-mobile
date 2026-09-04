@@ -8,6 +8,7 @@ import {
   buildUrl,
   checkOwnerAccess,
   configureApiClient,
+  errorMessage,
   normalizeBaseUrl,
   shareQuery,
 } from './client'
@@ -125,6 +126,25 @@ describe('api()', () => {
     expect(error).toBeInstanceOf(ApiError)
     expect(error.status).toBe(404)
     expect(error.code).toBe('game_not_found')
+  })
+
+  it('兼容 code 字段，并按当前语言映射大小写错误码', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        error: 'server fallback',
+        error_code: '',
+        code: 'ECONOMY_DECISION_PENDING',
+      }, 409),
+    )
+    const error = (await rejectionOf(api('/games/abc/action'))) as ApiError
+    expect(error.code).toBe('ECONOMY_DECISION_PENDING')
+    expect(errorMessage(error)).toBe('请先处理待确认的经济提案，再继续本局叙事')
+  })
+
+  it('未知错误码保留服务端原文', () => {
+    expect(errorMessage(new ApiError('server detail', 409, 'UNKNOWN_CONFLICT'))).toBe(
+      'server detail',
+    )
   })
 
   it('Owner 模式 401 触发 onUnauthorized，玩家模式不触发', async () => {

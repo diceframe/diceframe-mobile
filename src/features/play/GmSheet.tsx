@@ -16,6 +16,7 @@ import {
   ShieldOff,
   UserCircle,
   Users,
+  WalletCards,
 } from 'lucide-react-native'
 
 import { Button } from '@/components/ui/button'
@@ -42,6 +43,7 @@ interface GmSheetProps {
   onToggleAccess: () => void
   onRoomPassword: () => void
   onWorldSwitch: () => void
+  onCreatePayment: () => void
   onExport: () => void
   onReset: () => void
   onRestart: () => void
@@ -68,6 +70,7 @@ export function GmSheet({
   onToggleAccess,
   onRoomPassword,
   onWorldSwitch,
+  onCreatePayment,
   onExport,
   onReset,
   onRestart,
@@ -122,10 +125,16 @@ export function GmSheet({
         </>
       )}
 
-      <Button variant="outline" disabled={busy} onPress={onRecap}>
-        <Icon as={BookOpen} size={16} />
-        <Text>{t('dfPlayRecap')}</Text>
-      </Button>
+      <View className="flex-row gap-2">
+        <Button variant="outline" className="flex-1" disabled={busy} onPress={onRecap}>
+          <Icon as={BookOpen} size={16} />
+          <Text>{t('dfPlayRecap')}</Text>
+        </Button>
+        <Button variant="outline" className="flex-1" disabled={busy} onPress={onCreatePayment}>
+          <Icon as={WalletCards} size={16} />
+          <Text>{t('createPaymentProposal')}</Text>
+        </Button>
+      </View>
 
       {/* GM 指令 */}
       <View className="gap-2">

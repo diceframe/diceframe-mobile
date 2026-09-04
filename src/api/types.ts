@@ -240,6 +240,13 @@ export interface PendingPayment {
   description?: string
   reason?: string
   status?: string
+  kind?: 'payment' | 'purchase' | 'fee' | 'reward' | 'transfer' | string
+  payer_uid?: string
+  approval_policy?: string
+  contributors?: Array<{ uid: string; amount: number }>
+  approvals?: Record<string, boolean>
+  sequence?: number
+  run_id?: string
   [key: string]: unknown
 }
 
@@ -264,6 +271,8 @@ export interface GameDetail {
   multiplayer?: Multiplayer
   quick_actions?: string[]
   pending_payments?: PendingPayment[]
+  economy_proposals?: PendingPayment[]
+  run_id?: string
   pending_luck_decisions?: CheckResult[]
   round_check_results?: CheckResult[]
   total_tokens?: number
@@ -2117,10 +2126,34 @@ export interface TranscriptionResponse {
   [key: string]: unknown
 }
 
+/** GM 手工创建支付提案 */
+export interface PaymentProposalCreatePayload {
+  payer_uid: string
+  recipient_uid: string
+  amount: number
+  reason: string
+  items: string[]
+}
+
+export interface PaymentProposalCreateResponse {
+  ok?: boolean
+  error?: string
+  proposal?: PendingPayment
+}
+
 /** 支付决议响应 */
 export interface PaymentResolveResponse {
   ok?: boolean
   error?: string
+  code?: string
+  accepted?: boolean
+  committed?: boolean
+  awaiting_uids?: string[]
+  proposal?: PendingPayment
+  payment?: PendingPayment
+  effects_committed?: boolean
+  external_effects_committed?: boolean
+  scene_image_scheduled?: boolean
 }
 
 // ---- 剧情追踪（GameDetail.plot_tracker，服务端 round_effects 生成） ----

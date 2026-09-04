@@ -22,6 +22,8 @@ import type {
   LuckDecisionResponse,
   MapBackgroundSelection,
   MapData,
+  PaymentProposalCreatePayload,
+  PaymentProposalCreateResponse,
   PaymentResolveResponse,
   PlayerCreateResponse,
   PlayerContextResponse,
@@ -436,14 +438,34 @@ export async function selectCharacterCard(gameKey: string, userId: string, card:
   if (result.ok === false) throw new Error(result.error ?? '应用角色卡失败')
 }
 
-// ---------- 支付决议 ----------
+// ---------- 权威经济提案 ----------
 
-export async function resolvePayment(gameKey: string, paymentId: string, accepted: boolean): Promise<void> {
-  const result = await api<PaymentResolveResponse>(gamePath(gameKey, `/payments/${encodeURIComponent(paymentId)}`), {
+export async function createPaymentProposal(
+  gameKey: string,
+  payload: PaymentProposalCreatePayload,
+): Promise<PaymentProposalCreateResponse> {
+  const result = await api<PaymentProposalCreateResponse>(gamePath(gameKey, '/payments'), {
     method: 'POST',
-    body: JSON.stringify({ accepted }),
+    body: JSON.stringify(payload),
   })
+  if (result.ok === false) throw new Error(result.error ?? '创建支付提案失败')
+  return result
+}
+
+export async function resolvePayment(
+  gameKey: string,
+  paymentId: string,
+  accepted: boolean,
+): Promise<PaymentResolveResponse> {
+  const result = await api<PaymentResolveResponse>(
+    gamePath(gameKey, `/payments/${encodeURIComponent(paymentId)}`),
+    {
+      method: 'POST',
+      body: JSON.stringify({ accepted }),
+    },
+  )
   if (result.ok === false) throw new Error(result.error ?? '支付决议失败')
+  return result
 }
 
 // ---------- 角色肖像 ----------

@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from './client'
-import { regenerateSwipe, switchSwipe, updateCharacterPortrait, updateRulesetCharacterProfile } from './games'
+import {
+  createPaymentProposal,
+  regenerateSwipe,
+  switchSwipe,
+  updateCharacterPortrait,
+  updateRulesetCharacterProfile,
+} from './games'
 
 vi.mock('./client', () => ({ api: vi.fn() }))
 
@@ -28,6 +34,29 @@ describe('games API swipe contracts', () => {
     expect(mockedApi).toHaveBeenCalledWith('/games/game%2Fa/swipe/3', {
       method: 'PUT',
       body: '{}',
+    })
+  })
+})
+
+describe('games API economy contracts', () => {
+  beforeEach(() => {
+    mockedApi.mockReset()
+    mockedApi.mockResolvedValue({ ok: true })
+  })
+
+  it('GM 通过权威 payments 端点创建提案', async () => {
+    const payload = {
+      payer_uid: 'payer/1',
+      recipient_uid: 'recipient/2',
+      amount: 12,
+      reason: '通行证',
+      items: ['通行证'],
+    }
+    await createPaymentProposal('game/a', payload)
+
+    expect(mockedApi).toHaveBeenCalledWith('/games/game%2Fa/payments', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     })
   })
 })

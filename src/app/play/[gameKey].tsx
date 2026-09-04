@@ -18,6 +18,7 @@ import {
   MoreHorizontal,
   Route,
   User,
+  WalletCards,
 } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -36,7 +37,11 @@ import {
   setGameRoomPassword,
   switchSwipe,
 } from '@/api/games'
-import type { CharacterPortrait, GeneratedImageItem } from '@/api/types'
+import type {
+  CharacterPortrait,
+  GeneratedImageItem,
+  PaymentProposalCreatePayload,
+} from '@/api/types'
 import { ActionComposer } from '@/features/play/ActionComposer'
 import { CharacterCardsModal } from '@/features/play/CharacterCardsModal'
 import { CharacterPanel } from '@/features/play/CharacterPanel'
@@ -46,6 +51,7 @@ import { GmSheet } from '@/features/play/GmSheet'
 import { GAME_STATE_LABEL_KEYS, HealthPanel } from '@/features/play/HealthPanel'
 import { MapWorkspace } from '@/features/play/MapWorkspace'
 import { MultiplayerPanel } from '@/features/play/MultiplayerPanel'
+import { PaymentComposerSheet } from '@/features/play/PaymentComposerSheet'
 import { PaymentModal } from '@/features/play/PaymentModal'
 import { PlotTracker } from '@/features/play/PlotTracker'
 import { PrivateMessagePanel } from '@/features/play/PrivateMessagePanel'
@@ -63,13 +69,19 @@ import { useVoiceInput } from '@/features/play/useVoiceInput'
 import { useT, type T } from '@/i18n/t'
 import { appendActionText } from '@/lib/action-text'
 import { confirmDestructive } from '@/lib/confirm'
+import {
+  economyCurrencyLabel,
+  economyProposalList,
+  isNonBlockingPersonalPurchase,
+  nextEconomyProposal,
+} from '@/lib/economy-prompts'
 import { appLayoutForWidth } from '@/lib/layout'
 import { buildShareLink } from '@/lib/share-link'
 import { shareExportBlob } from '@/lib/share-export'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import {
   selectGmThinking,
-  selectMyPendingPayment,
+  selectMyPendingPayments,
   useGameStore,
 } from '@/stores/game'
 import { useSettingsStore } from '@/stores/settings'
@@ -131,7 +143,7 @@ export default function PlayScreen() {
   const serverTtsEnabled = useGameStore((s) => s.ttsEnabled)
   const health = useGameStore((s) => s.health)
   const gmThinking = useGameStore(selectGmThinking)
-  const myPendingPayment = useGameStore(selectMyPendingPayment)
+  const myPendingPayments = useGameStore(selectMyPendingPayments)
 
   const [draft, setDraft] = React.useState('')
   const [characterOpen, setCharacterOpen] = React.useState(false)
@@ -160,8 +172,14 @@ export default function PlayScreen() {
   // 对局内换头像抽屉（对齐 Web PlayView 的 showPortraitEditor：面板发事件、屏幕持有弹窗）
   const [portraitOpen, setPortraitOpen] = React.useState(false)
   const [sceneGalleryOpen, setSceneGalleryOpen] = React.useState(false)
+  const [paymentComposerOpen, setPaymentComposerOpen] = React.useState(false)
   const [sceneImages, setSceneImages] = React.useState<GeneratedImageItem[]>([])
   const [sceneImagesLoading, setSceneImagesLoading] = React.useState(false)
+  // 「稍后」仅是本地收起；按 game/run 隔离，重开一局不会误用旧提案 id。
+  const [dismissedPayments, setDismissedPayments] = React.useState<{
+    scope: string
+    ids: string[]
+  }>({ scope: '', ids: [] })
 
   const voice = useVoiceInput(gameKey, (text) => {
     setDraft((current) => appendActionText(current, text))
@@ -182,6 +200,21 @@ export default function PlayScreen() {
   const submittedActions = detail?.multiplayer?.submitted_actions ?? []
   const privateMessages = useGameStore((s) => s.privateMessages)
   const myPlayer = players.find((player) => player.user_id === userId) ?? null
+  const paymentScope = `${gameKey}:${detail?.run_id || ''}`
+  const dismissedPaymentIds = dismissedPayments.scope === paymentScope
+    ? dismissedPayments.ids
+    : []
+  const currentPayment = nextEconomyProposal(
+    myPendingPayments,
+    userId,
+    String(detail?.gm_uid || ''),
+    new Set(dismissedPaymentIds),
+  ) ?? null
+  const economyCurrency = economyCurrencyLabel(ruleMeta)
+  const hasBlockingEconomyProposal = economyProposalList(detail).some(
+    (proposal) => proposal.status === 'pending'
+      && !isNonBlockingPersonalPurchase(proposal, String(detail?.run_id || '')),
+  )
 
   const busy = actionBusy || gmBusy
 
@@ -476,17 +509,25 @@ export default function PlayScreen() {
     }
   }
 
+  async function handleCreatePayment(payload: PaymentProposalCreatePayload) {
+    await useGameStore.getState().createPayment(payload)
+    setPaymentComposerOpen(false)
+  }
+
   const stateLabel = pendingLuck.length
     ? t('luckDecisionState')
     : gmThinking
       ? t('dfPlayGmThinking')
       : stateLabelOf(detail?.state, t)
-  const composerDisabled = pendingLuck.length > 0 || detail?.state === 'ended'
+  const composerDisabled =
+    pendingLuck.length > 0 || hasBlockingEconomyProposal || detail?.state === 'ended'
   const composerDisabledReason = pendingLuck.length
     ? t('dfPlayResolveLuckFirst')
-    : detail?.state === 'ended'
-      ? t('dfPlayGameEnded')
-      : undefined
+    : hasBlockingEconomyProposal
+      ? t('apiErrors.economy_decision_pending')
+      : detail?.state === 'ended'
+        ? t('dfPlayGameEnded')
+        : undefined
 
   const statusBadge =
     streamStatus === 'live' ? (
@@ -554,7 +595,7 @@ export default function PlayScreen() {
       <Button
         size="sm"
         className="flex-1"
-        disabled={busy}
+        disabled={busy || hasBlockingEconomyProposal}
         onPress={() => void runGm(() => useGameStore.getState().advance())}
       >
         <Text>{t('dfPlayAdvance')}</Text>
@@ -654,6 +695,16 @@ export default function PlayScreen() {
                 <Text>{t('dfPlayTabMap')}</Text>
               </Button>
             </>
+          )}
+          {myPendingPayments.length > 0 && !currentPayment && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onPress={() => setDismissedPayments({ scope: paymentScope, ids: [] })}
+            >
+              <Icon as={WalletCards} size={16} />
+              <Text>{t('economyPendingAction', { count: myPendingPayments.length })}</Text>
+            </Button>
           )}
           {privateMessages.length > 0 && (
             <Button
@@ -825,6 +876,10 @@ export default function PlayScreen() {
                 setMenuOpen(false)
                 void openWorldSwitch()
               }}
+              onCreatePayment={() => {
+                setMenuOpen(false)
+                setPaymentComposerOpen(true)
+              }}
               onExport={() => void handleExport()}
               onReset={() => void handleReset()}
               onRestart={() => void handleRestart()}
@@ -965,10 +1020,35 @@ export default function PlayScreen() {
         onClose={() => setSceneGalleryOpen(false)}
       />
 
-      {/* GM 支付决议：selectMyPendingPayment 只取当前玩家名下的待决议请求，
-          弹出/稍后/请求中与失败态由弹窗内部管理 */}
+      <PaymentComposerSheet
+        open={paymentComposerOpen}
+        players={players}
+        busy={gmBusy}
+        onClose={() => setPaymentComposerOpen(false)}
+        onSubmit={handleCreatePayment}
+      />
+
+      {/* 权威经济提案：支持付款人、GM 奖励与多人分摊；稍后收起后顶栏保留入口。 */}
       <PaymentModal
-        payment={myPendingPayment}
+        key={String(currentPayment?.id || currentPayment?.payment_id || '')}
+        payment={currentPayment}
+        currency={economyCurrency}
+        playerName={(uid) =>
+          players.find((player) => player.user_id === uid)?.character_name || uid || '—'
+        }
+        actorId={userId}
+        gmUid={String(detail?.gm_uid || '')}
+        runId={String(detail?.run_id || '')}
+        solo={Boolean(detail?.solo_mode)}
+        onDismiss={(paymentId) =>
+          setDismissedPayments((current) => {
+            const ids = current.scope === paymentScope ? current.ids : []
+            return {
+              scope: paymentScope,
+              ids: ids.includes(paymentId) ? ids : [...ids, paymentId],
+            }
+          })
+        }
         onResolve={(paymentId, accepted) =>
           useGameStore.getState().decidePayment(paymentId, accepted)
         }

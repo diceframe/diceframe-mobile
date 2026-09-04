@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { auth } from './messages/mobile/auth'
 import { characters } from './messages/mobile/characters'
 import { common } from './messages/mobile/common'
+import { create } from './messages/mobile/create'
 import { lore } from './messages/mobile/lore'
 import { overview } from './messages/mobile/overview'
 import { play } from './messages/mobile/play'
@@ -17,6 +18,7 @@ const MOBILE_CLUSTERS = {
   settings,
   auth,
   overview,
+  create,
   profile,
   play,
   characters,
@@ -41,6 +43,19 @@ describe('上游镜像翻译（web 段）', () => {
       for (const [key, value] of Object.entries(dict)) {
         expect(value, `${lang}/${key}`).not.toMatch(/(^|[^{])\{[a-zA-Z_][a-zA-Z0-9_]*\}($|[^}])/)
       }
+    }
+  })
+
+  it('本轮经济契约文案的三语插值参数一致', () => {
+    const keys = keysOf(webZhCN).filter((key) =>
+      key.startsWith('economy')
+      || key.startsWith('gmPayment')
+      || key === 'importedWithFailures',
+    )
+    for (const key of keys) {
+      const expected = placeholderParams((webZhCN as Record<string, string>)[key])
+      expect(placeholderParams((webEn as Record<string, string>)[key]), `${key} en 插值参数`).toEqual(expected)
+      expect(placeholderParams((webJa as Record<string, string>)[key]), `${key} ja 插值参数`).toEqual(expected)
     }
   })
 })

@@ -9,10 +9,11 @@
  */
 import { create } from 'zustand'
 
-import { currentShare, errorMessage, fetchAppConfig } from '@/api/client'
+import { ApiError, currentShare, errorMessage, fetchAppConfig } from '@/api/client'
 import {
   advanceGame,
   claimGm,
+  createPaymentProposal,
   fetchCharacters,
   fetchCharacterCards,
   fetchGameDetail,
@@ -52,6 +53,8 @@ import type {
   LogEntry,
   MapData,
   PendingPayment,
+  PaymentProposalCreatePayload,
+  PaymentResolveResponse,
   Player,
   PrivateMessage,
   RuleAttribute,
@@ -67,6 +70,10 @@ import {
 } from '@/stream/gameStream'
 import { hasNewRound } from '@/lib/game-state'
 import { mergePendingLuck } from '@/lib/check-details'
+import {
+  economyProposalList,
+  isEconomyProposalActionable,
+} from '@/lib/economy-prompts'
 
 interface GameStore {
   gameKey: string
@@ -125,8 +132,9 @@ interface GameStore {
   fetchWorldCandidates: () => Promise<WorldCandidate[]>
   // 生成图
   fetchGeneratedImages: () => Promise<GeneratedImageItem[]>
-  // 支付决议
-  decidePayment: (paymentId: string, accepted: boolean) => Promise<void>
+  // 权威经济提案
+  createPayment: (payload: PaymentProposalCreatePayload) => Promise<void>
+  decidePayment: (paymentId: string, accepted: boolean) => Promise<PaymentResolveResponse>
 }
 
 const initial = {
@@ -361,7 +369,16 @@ export const useGameStore = create<GameStore>((set, get) => {
         await submitAction(gameKey, text.trim())
         if (get().gameKey === gameKey) await get().refresh()
       } catch (error) {
-        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        const message = errorMessage(error)
+        if (
+          error instanceof ApiError
+          && error.code?.toUpperCase() === 'ECONOMY_DECISION_PENDING'
+          && get().gameKey === gameKey
+        ) {
+          // 409 响应说明本地 detail 可能落后；只刷新权威状态，绝不自动重放写请求。
+          await get().refresh()
+        }
+        if (get().gameKey === gameKey) set({ error: message })
         throw error
       } finally {
         if (get().gameKey === gameKey) set({ actionBusy: false })
@@ -383,8 +400,21 @@ export const useGameStore = create<GameStore>((set, get) => {
     async advance() {
       const { gameKey } = get()
       if (!gameKey) return
-      await advanceGame(gameKey)
-      if (get().gameKey === gameKey) await get().refresh()
+      try {
+        await advanceGame(gameKey)
+        if (get().gameKey === gameKey) await get().refresh()
+      } catch (error) {
+        const message = errorMessage(error)
+        if (
+          error instanceof ApiError
+          && error.code?.toUpperCase() === 'ECONOMY_DECISION_PENDING'
+          && get().gameKey === gameKey
+        ) {
+          await get().refresh()
+        }
+        if (get().gameKey === gameKey) set({ error: message })
+        throw error
+      }
     },
 
     async rollback() {
@@ -397,8 +427,21 @@ export const useGameStore = create<GameStore>((set, get) => {
     async command(text) {
       const { gameKey } = get()
       if (!gameKey || !text.trim()) return
-      await gmCommand(gameKey, text.trim())
-      if (get().gameKey === gameKey) await get().refresh()
+      try {
+        await gmCommand(gameKey, text.trim())
+        if (get().gameKey === gameKey) await get().refresh()
+      } catch (error) {
+        const message = errorMessage(error)
+        if (
+          error instanceof ApiError
+          && error.code?.toUpperCase() === 'ECONOMY_DECISION_PENDING'
+          && get().gameKey === gameKey
+        ) {
+          await get().refresh()
+        }
+        if (get().gameKey === gameKey) set({ error: message })
+        throw error
+      }
     },
 
     // ---------- GM 工具 ----------
@@ -614,14 +657,35 @@ export const useGameStore = create<GameStore>((set, get) => {
       return result.images ?? []
     },
 
-    async decidePayment(paymentId, accepted) {
+    async createPayment(payload) {
       const { gameKey } = get()
       if (!gameKey) return
+      set({ gmBusy: true })
       try {
-        await resolvePayment(gameKey, paymentId, accepted)
+        await createPaymentProposal(gameKey, payload)
         if (get().gameKey === gameKey) await get().refresh()
       } catch (error) {
         if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        throw error
+      } finally {
+        if (get().gameKey === gameKey) set({ gmBusy: false })
+      }
+    },
+
+    async decidePayment(paymentId, accepted) {
+      const { gameKey } = get()
+      if (!gameKey) return {}
+      try {
+        const result = await resolvePayment(gameKey, paymentId, accepted)
+        if (get().gameKey === gameKey) await get().refresh()
+        return result
+      } catch (error) {
+        const message = errorMessage(error)
+        if (get().gameKey === gameKey) {
+          // 决议失败也可能已改变服务端状态（如余额不足会自动拒绝）；刷新后再展示原错误。
+          await get().refresh()
+          if (get().gameKey === gameKey) set({ error: message })
+        }
         throw error
       }
     },
@@ -665,16 +729,33 @@ export function selectGmThinking(state: GameStore) {
 }
 
 /**
- * 当前用户名下最早一条未决议的支付请求（对齐 Web PlayView 的 watch 语义）。
+ * 当前身份需要处理的权威经济提案。新服务端优先投影 economy_proposals，旧服回退
+ * pending_payments；GM 奖励、付款人和全队分摊分别按 approval_policy 路由。
  *
- * - 目标匹配：pending_payments[].uid 是被请求支付的玩家 id，与 Web 一致只认
- *   `uid === 当前会话用户`（GM 与无关玩家不命中，不弹窗）；uid 缺失的服务端
- *   旧数据无法确认归属，同样不弹。
- * - 排队从简：一次只取数组顺序里的第一条（服务端按产生顺序追加），决议后
- *   refresh 带回下一条，key 变化时弹窗自然轮到它。
+ * selector 结果按 detail/身份缓存，避免 zustand v5 因新数组引用反复重渲染。
  */
+let economyProposalCache: {
+  detail: GameDetail | null
+  userId: string
+  result: PendingPayment[]
+} = { detail: null, userId: '', result: [] }
+
+export function selectMyPendingPayments(state: GameStore): PendingPayment[] {
+  if (economyProposalCache.detail === state.detail && economyProposalCache.userId === state.userId) {
+    return economyProposalCache.result
+  }
+  const proposals = economyProposalList(state.detail)
+  const result = state.userId
+    ? proposals.filter((proposal) => isEconomyProposalActionable(
+        proposal,
+        state.userId,
+        String(state.detail?.gm_uid || ''),
+      ))
+    : []
+  economyProposalCache = { detail: state.detail, userId: state.userId, result }
+  return result
+}
+
 export function selectMyPendingPayment(state: GameStore): PendingPayment | null {
-  if (!state.userId) return null
-  const list = state.detail?.pending_payments ?? []
-  return list.find((p) => p.status === 'pending' && p.uid === state.userId) ?? null
+  return selectMyPendingPayments(state)[0] ?? null
 }
