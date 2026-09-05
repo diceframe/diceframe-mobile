@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { ActivityIndicator, Pressable, View } from 'react-native'
 import { Image as ExpoImage } from 'expo-image'
-import { ChevronLeft, ChevronRight, RotateCcw, Volume2 } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, Pause, RotateCcw, Volume2 } from 'lucide-react-native'
 
 import { Card } from '@/components/ui/card'
 import { Text } from '@/components/ui/text'
@@ -19,6 +19,7 @@ import { CheckCard } from './CheckCard'
 import { GmNarration } from './GmNarration'
 import { playerColor, playerColorSoft } from './playerColor'
 import { roundSceneImageSource } from './sceneImage'
+import type { SpeechControl } from './useSpeaker'
 
 /** 玩家专属气泡色（uid 稳定散列取色，与 Web playerColor 同算法） */
 
@@ -154,7 +155,7 @@ export function TimelineItem({
   gameKey,
   currentUserId,
   ttsAvailable,
-  onSpeak,
+  speech,
   isGm,
   luckBusy,
   onDecideLuck,
@@ -166,7 +167,8 @@ export function TimelineItem({
   gameKey: string
   currentUserId: string
   ttsAvailable: boolean
-  onSpeak: (text: string) => void
+  /** 朗读三态控制（喇叭/转圈/暂停），由宿主从 useSpeaker 注入，保证图标与播放状态一致 */
+  speech: SpeechControl
   isGm?: boolean
   /** 运气决议请求进行中：内嵌按钮统一禁用（与顶部 LuckCard 共用同一 busy 语义） */
   luckBusy?: boolean
@@ -178,6 +180,9 @@ export function TimelineItem({
   const actions = actionsOf(entry)
   const checks = Array.isArray(entry.check_results) ? entry.check_results : []
   const scene = roundSceneImageSource(gameKey, entry.scene_image)
+  // 本回合是否是当前朗读活动：空闲=喇叭、合成中=转圈、播放中=暂停，图标必须与实际状态一致
+  const responseText = (entry.gm_response ?? '').trim()
+  const speakingMine = !!responseText && speech.activeText === responseText
   const swipes = Array.isArray(entry.swipes) ? entry.swipes : []
   const swipeCount = swipes.length
   const swipeCur = Math.min(Math.max(Number(entry.current_swipe) || 0, 0), Math.max(swipeCount - 1, 0))
@@ -256,11 +261,20 @@ export function TimelineItem({
             </Text>
             {ttsAvailable ? (
               <Pressable
-                onPress={() => onSpeak(String(entry.gm_response ?? ''))}
+                onPress={() => speech.onToggle(responseText)}
+                disabled={speakingMine && speech.busy}
                 className="h-7 w-7 items-center justify-center rounded-md active:bg-accent"
-                accessibilityLabel={t('dfPlayReadAloud')}
+                accessibilityLabel={t(speakingMine && speech.playing ? 'dfPlayTtsStop' : 'dfPlayReadAloud')}
               >
-                <Icon as={Volume2} size={15} className="text-muted-foreground" />
+                {speakingMine && speech.busy ? (
+                  <ActivityIndicator size="small" className="text-muted-foreground" />
+                ) : (
+                  <Icon
+                    as={speakingMine && speech.playing ? Pause : Volume2}
+                    size={15}
+                    className="text-muted-foreground"
+                  />
+                )}
               </Pressable>
             ) : null}
           </View>

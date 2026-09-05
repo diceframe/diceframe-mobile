@@ -19,6 +19,7 @@ import { useGameStore, selectPendingLuck } from '@/stores/game'
 import { CheckCard } from './CheckCard'
 import { GmNarration } from './GmNarration'
 import { TimelineItem } from './TimelineItem'
+import type { SpeechControl } from './useSpeaker'
 
 /** detail 未就绪时的稳定空数组：内联 selector 返回字面量 [] 会让 zustand v5 快照每次都变 */
 const NO_CHECKS: CheckResult[] = []
@@ -98,10 +99,10 @@ export function GameTimeline({
   gmThinking,
   submittedActions,
   ttsAvailable,
+  speech,
   isGm,
   onLoadOlder,
   onDecideLuck,
-  onSpeak,
   onSwipeTo,
   onReroll,
 }: {
@@ -119,10 +120,11 @@ export function GameTimeline({
   gmThinking: boolean
   submittedActions: PublicAction[]
   ttsAvailable: boolean
+  /** 朗读三态控制（喇叭/转圈/暂停），宿主持有 useSpeaker 实例注入 */
+  speech: SpeechControl
   isGm?: boolean
   onLoadOlder: () => void
   onDecideLuck: (check: CheckResult, spend: boolean) => void
-  onSpeak: (text: string) => void
   onSwipeTo?: (round: number, swipeIndex: number) => Promise<void>
   onReroll?: (round: number) => Promise<void>
 }) {
@@ -285,7 +287,7 @@ export function GameTimeline({
               gameKey={gameKey}
               currentUserId={currentUserId}
               ttsAvailable={ttsAvailable}
-              onSpeak={onSpeak}
+              speech={speech}
               isGm={isGm}
               luckBusy={luckBusy}
               onDecideLuck={onDecideLuck}

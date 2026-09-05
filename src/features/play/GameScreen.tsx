@@ -543,7 +543,12 @@ export default function GameScreen() {
                   void decideLuck(check.check_id ?? '', spend)
                 }
                 ttsAvailable={ttsAvailable}
-                onSpeak={(text) => void speaker.speak(text)}
+                speech={{
+                  activeText: speaker.activeText,
+                  playing: speaker.playing,
+                  busy: speaker.busy,
+                  onToggle: (text) => void speaker.speak(text),
+                }}
                 isGm={isGm}
                 onSwipeTo={handleSwipeTo}
                 onReroll={handleRerollSwipe}

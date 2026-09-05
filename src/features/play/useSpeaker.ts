@@ -17,12 +17,26 @@ import { useSettingsStore } from '@/stores/settings'
 
 import { chunkSpeechText } from './tts-options'
 
+/**
+ * 时间线朗读按钮的三态输入：空闲显示小喇叭，合成中显示转圈，播放中显示暂停。
+ * activeText 供各回合按钮比对「正在响的是不是我」，与 playing/busy 一起保证图标与实际状态一致。
+ */
+export interface SpeechControl {
+  /** 当前活动（合成中或播放中）的文本，trim 后存储；空串表示空闲 */
+  activeText: string
+  playing: boolean
+  busy: boolean
+  onToggle: (text: string) => void
+}
+
 export function useSpeaker(gameKey: string) {
   const ttsRate = useSettingsStore((s) => s.ttsRate)
   const ttsEngine = useSettingsStore((s) => s.ttsEngine)
   const [playing, setPlaying] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
+  // 活动文本是渲染状态：时间线按钮靠它做图标三态匹配；ref 供事件处理器同步读取
+  const [activeText, setActiveText] = React.useState('')
   const playerRef = React.useRef<AudioPlayer | null>(null)
   // 合成在途标记用 ref：快速连点时事件处理器读到的还是旧渲染闭包，state 挡不住
   const busyRef = React.useRef(false)
@@ -30,6 +44,11 @@ export function useSpeaker(gameKey: string) {
   const activeTextRef = React.useRef('')
   // 系统引擎排队块计数：expo-speech 对每块各回调一次 onDone，全部结束才算播完
   const pendingChunksRef = React.useRef(0)
+
+  function setActive(trimmed: string) {
+    activeTextRef.current = trimmed
+    setActiveText(trimmed)
+  }
 
   React.useEffect(() => {
     return () => {
@@ -46,7 +65,7 @@ export function useSpeaker(gameKey: string) {
     // 两个引擎都停：播放途中切换引擎不留残余语音（无语音时是空操作）
     void Speech.stop()
     pendingChunksRef.current = 0
-    activeTextRef.current = ''
+    setActive('')
     setPlaying(false)
   }
 
@@ -56,7 +75,7 @@ export function useSpeaker(gameKey: string) {
     if (failure) setError(failure)
     pendingChunksRef.current -= 1
     if (failure || pendingChunksRef.current <= 0) {
-      activeTextRef.current = ''
+      setActive('')
       setPlaying(false)
     }
   }
@@ -89,7 +108,7 @@ export function useSpeaker(gameKey: string) {
       player.addListener('playbackStatusUpdate', (status) => {
         if (status.didJustFinish) {
           setPlaying(false)
-          if (activeTextRef.current === trimmed) activeTextRef.current = ''
+          if (activeTextRef.current === trimmed) setActive('')
           player.release()
           if (playerRef.current === player) playerRef.current = null
         }
@@ -98,7 +117,7 @@ export function useSpeaker(gameKey: string) {
       player.play()
     } catch (e) {
       // 失败后清掉活动文本，下次点击可以重试同一段
-      if (activeTextRef.current === trimmed) activeTextRef.current = ''
+      if (activeTextRef.current === trimmed) setActive('')
       setError(errorMessage(e, 'dfPlayTtsFailed'))
     } finally {
       busyRef.current = false
@@ -111,13 +130,13 @@ export function useSpeaker(gameKey: string) {
     if (!trimmed) return
     // 防抖：合成在途时忽略新请求，连点与自动朗读叠加都不会并发请求重复合成
     if (busyRef.current) return
-    // 正在朗读同一段时再按 = 停止（对齐 Web ttsToggle 的停止语义）
+    // 正在朗读同一段时再按 = 停止（暂停即回到小喇叭，无断点续播）
     if (activeTextRef.current === trimmed) {
       stop()
       return
     }
     stop()
-    activeTextRef.current = trimmed
+    setActive(trimmed)
     setError('')
     if (ttsEngine === 'system') {
       speakWithSystem(trimmed)
@@ -126,5 +145,5 @@ export function useSpeaker(gameKey: string) {
     await speakWithServer(trimmed)
   }
 
-  return { speak, stop, playing, busy, error }
+  return { speak, stop, playing, busy, error, activeText }
 }
