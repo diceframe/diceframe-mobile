@@ -12,6 +12,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
 import { ErrorBoundary } from '@/components/error-boundary'
 import { configureApiClient } from '@/api/client'
+import { Toaster } from 'sonner-native'
 import { useLocaleSync } from '@/hooks/useLocaleSync'
 import { useResolvedTheme, useThemeToken } from '@/lib/theme'
 import { useSettingsStore } from '@/stores/settings'
@@ -66,6 +67,8 @@ export default function RootLayout() {
             }}
           />
           <PortalHost />
+          {/* 应用内 toast：错误与操作提示不再占输入区排版，顶部居中不挡底部输入。 */}
+          <Toaster position="top-center" richColors />
         </ThemeProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>
