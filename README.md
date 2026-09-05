@@ -99,9 +99,30 @@ npm run lint      # eslint（react-hooks + compiler 规则）
 npx expo export --platform android --output-dir dist  # 本地整包冒烟
 ```
 
-### 不安装 Android Studio 构建 APK
+### 本地构建与发布 APK
 
-仓库提供手动触发的 GitHub Actions 工作流 `Build Android APK`。在 GitHub 仓库的
+默认在本机构建正式签名 APK 并上传 GitHub Release，减少云端构建等待。首次配置使用
+`scripts/configure-android-signing.ps1`，必须沿用已发布 APK 的签名密钥。
+设置 `JAVA_HOME` 为 JDK 17、`ANDROID_HOME` 为 Android SDK 后运行：
+
+```bash
+npx expo prebuild --platform android --no-install
+cd android
+./gradlew assembleRelease --no-daemon
+```
+
+产物在 `android/app/build/outputs/apk/release/`。将 `app-arm64-v8a-release.apk`、
+`app-armeabi-v7a-release.apk`、`app-universal-release.apk` 分别命名为下文三个发布包名，
+核对包名、原生版本、构建号及签名与旧版一致，再生成 SHA-256 文件，与 APK 一并上传
+GitHub Release。先上传齐全附件，再公开 Release 并设为 latest。发布说明直接保存在
+Release 正文中，发布成功后删除临时说明 md。
+
+GitHub CLI 未登录时，可从 Git Credential Manager 复用 GitHub 凭据，仅在子进程环境
+注入 `GH_TOKEN`，不得打印或落盘。
+
+### GitHub Actions 备用构建
+
+本地环境不可用时，可手动触发 GitHub Actions 工作流 `Build Android APK`。在 GitHub 仓库的
 **Actions** 页面选择该工作流，点击 **Run workflow**；构建完成后，从运行页面底部的
 Artifacts 下载 `diceframe-android-apk`。压缩包内包含三个可直接安装的 APK 及各自的
 SHA-256 校验文件：
@@ -128,8 +149,9 @@ SHA-256 校验文件：
 
 客户端进入首页、返回首页或应用回到前台时，会静默读取本仓库 GitHub Releases 的
 latest release，与已安装 APK 的原生版本比较（Expo Go / Web 回退 `expo.version`）。
-发现新版后，首页右上角铃铛显示
-红点，点击直接查看版本说明并下载 APK；**我的 → 检查更新** 也可进入同一页面手动检查。
+仅在发现新版后，首页右上角才显示带红点的铃铛，并间歇轻摇；没有新版或尚未取得更新
+结果时不显示铃铛，也不占位。点击铃铛查看版本说明并下载 APK；**我的 → 检查更新**
+始终可手动检查。离开首页或进入后台时停止摇动，系统开启减少动态效果时保持静止。
 更新页与首页共享结果，自动检查成功后 6 小时内复用缓存，失败后 15 分钟再试，
 手动检查不受该间隔限制。缓存仅保留在本次应用运行期间，重新启动会再次检查；
 网络失败不弹窗，也不会清除已发现的新版提醒，红点持续显示至检测结果不再有新版。

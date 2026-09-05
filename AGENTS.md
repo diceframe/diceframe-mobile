@@ -30,7 +30,7 @@ npm run ui:add      # 从 rnr registry 生成基础组件到 src/components/ui�
 ```
 
 CI（`.github/workflows/ci.yml`）= typecheck + test + lint 三项全绿才算过。提交前至少跑 typecheck 和 lint。
-对外发布的 APK 用 GitHub Actions 工作流 `Build Android APK`（README 有说明）；实机调试的本地构建方式见下文「平台与构建注意」。
+对外发布默认本地构建正式签名 APK，校验版本、签名与 SHA-256 后上传 GitHub Release；GitHub Actions `Build Android APK` 仅作备用，避免云端构建耗时。方式见下文「平台与构建注意」和 README。
 
 ## 架构与分层（依赖只允许自上而下）
 
@@ -97,7 +97,9 @@ src/
   `android/gradlew assembleRelease`（新增含原生代码的依赖后先
   `npx expo prebuild -p android --clean --no-install`），产物在
   `android/app/build/outputs/apk/release/`，`adb install -r` 安装；
-  对外发布的 APK 仍以 GitHub Actions `Build Android APK` 工作流为准。
+  对外发布同样使用本地正式签名构建；发布前校验三个 APK 的原生版本、递增构建号和签名与旧版一致，生成 SHA-256 文件后一并上传 GitHub Release。GitHub Actions `Build Android APK` 仅作备用。
+- GitHub CLI 未登录时可复用 Git Credential Manager 的 GitHub 凭据，仅在子进程环境注入 `GH_TOKEN`，不得打印或写入文件；不要因此停止已获授权的发布。
+- 发布说明写入 GitHub Release 正文；发布成功后删除临时发布说明 md，不在仓库长期保留。
 - 移动端调用的 `/adventures`、`/worlds/clone-from-template`、`/worlds/{id}/gm-style`
   是预设端点（服务端尚未实现），调用处已做优雅降级，服务端上线后自动生效。
 - Android 已开 `usesCleartextTraffic`（局域网明文 HTTP 是核心场景）；iOS ATS 例外留待出包处理。

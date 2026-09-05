@@ -31,7 +31,7 @@ describe('0.5.0 到当前补丁版更新流程', () => {
 
     expect(appConfig.expo.android.versionCode).toBeGreaterThan(7)
     await store.getState().check({ automatic: true })
-    expect(store.getState().result).toMatchObject({ latestVersion: '0.5.1', isNewer: true, apkName: 'DiceFrame-android-arm64-v8a.apk' })
+    expect(store.getState().result).toMatchObject({ latestVersion: appConfig.expo.version, isNewer: true, apkName: 'DiceFrame-android-arm64-v8a.apk' })
     await store.getState().check()
     expect(store.getState().result?.isNewer).toBe(true)
     expect(store.getState().error).toBe(getT()('dfUpdatesCheckFailed'))

@@ -3,11 +3,12 @@ import { Pressable, RefreshControl, StyleSheet, useWindowDimensions, View } from
 import { GlassView } from 'expo-glass-effect'
 import { useNavigation, useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
-import { Bell, Check, ListChecks, Plus, ScrollText, Trash2, X } from 'lucide-react-native'
+import { Check, ListChecks, Plus, ScrollText, Trash2, X } from 'lucide-react-native'
 
 import { PageHeader } from '@/components/page-header'
 import { SceneCover } from '@/components/patterns/scene-cover'
 import { StatusBadge } from '@/components/patterns/status-badge'
+import { UpdateBell } from '@/components/patterns/update-bell'
 import { Screen } from '@/components/screen'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -345,22 +346,12 @@ export default function OverviewScreen() {
         className="px-0"
         right={
           <View className="flex-row items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-11 w-11"
-              onPress={() => router.push('/(profile)/settings/updates')}
-              accessibilityLabel={updates.result?.isNewer
-                ? t('dfUpdatesNewVersionFound', { version: updates.result.latestVersion })
-                : t('dfUpdatesTitle')}
-            >
-              <View className="relative p-1" pointerEvents="none">
-                <Icon as={Bell} size={21} />
-                {updates.result?.isNewer ? (
-                  <View className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-background bg-destructive" />
-                ) : null}
-              </View>
-            </Button>
+            {updates.result?.isNewer ? (
+              <UpdateBell
+                version={updates.result.latestVersion}
+                onPress={() => router.push('/(profile)/settings/updates')}
+              />
+            ) : null}
             <Button size="sm" onPress={openCreate} accessibilityLabel={t('dfOverviewNew')}>
               <Icon as={Plus} size={16} />
               <Text>{t('dfOverviewNew')}</Text>
