@@ -12,6 +12,7 @@ import { Icon } from '@/components/ui/icon'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
 import { errorMessage } from '@/api/client'
+import { UserFacingError } from '@/lib/user-facing-error'
 import {
   regenerateSwipe,
   setGameRoomPassword,
@@ -211,14 +212,14 @@ export default function GameScreen() {
     // 录音/编辑期间对局可能已经变化，发送时重新检查当前状态。
     const current = useGameStore.getState()
     if (current.gameKey !== gameKey || current.detail?.state === 'ended') {
-      throw new Error(t('dfPlayGameEnded'))
+      throw new UserFacingError('dfPlayGameEnded')
     }
-    if (current.actionBusy || current.gmBusy) throw new Error(t('dfPlayVoiceSendBusy'))
-    if (current.detail?.pending_luck_decisions?.length) throw new Error(t('dfPlayResolveLuckFirst'))
+    if (current.actionBusy || current.gmBusy) throw new UserFacingError('dfPlayVoiceSendBusy')
+    if (current.detail?.pending_luck_decisions?.length) throw new UserFacingError('dfPlayResolveLuckFirst')
     if (economyProposalList(current.detail).some(
       (proposal) => proposal.status === 'pending'
         && !isNonBlockingPersonalPurchase(proposal, String(current.detail?.run_id || '')),
-    )) throw new Error(t('apiErrors.economy_decision_pending'))
+    )) throw new UserFacingError('apiErrors.economy_decision_pending')
     await current.submit(text)
     void playGameHaptic('submit')
   }

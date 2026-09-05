@@ -161,9 +161,9 @@ describe('api()', () => {
     expect(errorMessage(error)).toBe('请先处理待确认的经济提案，再继续本局叙事')
   })
 
-  it('未知错误码保留服务端原文', () => {
+  it('未知错误码按状态提示，不显示服务端原文', () => {
     expect(errorMessage(new ApiError('server detail', 409, 'UNKNOWN_CONFLICT'))).toBe(
-      'server detail',
+      '当前状态已发生变化，请刷新后重试。',
     )
   })
 

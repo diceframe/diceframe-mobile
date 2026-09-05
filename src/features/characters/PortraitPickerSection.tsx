@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker'
 import { Image } from 'expo-image'
 import { ChevronDown, ChevronUp, ImagePlus, Sparkles, Trash2, UserRound } from 'lucide-react-native'
 
-import { buildStaticAssetUrl } from '@/api/client'
+import { buildStaticAssetUrl, errorMessage } from '@/api/client'
 import { libraryAvatarSource } from '@/api/assets'
 import { MAX_AVATAR_BYTES, deleteUserAvatar, listUserAvatars, uploadAvatar, type UserAvatar } from '@/api/avatars'
 import { generateAvatarImage } from '@/api/images'
@@ -117,7 +117,7 @@ export function PortraitPickerSection({
       const assetId = await generateAvatarImage({ prompt: subject, name, ruleId })
       onChange({ kind: 'generated', asset_id: assetId })
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(errorMessage(cause))
     } finally {
       setGenerating(false)
     }
@@ -159,7 +159,7 @@ export function PortraitPickerSection({
       })
       onChange(portrait)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(errorMessage(cause))
     } finally {
       setUploading(false)
     }
@@ -192,7 +192,7 @@ export function PortraitPickerSection({
       await deleteUserAvatar(assetId)
       setUserAvatars((items) => items.filter((item) => item.asset_id !== assetId))
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(errorMessage(cause))
     }
   }
 

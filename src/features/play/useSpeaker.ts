@@ -11,6 +11,7 @@ import * as Speech from 'expo-speech'
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio'
 
 import { synthesizeSpeech } from '@/api/speech'
+import { errorMessage } from '@/api/client'
 import { getT } from '@/i18n/t'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -98,7 +99,7 @@ export function useSpeaker(gameKey: string) {
     } catch (e) {
       // 失败后清掉活动文本，下次点击可以重试同一段
       if (activeTextRef.current === trimmed) activeTextRef.current = ''
-      setError(e instanceof Error ? e.message : getT()('dfPlayTtsFailed'))
+      setError(errorMessage(e, 'dfPlayTtsFailed'))
     } finally {
       busyRef.current = false
       setBusy(false)

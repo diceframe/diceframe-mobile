@@ -12,6 +12,7 @@ import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
 import { buildCardPatch, normalizeSkillList, type CharacterCardPatch } from '@/lib/character-card'
 import { useT } from '@/i18n/t'
+import { errorMessage } from '@/api/client'
 import { PortraitPickerSection } from './PortraitPickerSection'
 import { SkillRowsEditor } from './SkillRowsEditor'
 
@@ -90,7 +91,7 @@ export function CharacterCardEditor({
       } catch (cause) {
         if (cancelled) return
         setSchema(null)
-        setSchemaError(cause instanceof Error ? cause.message : String(cause))
+        setSchemaError(errorMessage(cause))
       }
     }
     void loadSchema()
@@ -117,7 +118,7 @@ export function CharacterCardEditor({
       await onSubmit(patch)
       onClose()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(errorMessage(cause))
     } finally {
       setSaving(false)
     }

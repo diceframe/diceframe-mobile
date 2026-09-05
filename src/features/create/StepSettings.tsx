@@ -18,6 +18,7 @@ import { Field } from '@/features/create/field'
 import type { CreateFormState, NarrativePerspective } from '@/features/create/payload'
 import { BUILTIN_MAP_BACKGROUNDS, mapBackgroundOf, mapBackgroundValue } from '@/lib/map-background'
 import { useT } from '@/i18n/t'
+import { errorMessage } from '@/api/client'
 import { cn } from '@/lib/utils'
 
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp'])
@@ -123,7 +124,7 @@ export function StepSettings({
     setUploadError('')
     setUploading(kind)
     void pickAndUpload(kind === 'scene' ? uploadScene : uploadMap, handleUploadError)
-      .catch((cause: unknown) => setUploadError(cause instanceof Error ? cause.message : String(cause)))
+      .catch((cause: unknown) => setUploadError(errorMessage(cause)))
       .finally(() => setUploading(null))
   }
 

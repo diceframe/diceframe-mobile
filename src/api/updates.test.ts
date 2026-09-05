@@ -30,26 +30,36 @@ describe('GitHub latest release 拉取', () => {
       init.signal?.addEventListener('abort', () => reject(new Error('aborted')))
     })))
     const request = fetchLatestRelease()
-    const assertion = expect(request).rejects.toThrow('检查更新失败')
+    const assertion = expect(request).rejects.toThrow('dfUpdatesCheckFailed')
     await vi.advanceTimersByTimeAsync(15_000)
     await assertion
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('404 映射为「还没有 GitHub Release」', async () => {
+  it.each([500, 502, 503])('%s 不直接显示 GitHub 状态码', async (status) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse(status, async () => ({}))))
+    await expect(fetchLatestRelease()).rejects.toThrow('dfUpdatesCheckFailed')
+  })
+
+  it('断网不透传底层异常', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+    await expect(fetchLatestRelease()).rejects.toThrow('dfUpdatesCheckFailed')
+  })
+
+  it('404 映射为暂无正式版本', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse(404, async () => ({}))))
-    await expect(fetchLatestRelease()).rejects.toThrow('还没有 GitHub Release')
+    await expect(fetchLatestRelease()).rejects.toThrow('dfUpdatesNoReleases')
   })
 
   it.each([403, 429])('%s 映射为限流提示', async (status) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse(status, async () => ({}))))
-    await expect(fetchLatestRelease()).rejects.toThrow('GitHub API 暂时限流，请稍后再试')
+    await expect(fetchLatestRelease()).rejects.toThrow('dfUpdatesRateLimited')
   })
 
   it('非 JSON 响应给出可读错误（防止代理返回 HTML 时泄漏英文 SyntaxError）', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse(200, async () => {
       throw new SyntaxError('Unexpected token < in JSON')
     })))
-    await expect(fetchLatestRelease()).rejects.toThrow('GitHub 返回的数据无法解析')
+    await expect(fetchLatestRelease()).rejects.toThrow('dfUpdatesBadPayload')
   })
 })

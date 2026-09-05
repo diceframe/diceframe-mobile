@@ -53,17 +53,7 @@ export default function ServerSettingsScreen() {
         sessionToken: currentSessionToken(),
       }
       configureApiClient({ baseUrl: url, token: null, share: null, sessionToken: generateSessionToken() })
-      let config
-      try {
-        config = await fetchAppConfig()
-      } catch (e) {
-        const detail = errorMessage(e)
-        throw new Error(
-          detail
-            ? `${t('dfCommonNetworkError')}（${url.replace(/^https?:\/\//, '')}：${detail}）`
-            : t('dfCommonNetworkError')
-        )
-      }
+      const config = await fetchAppConfig()
       const needsPassword = !!config.access_password?.configured
       const saved = snapshot.serverPasswords[url] ?? ''
       if (needsPassword && !saved) {
@@ -90,7 +80,7 @@ export default function ServerSettingsScreen() {
       if (switchClientRestoreRef.current) configureApiClient(switchClientRestoreRef.current)
       switchClientRestoreRef.current = null
       if (switchMountedRef.current) {
-        setSwitchError(e instanceof Error && e.message ? e.message : t('dfCommonNetworkError'))
+        setSwitchError(errorMessage(e))
       }
     } finally {
       if (switchMountedRef.current) setSwitchingUrl(null)

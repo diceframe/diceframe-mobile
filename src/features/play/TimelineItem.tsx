@@ -12,6 +12,7 @@ import type { AssetSource } from '@/api/assets'
 import { avatarSource } from '@/api/assets'
 import { canDecideLuckOf } from '@/lib/check-details'
 import { useT } from '@/i18n/t'
+import { errorMessage } from '@/api/client'
 import { useAssetUri } from './useAssetUri'
 
 import { CheckCard } from './CheckCard'
@@ -191,7 +192,7 @@ export function TimelineItem({
       await op()
     } catch (cause) {
       setSwipeError(
-        (cause instanceof Error ? cause.message : String(cause)) || t('branchOperationFailed'),
+        errorMessage(cause, 'branchOperationFailed'),
       )
     } finally {
       setSwipeBusy(false)

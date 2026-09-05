@@ -106,8 +106,8 @@ export const profile = {
     dfLoreCreateWorldFailed: '创建世界书失败',
     dfUiSelect: '请选择',
     dfUiLastUpdated: '最后更新：{{date}}',
-    dfUiRenderErrorTitle: '页面渲染出错',
-    dfUiUnknownError: '发生未知错误',
+    dfUiRenderErrorTitle: '页面暂时无法显示',
+    dfUiUnknownError: '请点击重试重新加载页面。若仍无法打开，请关闭应用后重新进入。',
   },
   en: {
     dfProfileSubtitle: 'Identity, preferences & adventure tools',
@@ -211,8 +211,8 @@ export const profile = {
     dfLoreCreateWorldFailed: 'Failed to create the lorebook',
     dfUiSelect: 'Select',
     dfUiLastUpdated: 'Last updated: {{date}}',
-    dfUiRenderErrorTitle: 'This screen failed to render',
-    dfUiUnknownError: 'An unknown error occurred',
+    dfUiRenderErrorTitle: 'This page is temporarily unavailable',
+    dfUiUnknownError: 'Tap Retry to reload the page. If it still will not open, close and reopen the app.',
   },
   ja: {
     dfProfileSubtitle: 'ID・設定・冒険ツール',
@@ -316,7 +316,7 @@ export const profile = {
     dfLoreCreateWorldFailed: '世界書の作成に失敗しました',
     dfUiSelect: '選択してください',
     dfUiLastUpdated: '最終更新：{{date}}',
-    dfUiRenderErrorTitle: '画面の描画中にエラーが発生しました',
-    dfUiUnknownError: '不明なエラーが発生しました',
+    dfUiRenderErrorTitle: 'ページを表示できません',
+    dfUiUnknownError: '再試行をタップして読み込み直してください。改善しない場合は、アプリを終了して再度開いてください。',
   },
 } as const

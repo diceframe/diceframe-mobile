@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
 import { useT } from '@/i18n/t'
+import { errorMessage } from '@/api/client'
 import { useLogs } from '@/hooks/useLogs'
 
 export default function LogsScreen() {
@@ -40,7 +41,7 @@ export default function LogsScreen() {
         setGames(next)
         setGameKey((current) => current || next[0]?.game_key || '')
       } catch (cause) {
-        setGamesError(cause instanceof Error ? cause.message : String(cause))
+        setGamesError(errorMessage(cause))
       }
     }
     void loadGames()

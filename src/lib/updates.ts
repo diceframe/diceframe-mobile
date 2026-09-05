@@ -1,3 +1,5 @@
+import { UserFacingError } from './user-facing-error'
+
 export interface GitHubReleaseAsset {
   name?: unknown
   browser_download_url?: unknown
@@ -81,6 +83,7 @@ export function getGitHubLatestReleaseUrl(repo: string): string {
 export const CANONICAL_APK_ASSET = 'diceframe-android.apk'
 
 function isApkAsset(asset: GitHubReleaseAsset): boolean {
+  if (!asset || typeof asset !== 'object') return false
   const name = typeof asset.name === 'string' ? asset.name : ''
   const url = typeof asset.browser_download_url === 'string' ? asset.browser_download_url : ''
   return name.toLowerCase().endsWith('.apk') && url.startsWith('https://')
@@ -108,12 +111,12 @@ export function parseGitHubRelease(
   current: AppVersionInfo,
   device?: { supportedAbis?: string[] | null },
 ): AppUpdateInfo {
-  if (payload.draft === true) throw new Error('最新发布仍是草稿')
-  if (payload.prerelease === true) throw new Error('最新发布是预览版')
+  if (!payload || typeof payload !== 'object') throw new UserFacingError('dfUpdatesBadPayload')
+  if (payload.draft === true || payload.prerelease === true) throw new UserFacingError('dfUpdatesNoReleases')
 
   const rawVersion = typeof payload.tag_name === 'string' ? payload.tag_name : ''
   const latestVersion = normalizeReleaseVersion(rawVersion)
-  if (!latestVersion) throw new Error('发布版本号缺失')
+  if (!/^\d+\.\d+\.\d+$/.test(latestVersion)) throw new UserFacingError('dfUpdatesBadPayload')
 
   const assets = Array.isArray(payload.assets) ? payload.assets as GitHubReleaseAsset[] : []
   const apks: AppUpdateApk[] = assets
@@ -122,7 +125,7 @@ export function parseGitHubRelease(
   const apk = recommendApk(apks, device?.supportedAbis)
 
   if (!apk) {
-    throw new Error('最新发布没有可下载的 APK')
+    throw new UserFacingError('dfUpdatesNoApk')
   }
 
   return {

@@ -4,6 +4,7 @@ import { Dices, Eye, EyeOff } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useT } from '@/i18n/t'
+import { UserFacingError } from '@/lib/user-facing-error'
 
 import { PageHeader } from '@/components/page-header'
 import { Screen } from '@/components/screen'
@@ -106,20 +107,10 @@ export default function LoginScreen() {
       configureApiClient({ baseUrl: normalized, token: null, share: null, sessionToken: generateSessionToken() })
       // 一次提交完成“探测 + 校验”：先拿服务器配置判断是否设了访问密码，
       // 设了才校验密码；没设密码的服务器填不填都能直接进
-      let config
-      try {
-        config = await fetchAppConfig()
-      } catch (e) {
-        // 探测失败按“连不上服务器”提示，不落入“密码不正确”的语义
-        const detail = errorMessage(e)
-        const target = normalized || t('dfLoginCurrentAddress')
-        throw new Error(
-          detail ? `${t('dfCommonNetworkError')}（${target}：${detail}）` : t('dfCommonNetworkError')
-        )
-      }
+      const config = await fetchAppConfig()
       const needsPassword = !!config.access_password?.configured
       if (needsPassword) {
-        if (!password) throw new Error(t('dfLoginPasswordRequired'))
+        if (!password) throw new UserFacingError('dfLoginPasswordRequired')
         await validateAccessToken(password)
       }
       if (!mountedRef.current) return
@@ -139,7 +130,7 @@ export default function LoginScreen() {
       // 候选服务器请求失败后恢复当前已连接实例，不能让 API 内存态停在坏地址上。
       restoreCurrentClient()
       if (mountedRef.current) {
-        setError(e instanceof Error && e.message ? e.message : t('dfLoginWrongPassword'))
+        setError(errorMessage(e))
       }
     } finally {
       if (mountedRef.current) setBusy(null)

@@ -35,6 +35,8 @@ import {
   type NarrativePerspective,
 } from '@/features/create/payload'
 import { contentLanguage, useT } from '@/i18n/t'
+import { errorMessage } from '@/api/client'
+import { UserFacingError } from '@/lib/user-facing-error'
 import { cn } from '@/lib/utils'
 
 const STEP_KEYS = ['stepWorld', 'stepGameSettings', 'stepCharacters', 'stepConfirm'] as const
@@ -292,7 +294,7 @@ export function CreateWizard({ preselectedWorldId }: { preselectedWorldId?: stri
     try {
       // 「按母版生成本局专属规则」在离开第 1 步时生成（对齐 Web prepareAiRule）
       if (step === 1 && state.mode === 'ai' && state.aiAutoRule && !state.aiGeneratedRuleId) {
-        if (!state.aiPrompt.trim()) throw new Error(t('enterWorldPrompt'))
+        if (!state.aiPrompt.trim()) throw new UserFacingError('enterWorldPrompt')
         setBusyHint('rule')
         const generated = await generateRule(state.aiPrompt.trim(), state.aiRuleId, state.gameLanguage)
         const ruleId = generated.rule_id ?? ''
@@ -304,7 +306,7 @@ export function CreateWizard({ preselectedWorldId }: { preselectedWorldId?: stri
       }
       setStep((s) => s + 1)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(errorMessage(cause))
     } finally {
       setBusyHint(null)
       setBusy(false)
@@ -323,7 +325,7 @@ export function CreateWizard({ preselectedWorldId }: { preselectedWorldId?: stri
     try {
       let working = state
       if (!seedActive && state.mode === 'ai') {
-        if (!state.aiPrompt.trim()) throw new Error(t('enterWorldPrompt'))
+        if (!state.aiPrompt.trim()) throw new UserFacingError('enterWorldPrompt')
         setBusyHint('world')
         const world = await generateWorld(state.aiPrompt.trim(), activeRuleIdOf(state), state.gameLanguage)
         working = { ...state, aiWorldId: world.world_id, aiWorldName: world.world_name || '' }
@@ -345,7 +347,7 @@ export function CreateWizard({ preselectedWorldId }: { preselectedWorldId?: stri
       const result = request.endpoint === 'create-from-seed'
         ? await createGameFromSeed(request.body as JsonObject)
         : await createGame(request.body as JsonObject)
-      if (!result.game_key) throw new Error(t('dfCreateFailed'))
+      if (!result.game_key) throw new UserFacingError('dfCreateFailed')
       if (result.generated_password) {
         // 多人自动生成密码：先展示再进入（对齐 Web 的 alert）
         setPendingKey(result.game_key)
@@ -354,7 +356,7 @@ export function CreateWizard({ preselectedWorldId }: { preselectedWorldId?: stri
       }
       enterGame(result.game_key)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(errorMessage(cause))
     } finally {
       setBusyHint(null)
       setBusy(false)

@@ -12,6 +12,8 @@ import {
 } from 'expo-audio'
 
 import { transcribeAudio } from '@/api/speech'
+import { errorMessage } from '@/api/client'
+import { UserFacingError } from '@/lib/user-facing-error'
 import { getT } from '@/i18n/t'
 import { createHoldRecording, type RecordingPhase, type RecordingTarget } from '@/lib/hold-recording'
 import { useGameStore } from '@/stores/game'
@@ -66,7 +68,7 @@ export function useVoiceInput(gameKey: string, onSend: (text: string) => Promise
       // 发送失败留在文字浮层，保留全文供修改或重试。
       if (mountedRef.current) {
         setReviewText(text)
-        setError(e instanceof Error && e.message ? e.message : getT()('dfPlayVoiceSendFailed'))
+        setError(errorMessage(e, 'dfPlayVoiceSendFailed'))
       }
     } finally {
       sendingRef.current = false
@@ -101,11 +103,11 @@ export function useVoiceInput(gameKey: string, onSend: (text: string) => Promise
       resetAudioMode: () => setAudioModeAsync({ allowsRecording: false }),
       async transcribe() {
         const uri = recorder.uri
-        if (!uri) throw new Error(getT()('dfErrorsRecordFailed'))
+        if (!uri) throw new UserFacingError('dfErrorsRecordFailed')
         const bytes = await new File(uri).bytes()
-        if (bytes.length < MIN_VALID_BYTES) throw new Error(getT()('dfErrorsEmptyRecording'))
+        if (bytes.length < MIN_VALID_BYTES) throw new UserFacingError('dfErrorsEmptyRecording')
         const text = await transcribeAudio(gameKey, bytes, 'audio/mp4')
-        if (!text.trim()) throw new Error(getT()('dfPlayVoiceNoText'))
+        if (!text.trim()) throw new UserFacingError('dfPlayVoiceNoText')
         return text
       },
       async onText(text, destination) {
@@ -115,7 +117,7 @@ export function useVoiceInput(gameKey: string, onSend: (text: string) => Promise
       },
       onPhase: (next) => { if (mountedRef.current) setPhase(next) },
       onError: (e) => {
-        if (mountedRef.current) setError(e instanceof Error && e.message ? e.message : getT()('dfErrorsRecordFailed'))
+        if (mountedRef.current) setError(errorMessage(e, 'dfErrorsRecordFailed'))
       },
     })
   }

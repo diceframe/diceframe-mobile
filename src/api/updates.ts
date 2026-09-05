@@ -5,7 +5,7 @@
  * 会话 Cookie 或 X-TRPG-Confirm 头都是错的。这里只发匿名 GET，失败仅影响
  * 更新检查结果，不适用 ApiError 会话语义——属于规则 2 的显式例外。
  */
-import { getT } from '@/i18n/t'
+import { UserFacingError } from '@/lib/user-facing-error'
 import { getGitHubLatestReleaseUrl, type GitHubReleasePayload } from '@/lib/updates'
 
 export const GITHUB_RELEASE_REPO = 'diceframe/diceframe-mobile'
@@ -21,19 +21,19 @@ export async function fetchLatestRelease(): Promise<GitHubReleasePayload> {
       signal: controller.signal,
     })
 
-    if (response.status === 404) throw new Error(getT()('dfUpdatesNoReleases'))
+    if (response.status === 404) throw new UserFacingError('dfUpdatesNoReleases')
     // 未认证配额按 IP 限流，403 几乎总是这个原因
-    if (response.status === 403 || response.status === 429) throw new Error(getT()('dfUpdatesRateLimited'))
-    if (!response.ok) throw new Error(`GitHub ${response.status}`)
+    if (response.status === 403 || response.status === 429) throw new UserFacingError('dfUpdatesRateLimited')
+    if (!response.ok) throw new UserFacingError('dfUpdatesCheckFailed')
 
     try {
       return (await response.json()) as GitHubReleasePayload
     } catch {
-      throw new Error(getT()('dfUpdatesBadPayload'))
+      throw new UserFacingError('dfUpdatesBadPayload')
     }
   } catch (error) {
-    if (controller.signal.aborted) throw new Error(getT()('dfUpdatesCheckFailed'))
-    throw error
+    if (error instanceof UserFacingError) throw error
+    throw new UserFacingError('dfUpdatesCheckFailed')
   } finally {
     clearTimeout(timeout)
   }

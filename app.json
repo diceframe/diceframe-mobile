@@ -2,7 +2,7 @@
   "expo": {
     "name": "DiceFrame",
     "slug": "diceframe",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "diceframe",
@@ -24,7 +24,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.diceframe.mobile",
-      "versionCode": 7,
+      "versionCode": 8,
       "permissions": [
         "RECORD_AUDIO",
         "READ_MEDIA_IMAGES",

@@ -15,6 +15,7 @@
 
 import { getT } from '@/i18n/t'
 import type { TKey } from '@/i18n/keyset'
+import { UserFacingError } from '@/lib/user-facing-error'
 
 export class ApiError extends Error {
   constructor(
@@ -235,7 +236,8 @@ export async function validateAccessToken(value: string): Promise<void> {
   if (response.status === 429) {
     throw new ApiError('请求过于频繁，请稍后再试', 429, errorCodeOf(data), retryAfterOf(data))
   }
-  if (!response.ok) throw new ApiError('密码不正确或服务器拒绝访问', response.status)
+  if (response.status === 401 || response.status === 403) throw new UserFacingError('dfLoginWrongPassword')
+  if (!response.ok) throw errorFrom(data, response.status)
 }
 
 export type OwnerAccessStatus = 'allowed' | 'login-required' | 'unavailable'
@@ -259,12 +261,37 @@ export async function fetchAppConfig(): Promise<import('./types').AppConfig> {
   return api<import('./types').AppConfig>('/config', {}, { anonymous: true })
 }
 
-export function errorMessage(error: unknown): string {
-  if (error instanceof ApiError && error.code) {
-    // 服务端错误码通常为大写，镜像文案 key 为小写；未知码保留服务端原文。
-    const key = `apiErrors.${error.code.toLowerCase()}`
-    const translated = getT()(key as TKey)
-    if (translated !== key) return translated
+export function errorMessage(error: unknown, fallback: TKey = 'dfErrorsUnexpected'): string {
+  const t = getT()
+  if (error instanceof UserFacingError) return t(error.key)
+  if (error instanceof ApiError) {
+    if (error.code) {
+      // 只展示已收录的业务提示；未知错误码和服务端异常原文留在异常对象中供排查。
+      const key = `apiErrors.${error.code.toLowerCase()}`
+      const translated = t(key as TKey)
+      if (translated !== key) return translated
+    }
+    if (error.status === 429) {
+      const seconds = error.retryAfter
+      return typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0
+        ? t('dfErrorsRateLimitedWait', { seconds: Math.ceil(seconds) })
+        : t('dfErrorsRateLimited')
+    }
+    if (error.status === 401) return t('dfErrorsUnauthorized')
+    if (error.status === 403) return t('dfErrorsForbidden')
+    if (error.status === 404) return t('dfErrorsNotFound')
+    if (error.status === 408 || error.status === 504) return t('dfErrorsTimeout')
+    if (error.status >= 500) return t('dfErrorsServerUnavailable')
+    if (error.status === 409) return t('dfErrorsConflict')
+    if (error.status === 413) return t('dfErrorsFileTooLarge')
+    if (error.status === 400 || error.status === 422) return t('dfErrorsInvalidInput')
   }
-  return error instanceof Error ? error.message : String(error)
+  if (error instanceof Error) {
+    if (error.name === 'AbortError' || error.name === 'TimeoutError') return t('dfErrorsTimeout')
+    // fetch 在浏览器和原生端的错误名称不同，只识别网络特征，不暴露异常内容。
+    if (/network request failed|failed to fetch|fetch failed|networkerror|load failed|network is offline|econnrefused|enotfound/i.test(error.message)) {
+      return t('dfCommonNetworkError')
+    }
+  }
+  return t(fallback)
 }

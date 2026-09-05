@@ -18,6 +18,7 @@ import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
 import { DEFAULT_GM_STYLE, languageLabel, useWorlds, type WorldGalleryCard } from '@/hooks/useWorlds'
 import { useT, type T } from '@/i18n/t'
+import { errorMessage } from '@/api/client'
 import { appLayoutForWidth } from '@/lib/layout'
 import { confirmDestructive } from '@/lib/confirm'
 
@@ -84,7 +85,7 @@ export default function WorldsScreen() {
     try {
       await clone(card)
     } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : t('dfWorldsCloneFailed'))
+      setActionError(errorMessage(cause, 'dfWorldsCloneFailed'))
     } finally {
       setBusy(false)
     }
@@ -98,7 +99,7 @@ export default function WorldsScreen() {
       await saveGmStyle(previewCard, { tone, verbosity, custom_instructions: customInstructions })
       closePreview()
     } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : t('dfWorldsSaveStyleFailed'))
+      setActionError(errorMessage(cause, 'dfWorldsSaveStyleFailed'))
     } finally {
       setBusy(false)
     }
@@ -118,7 +119,7 @@ export default function WorldsScreen() {
       await remove(card)
       closePreview()
     } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : t('dfWorldsDeleteFailed'))
+      setActionError(errorMessage(cause, 'dfWorldsDeleteFailed'))
     } finally {
       setBusy(false)
     }

@@ -1,3 +1,4 @@
+import * as React from 'react'
 import { ActivityIndicator, Linking, View } from 'react-native'
 import { Download, ExternalLink, RefreshCw } from 'lucide-react-native'
 
@@ -21,6 +22,16 @@ function apkOptionLabel(name: string, t: T): string {
 export default function UpdatesSettingsScreen() {
   const t = useT()
   const updates = useAppUpdates({ autoCheck: true })
+  const [linkFailed, setLinkFailed] = React.useState(false)
+
+  async function openDownload(url: string) {
+    setLinkFailed(false)
+    try {
+      await Linking.openURL(url)
+    } catch {
+      setLinkFailed(true)
+    }
+  }
 
   return (
     <SettingsSectionScreen section="updates">
@@ -39,7 +50,7 @@ export default function UpdatesSettingsScreen() {
             <View className="gap-2">
               <Text variant="small" className="text-destructive">{updates.error}</Text>
               <Text variant="small">{t('dfUpdatesReleasePageHint')}</Text>
-              <Button variant="outline" onPress={() => void Linking.openURL(GITHUB_RELEASE_PAGE)}>
+              <Button variant="outline" onPress={() => void openDownload(GITHUB_RELEASE_PAGE)}>
                 <Icon as={ExternalLink} size={15} />
                 <Text>{t('dfUpdatesOpenReleasePage')}</Text>
               </Button>
@@ -54,7 +65,7 @@ export default function UpdatesSettingsScreen() {
               {updates.result.releaseNotes ? <Text variant="small" numberOfLines={8}>{updates.result.releaseNotes}</Text> : null}
               {updates.result.isNewer ? (
                 <View className="gap-2">
-                  <Button onPress={() => void Linking.openURL(updates.result!.apkUrl)}>
+                  <Button onPress={() => void openDownload(updates.result!.apkUrl)}>
                     <Icon as={Download} size={15} />
                     <Text>{t('dfUpdatesDownloadApk')}</Text>
                   </Button>
@@ -63,7 +74,7 @@ export default function UpdatesSettingsScreen() {
                     <View className="gap-1 rounded-xl border border-border p-2">
                       <Text variant="small" className="px-1 font-semibold text-foreground">{t('dfUpdatesManualPick')}</Text>
                       {updates.result.apks.map((apk) => (
-                        <Button key={apk.url} size="sm" variant="ghost" onPress={() => void Linking.openURL(apk.url)}>
+                        <Button key={apk.url} size="sm" variant="ghost" onPress={() => void openDownload(apk.url)}>
                           <Text numberOfLines={1}>{apkOptionLabel(apk.name, t)}</Text>
                         </Button>
                       ))}
@@ -73,6 +84,7 @@ export default function UpdatesSettingsScreen() {
               ) : null}
             </View>
           ) : null}
+          {linkFailed ? <Text variant="small" className="text-destructive">{t('dfUpdatesOpenFailed')}</Text> : null}
           <Text variant="small">{t('dfUpdatesFooter')}</Text>
         </CardContent>
       </Card>

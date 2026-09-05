@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
 import { useT } from '@/i18n/t'
+import { errorMessage } from '@/api/client'
 import { formatDateTime } from '@/lib/datetime'
 import { memoryDisplayText } from '@/lib/memory-display'
 
@@ -43,7 +44,7 @@ export default function MemoryScreen() {
         setGames(next)
         setGameKey((current) => current || next[0]?.game_key || '')
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause))
+        setError(errorMessage(cause))
       }
     }
     queueMicrotask(() => void loadGames())
@@ -61,7 +62,7 @@ export default function MemoryScreen() {
       setMemories(result.memories ?? result.entries ?? [])
       setError('')
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(errorMessage(cause))
     } finally {
       setLoading(false)
     }
@@ -116,10 +117,7 @@ export default function MemoryScreen() {
       closeEdit()
       await load(gameKey, query)
     } catch (cause) {
-      setError(
-        (cause instanceof Error ? cause.message : String(cause)) ||
-          t('dfMemoryEditFailed'),
-      )
+      setError(errorMessage(cause, 'dfMemoryEditFailed'))
     } finally {
       setEditBusy(false)
     }

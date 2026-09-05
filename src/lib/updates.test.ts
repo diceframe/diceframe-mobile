@@ -89,8 +89,8 @@ describe('GitHub APK 更新检查', () => {
         { name: 'diceframe-arm64-v8a.apk', browser_download_url: 'https://example.com/armv8.apk' },
       ],
     }
-    expect(() => parseGitHubRelease(payload, { version: '0.1.0' })).toThrow('最新发布没有可下载的 APK')
-    expect(() => parseGitHubRelease(payload, { version: '0.1.0' }, { supportedAbis: ['x86_64'] })).toThrow('最新发布没有可下载的 APK')
+    expect(() => parseGitHubRelease(payload, { version: '0.1.0' })).toThrow('dfUpdatesNoApk')
+    expect(() => parseGitHubRelease(payload, { version: '0.1.0' }, { supportedAbis: ['x86_64'] })).toThrow('dfUpdatesNoApk')
   })
 
   it('parseGitHubRelease 透传设备 ABI 并携带全部 APK 列表', () => {
@@ -108,14 +108,24 @@ describe('GitHub APK 更新检查', () => {
   })
 
   it('没有 APK 时给出明确错误', () => {
-    expect(() => parseGitHubRelease({ tag_name: 'v0.2.0', assets: [] }, { version: '0.1.0' })).toThrow('最新发布没有可下载的 APK')
+    expect(() => parseGitHubRelease({ tag_name: 'v0.2.0', assets: [] }, { version: '0.1.0' })).toThrow('dfUpdatesNoApk')
   })
 
   // /releases/latest 正常不会返回草稿或预览版；保留防御分支并在测试中固定契约
   it('拒绝草稿与预览版', () => {
     const apk = { name: 'DiceFrame-android.apk', browser_download_url: 'https://example.com/a.apk' }
-    expect(() => parseGitHubRelease({ tag_name: 'v0.2.0', draft: true, assets: [apk] }, { version: '0.1.0' })).toThrow('最新发布仍是草稿')
-    expect(() => parseGitHubRelease({ tag_name: 'v0.2.0', prerelease: true, assets: [apk] }, { version: '0.1.0' })).toThrow('最新发布是预览版')
+    expect(() => parseGitHubRelease({ tag_name: 'v0.2.0', draft: true, assets: [apk] }, { version: '0.1.0' })).toThrow('dfUpdatesNoReleases')
+    expect(() => parseGitHubRelease({ tag_name: 'v0.2.0', prerelease: true, assets: [apk] }, { version: '0.1.0' })).toThrow('dfUpdatesNoReleases')
+  })
+
+  it.each([null, {}, { tag_name: 'latest' }, { tag_name: 'v0.5.1-rc1' }])('异常版本数据使用友好错误：%s', (payload) => {
+    expect(() => parseGitHubRelease(payload as Parameters<typeof parseGitHubRelease>[0], { version: '0.5.0' })).toThrow('dfUpdatesBadPayload')
+  })
+
+  it('忽略损坏的附件条目，仍能推荐有效安装包', () => {
+    expect(parseGitHubRelease({ tag_name: 'v0.5.1', assets: [null, 123, {}, {
+      name: 'DiceFrame-android.apk', browser_download_url: 'https://example.com/app.apk',
+    }] }, { version: '0.5.0' }).isNewer).toBe(true)
   })
 
   it('生成 GitHub latest release API 地址', () => {

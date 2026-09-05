@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppUpdateInfo } from '@/lib/updates'
+import { getT } from '@/i18n/t'
 import { createAppUpdatesStore } from './app-updates'
 
 const release: AppUpdateInfo = {
@@ -52,7 +53,7 @@ describe('共享更新检查状态', () => {
     const load = vi.fn().mockRejectedValueOnce(new Error('断网')).mockResolvedValue(release)
     const store = createAppUpdatesStore(load)
     await expect(store.getState().check(automatic)).resolves.toBeNull()
-    expect(store.getState()).toMatchObject({ checking: false, result: null, error: '断网' })
+    expect(store.getState()).toMatchObject({ checking: false, result: null, error: getT()('dfUpdatesCheckFailed') })
 
     vi.advanceTimersByTime(15 * 60 * 1000 - 1)
     await store.getState().check(automatic)
@@ -71,7 +72,7 @@ describe('共享更新检查状态', () => {
     const store = createAppUpdatesStore(load)
     await store.getState().check(automatic)
     await store.getState().check()
-    expect(store.getState()).toMatchObject({ checking: false, result: release, error: '断网' })
+    expect(store.getState()).toMatchObject({ checking: false, result: release, error: getT()('dfUpdatesCheckFailed') })
 
     await store.getState().check()
     expect(load).toHaveBeenCalledTimes(3)
@@ -81,7 +82,7 @@ describe('共享更新检查状态', () => {
   it('加载器同步抛错也能结束检查并允许重试', async () => {
     const store = createAppUpdatesStore(() => { throw new Error('加载失败') })
     await expect(store.getState().check()).resolves.toBeNull()
-    expect(store.getState()).toMatchObject({ checking: false, error: '加载失败' })
+    expect(store.getState()).toMatchObject({ checking: false, error: getT()('dfUpdatesCheckFailed') })
     await expect(store.getState().check()).resolves.toBeNull()
   })
 })

@@ -4,6 +4,7 @@ import { errorMessage } from '@/api/client'
 import { createLoreEntry, createWorld, deleteLoreEntry, fetchLoreEntries, fetchWorlds, updateLoreEntry, type LoreRecord, type WorldRecord } from '@/api/library'
 import { toLoreEntryView, visibilityForMode, type LoreType, type LoreTier, type LoreVisibilityMode, type LorebookEntryView } from '@/lib/lorebook'
 import { getT } from '@/i18n/t'
+import { UserFacingError } from '@/lib/user-facing-error'
 
 /** 编辑表单提交的数据：type/tier 为真实服务端值，可见性为三档档位 + 点名候选 */
 export interface LoreEntryForm {
@@ -51,7 +52,7 @@ export function useLorebook() {
   React.useEffect(() => { queueMicrotask(() => void loadEntries(worldId)) }, [worldId])
 
   async function addEntry(data: LoreEntryForm) {
-    if (!worldId) throw new Error(getT()('dfLoreCreateWorldFirst'))
+    if (!worldId) throw new UserFacingError('dfLoreCreateWorldFirst')
     const payload = {
       world_id: worldId,
       name: data.title,

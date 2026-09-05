@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-import { getT } from '@/i18n/t'
+import { errorMessage } from '@/api/client'
 import type { AppUpdateInfo } from '@/lib/updates'
 
 const AUTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -40,7 +40,7 @@ export function createAppUpdatesStore(loadLatest: () => Promise<AppUpdateInfo>) 
         .catch((error: unknown) => {
           nextAutomaticCheckAt = Date.now() + FAILED_CHECK_RETRY_MS
           // 网络失败保留已知新版，避免首页红点因临时断网消失。
-          set({ error: error instanceof Error ? error.message : getT()('dfUpdatesCheckFailed') })
+          set({ error: errorMessage(error, 'dfUpdatesCheckFailed') })
           return null
         })
         .finally(() => {

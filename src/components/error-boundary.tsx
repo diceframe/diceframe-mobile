@@ -45,7 +45,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
         <View className="flex-1 items-center justify-center gap-4 bg-background p-8">
           <Text variant="h3">{t('dfUiRenderErrorTitle')}</Text>
           <Text variant="muted" className="text-center">
-            {this.state.error?.message || t('dfUiUnknownError')}
+            {t('dfUiUnknownError')}
           </Text>
           <Button onPress={this.reset} variant="outline">
             <Text>{t('dfCommonRetry')}</Text>
