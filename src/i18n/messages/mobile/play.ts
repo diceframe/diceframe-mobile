@@ -44,10 +44,8 @@ export const play = {
     dfPlayVoiceDiscard: '返回并丢弃本次录音',
     dfPlayVoiceConfirmSend: '确认并发送行动',
     dfPlayVoiceSending: '正在发送…',
-    dfPlayVoiceProcessing: '行动处理中，可继续查看叙事…',
     dfPlayVoiceSendFailed: '发送失败，请重试',
     dfPlayVoiceSendBusy: '上一条行动还在处理中，请稍后再试',
-    dfPlayVoiceNoText: '没有识别到文字，请重新录音',
     dfPlayRecordCancelRelease: '松开取消',
     dfPlayKeyboardInput: '键盘输入',
     dfPlayVoiceEdit: '点击编辑识别文字',
@@ -187,9 +185,7 @@ export const play = {
     // 语音与错误
     dfErrorsMicDenied: '麦克风权限被拒绝，请在系统设置中允许',
     dfErrorsRecordFailed: '录音失败，请重试',
-    dfErrorsAsrFailed: '语音识别失败',
     dfErrorsEmptyRecording: '录音太短，请重试',
-    dfErrorsTranscribeEmpty: '转写失败：服务器未返回文本',
     dfPlayTtsFailed: '语音合成失败',
     // GM 支付决议（其余文案复用上游 key：gmPayment*/later/reject/confirmPurchase）
     dfPlayPaymentResolving: '处理中…',
@@ -230,10 +226,8 @@ export const play = {
     dfPlayVoiceDiscard: 'Go back and discard this recording',
     dfPlayVoiceConfirmSend: 'Confirm and send action',
     dfPlayVoiceSending: 'Sending…',
-    dfPlayVoiceProcessing: 'Processing your action. You can keep reading the story…',
     dfPlayVoiceSendFailed: 'Could not send. Please try again.',
     dfPlayVoiceSendBusy: 'The previous action is still processing. Try again shortly.',
-    dfPlayVoiceNoText: 'No speech recognized. Please record again.',
     dfPlayRecordCancelRelease: 'Release to cancel',
     dfPlayKeyboardInput: 'Keyboard input',
     dfPlayVoiceEdit: 'Tap to edit the transcription',
@@ -373,9 +367,7 @@ export const play = {
     // Voice & errors
     dfErrorsMicDenied: 'Microphone permission denied. Please allow it in system settings.',
     dfErrorsRecordFailed: 'Recording failed. Please try again.',
-    dfErrorsAsrFailed: 'Speech recognition failed',
     dfErrorsEmptyRecording: 'The recording is too short. Please try again.',
-    dfErrorsTranscribeEmpty: 'Transcription failed: the server returned no text',
     dfPlayTtsFailed: 'Speech synthesis failed',
     // GM payment modal (other strings reuse upstream keys: gmPayment*/later/reject/confirmPurchase)
     dfPlayPaymentResolving: 'Working…',
@@ -416,10 +408,8 @@ export const play = {
     dfPlayVoiceDiscard: '戻って今回の録音を破棄',
     dfPlayVoiceConfirmSend: '確認して行動を送信',
     dfPlayVoiceSending: '送信中…',
-    dfPlayVoiceProcessing: '行動を処理中です。物語は引き続き読めます…',
     dfPlayVoiceSendFailed: '送信できませんでした。もう一度お試しください',
     dfPlayVoiceSendBusy: '前の行動を処理中です。しばらくしてからお試しください',
-    dfPlayVoiceNoText: '文字を認識できませんでした。もう一度録音してください',
     dfPlayRecordCancelRelease: '指を離してキャンセル',
     dfPlayKeyboardInput: 'キーボード入力',
     dfPlayVoiceEdit: 'タップして認識した文字を編集',
@@ -559,9 +549,7 @@ export const play = {
     // 音声とエラー
     dfErrorsMicDenied: 'マイクの権限が拒否されました。システム設定で許可してください',
     dfErrorsRecordFailed: '録音に失敗しました。もう一度お試しください',
-    dfErrorsAsrFailed: '音声認識に失敗しました',
     dfErrorsEmptyRecording: '録音が短すぎます。もう一度お試しください',
-    dfErrorsTranscribeEmpty: '文字起こしに失敗しました：サーバーがテキストを返しませんでした',
     dfPlayTtsFailed: '音声合成に失敗しました',
     // GM支払いダイアログ（その他の文言は上流キーを流用：gmPayment*/later/reject/confirmPurchase）
     dfPlayPaymentResolving: '処理中…',

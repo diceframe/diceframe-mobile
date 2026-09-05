@@ -78,6 +78,27 @@ describe('按住录音', () => {
     expect(audio.onText).not.toHaveBeenCalled()
   })
 
+  it('识别在途时点取消立即收起浮层，迟到结果不回填且可立刻重开', async () => {
+    const session = createHoldRecording()
+    const audio = services()
+    const transcription = deferred()
+    audio.transcribe = vi.fn(async () => { await transcription.promise; return '迟到文字' })
+    await session.press(audio)
+    const releasing = session.release()
+    await Promise.resolve()
+    await Promise.resolve()
+    // 松手后浮层停在「转写中」，此时点 X 必须立刻回到 idle，而不是等识别返回。
+    await session.cancel()
+    expect(audio.onPhase).toHaveBeenLastCalledWith('idle')
+    transcription.resolve()
+    await releasing
+    expect(audio.onText).not.toHaveBeenCalled()
+    const next = services()
+    await session.press(next)
+    expect(next.record).toHaveBeenCalledOnce()
+    await session.cancel()
+  })
+
   it('取消进行中的识别后忽略迟到结果，期间不接受另一轮按下', async () => {
     const session = createHoldRecording()
     const audio = services()

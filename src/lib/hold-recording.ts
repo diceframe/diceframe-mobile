@@ -96,6 +96,18 @@ export function createHoldRecording() {
       }
     },
     release: (destination: RecordingDestination = 'send') => finish(false, destination),
-    cancel: () => finish(true),
+    async cancel() {
+      const session = active
+      if (!session) return
+      session.cancelled = true
+      if (!session.finishing) {
+        await finish(true)
+        return
+      }
+      // 识别/发送已在途：原生 stop 不可重复调，立即收起浮层，迟到结果由 cancelled 守卫丢弃。
+      session.held = false
+      active = null
+      session.services.onPhase('idle')
+    },
   }
 }

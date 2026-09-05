@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AiProvider } from '@/api/types'
-import { asrAvailable, serverTtsAvailable } from './speech-config'
+import { asrAvailable, asrLanguageFor, serverTtsAvailable } from './speech-config'
 
 const providers: AiProvider[] = [{ id: 'local', name: '本地语音', base_url: 'http://localhost:8000', api_format: 'openai' }]
 
@@ -33,6 +33,24 @@ describe('asrAvailable', () => {
   it('关闭或缺失引擎时不能由有效引用启用', () => {
     expect(asrAvailable({ asr_provider: 'disabled', asr_provider_ref: 'local', ai_providers: providers })).toBe(false)
     expect(asrAvailable({ asr_provider_ref: 'local', ai_providers: providers })).toBe(false)
+  })
+})
+
+describe('asrLanguageFor', () => {
+  it('界面语言映射为带地区的 ASR 语言', () => {
+    expect(asrLanguageFor('zh-CN')).toBe('zh-CN')
+    expect(asrLanguageFor('zh')).toBe('zh-CN')
+    expect(asrLanguageFor('en')).toBe('en-US')
+    expect(asrLanguageFor('en-US')).toBe('en-US')
+    expect(asrLanguageFor('ja')).toBe('ja-JP')
+  })
+
+  it('未知语言回落系统语言，系统语言也不支持时归一到中文', () => {
+    expect(asrLanguageFor('fr', 'ja-JP')).toBe('ja-JP')
+    expect(asrLanguageFor('ko', 'en-GB')).toBe('en-US')
+    expect(asrLanguageFor('', 'zh-TW')).toBe('zh-CN')
+    expect(asrLanguageFor('fr')).toBe('zh-CN')
+    expect(asrLanguageFor('fr', 'fr-FR')).toBe('zh-CN')
   })
 })
 

@@ -152,14 +152,7 @@ export function ActionComposer({
         ) : null}
       </View>
 
-      {voice?.sending ? (
-        <Text variant="small" className="px-3 text-muted-foreground" accessibilityLiveRegion="polite">
-          {t('dfPlayVoiceProcessing')}
-        </Text>
-      ) : null}
-      {voice?.error ? <Text className="px-3 text-destructive">{voice.error}</Text> : null}
       {disabledReason ? <Text variant="small" className="px-3">{disabledReason}</Text> : null}
-      {voice?.notice ? <Text variant="small" className="px-3">{voice.notice}</Text> : null}
       {voice ? <VoiceInputOverlay voice={voice} /> : null}
     </View>
   )

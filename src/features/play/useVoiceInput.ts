@@ -3,29 +3,50 @@ import * as React from 'react'
 import { AppState } from 'react-native'
 import { File } from 'expo-file-system'
 import {
-  RecordingPresets,
+  AudioQuality,
+  IOSOutputFormat,
   getRecordingPermissionsAsync,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
   useAudioRecorder,
   useAudioRecorderState,
 } from 'expo-audio'
+import type { RecordingOptions } from 'expo-audio'
 
-import { transcribeAudio } from '@/api/speech'
+import { transcribeAudio, transcribeErrorText } from '@/api/speech'
 import { errorMessage } from '@/api/client'
+import { toastError, toastNotice } from '@/components/patterns/toast'
 import { UserFacingError } from '@/lib/user-facing-error'
-import { getT } from '@/i18n/t'
+import { getT, contentLanguage } from '@/i18n/t'
+import { asrLanguageFor } from '@/lib/speech-config'
 import { createHoldRecording, type RecordingPhase, type RecordingTarget } from '@/lib/hold-recording'
 import { useGameStore } from '@/stores/game'
+import { getLocales } from 'expo-localization'
 
 const MAX_RECORDING_MS = 60_000
 const MIN_VALID_BYTES = 2000
 
+/** 设备系统语言标签，与 useLocaleSync 同源同默认（'system' 偏好和未知语言的回落基准）。 */
+function deviceLanguageTag(): string {
+  return getLocales()[0]?.languageTag ?? 'zh-CN'
+}
+
+/** Whisper 侧统一按 16k 单声道重采样，立体声高清预设只放大上传体积，这里按语音识别的最优参数录。 */
+const ASR_RECORDING_OPTIONS: RecordingOptions = {
+  extension: '.m4a',
+  sampleRate: 16000,
+  numberOfChannels: 1,
+  bitRate: 48000,
+  android: { outputFormat: 'mpeg4', audioEncoder: 'aac' },
+  ios: { outputFormat: IOSOutputFormat.MPEG4AAC, audioQuality: AudioQuality.HIGH },
+  web: { mimeType: 'audio/webm', bitsPerSecond: 48000 },
+}
+
 export function useVoiceInput(gameKey: string, onSend: (text: string) => Promise<void>) {
   const asrEnabled = useGameStore((s) => s.asrEnabled)
   const [phase, setPhase] = React.useState<RecordingPhase>('idle')
+  // error 只承载发送失败的持久上下文（编辑浮层内展示）；录音/识别类瞬时失败直接走 toast。
   const [error, setError] = React.useState('')
-  const [notice, setNotice] = React.useState('')
   const [reviewText, setReviewText] = React.useState<string | null>(null)
   const [sending, setSending] = React.useState(false)
   const [target, setTarget] = React.useState<RecordingTarget>('send')
@@ -33,7 +54,7 @@ export function useVoiceInput(gameKey: string, onSend: (text: string) => Promise
   const sendingRef = React.useRef(false)
   const mountedRef = React.useRef(true)
   const [session] = React.useState(createHoldRecording)
-  const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true })
+  const recorder = useAudioRecorder({ ...ASR_RECORDING_OPTIONS, isMeteringEnabled: true })
   const recorderState = useAudioRecorderState(recorder, 100)
 
   React.useEffect(() => {
@@ -79,7 +100,6 @@ export function useVoiceInput(gameKey: string, onSend: (text: string) => Promise
   function press() {
     if (sendingRef.current || reviewText !== null) return
     setError('')
-    setNotice('')
     setTarget('send')
     targetRef.current = 'send'
     void session.press({
@@ -90,8 +110,8 @@ export function useVoiceInput(gameKey: string, onSend: (text: string) => Promise
           void session.cancel()
           permission = await requestRecordingPermissionsAsync()
           if (!mountedRef.current) return
-          if (permission.granted) setNotice(getT()('dfPlayMicReady'))
-          else setError(getT()('dfErrorsMicDenied'))
+          if (permission.granted) toastNotice(getT()('dfPlayMicReady'))
+          else toastError(getT()('dfErrorsMicDenied'))
         }
       },
       async prepare() {
@@ -105,10 +125,14 @@ export function useVoiceInput(gameKey: string, onSend: (text: string) => Promise
         const uri = recorder.uri
         if (!uri) throw new UserFacingError('dfErrorsRecordFailed')
         const bytes = await new File(uri).bytes()
+        // 过小的静音/误触录音本地拦下，不值得为它等一次几十秒的识别请求；空文本由服务端负责报错。
         if (bytes.length < MIN_VALID_BYTES) throw new UserFacingError('dfErrorsEmptyRecording')
-        const text = await transcribeAudio(gameKey, bytes, 'audio/mp4')
-        if (!text.trim()) throw new UserFacingError('dfPlayVoiceNoText')
-        return text
+        return transcribeAudio(
+          gameKey,
+          bytes,
+          'audio/mp4',
+          asrLanguageFor(contentLanguage(), deviceLanguageTag()),
+        )
       },
       async onText(text, destination) {
         if (!mountedRef.current) return
@@ -117,7 +141,7 @@ export function useVoiceInput(gameKey: string, onSend: (text: string) => Promise
       },
       onPhase: (next) => { if (mountedRef.current) setPhase(next) },
       onError: (e) => {
-        if (mountedRef.current) setError(errorMessage(e, 'dfErrorsRecordFailed'))
+        if (mountedRef.current) toastError(transcribeErrorText(e, 'dfErrorsRecordFailed'))
       },
     })
   }
@@ -145,7 +169,6 @@ export function useVoiceInput(gameKey: string, onSend: (text: string) => Promise
     preparing: phase === 'preparing',
     available: asrEnabled,
     error,
-    notice,
     target,
     durationMillis: phase === 'preparing' ? 0 : recorderState.durationMillis,
     metering: phase === 'recording' ? recorderState.metering : undefined,
