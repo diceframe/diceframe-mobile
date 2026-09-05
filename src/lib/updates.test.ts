@@ -50,18 +50,32 @@ describe('GitHub APK 更新检查', () => {
     expect(recommendApk(apks, ['x86_64'])?.url).toBe('https://example.com/universal.apk')
   })
 
-  it('缺 canonical 包时回退首个 .apk（兼容手工上传的历史 Release）', () => {
-    const result = parseGitHubRelease({
+  it('缺 canonical 且 ABI 不匹配时不推荐任意历史 APK', () => {
+    const apks = [
+      { name: 'DiceFrame-0.1.0-armeabi-v7a-release.apk', url: 'https://example.com/armv7.apk' },
+      { name: 'diceframe-arm64-v8a.apk', url: 'https://example.com/armv8.apk' },
+      { name: 'custom-universal.apk', url: 'https://example.com/custom.apk' },
+    ]
+
+    expect(recommendApk(apks)).toBeNull()
+    expect(recommendApk(apks, null)).toBeNull()
+    expect(recommendApk(apks, [])).toBeNull()
+    expect(recommendApk(apks, ['x86_64'])).toBeNull()
+    expect(recommendApk(apks, [''])).toBeNull()
+    expect(recommendApk([], ['arm64-v8a'])).toBeNull()
+    expect(recommendApk(apks, ['arm64-v8a'])).toBe(apks[1])
+  })
+
+  it('只有不匹配架构的拆分包时更新解析明确报错', () => {
+    const payload = {
       tag_name: 'v0.1.0',
       assets: [
         { name: 'notes.txt', browser_download_url: 'https://example.com/notes.txt' },
-        { name: 'DiceFrame-0.1.0-armeabi-v7a-release.apk', browser_download_url: 'https://example.com/armv7.apk' },
         { name: 'diceframe-arm64-v8a.apk', browser_download_url: 'https://example.com/armv8.apk' },
       ],
-    }, { version: '0.1.0' })
-
-    expect(result.apkName).toBe('DiceFrame-0.1.0-armeabi-v7a-release.apk')
-    expect(result.apkUrl).toBe('https://example.com/armv7.apk')
+    }
+    expect(() => parseGitHubRelease(payload, { version: '0.1.0' })).toThrow('最新发布没有可下载的 APK')
+    expect(() => parseGitHubRelease(payload, { version: '0.1.0' }, { supportedAbis: ['x86_64'] })).toThrow('最新发布没有可下载的 APK')
   })
 
   it('parseGitHubRelease 透传设备 ABI 并携带全部 APK 列表', () => {

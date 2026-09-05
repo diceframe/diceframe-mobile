@@ -51,23 +51,3 @@ export interface Plugin {
   isInstalled: boolean;
   isEnabled: boolean;
 }
-
-export interface Peer {
-  id: string;
-  name: string;
-  connected: boolean;
-  lastSeen: string;
-}
-
-export interface Settings {
-  apiKey?: string;
-  apiEndpoint?: string;
-  model?: string;
-  theme?: string;
-  language?: string;
-  enableNotifications?: boolean;
-  enableTTS?: boolean;
-  enableAutoSave?: boolean;
-  accessCode?: string;
-  enablePublicAccess?: boolean;
-}

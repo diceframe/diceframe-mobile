@@ -23,7 +23,7 @@ import {
   joinFormReady,
 } from '@/lib/join-form'
 import { parseShareLink, type ParsedShareLink } from '@/lib/share-link'
-import { useSettingsStore } from '@/stores/settings'
+import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
 import { useT } from '@/i18n/t'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 
@@ -91,7 +91,7 @@ export default function JoinScreen() {
     pendingClientRestoreRef.current = {
       baseUrl: current.baseUrl,
       token: current.token,
-      share: current.share,
+      share: activeIdentityOf(current),
       sessionToken: currentSessionToken(),
     }
     try {

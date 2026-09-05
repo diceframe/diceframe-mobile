@@ -17,7 +17,7 @@ import {
   validateAccessToken,
 } from '@/api/client'
 import { useT } from '@/i18n/t'
-import { useSettingsStore } from '@/stores/settings'
+import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
 
 export default function ServerSettingsScreen() {
   const router = useRouter()
@@ -49,7 +49,7 @@ export default function ServerSettingsScreen() {
       switchClientRestoreRef.current = {
         baseUrl: snapshot.baseUrl,
         token: snapshot.token,
-        share: snapshot.share,
+        share: activeIdentityOf(snapshot),
         sessionToken: currentSessionToken(),
       }
       configureApiClient({ baseUrl: url, token: null, share: null, sessionToken: generateSessionToken() })
@@ -78,7 +78,7 @@ export default function ServerSettingsScreen() {
       if (url !== snapshot.baseUrl) {
         // 换服务器：旧实例的 GM 登录态与玩家身份一律作废；GM 密码由密码本按台恢复
         settings.setToken(null)
-        settings.setShare(null)
+        settings.clearShares()
       }
       settings.setBaseUrl(url)
       settings.setToken(needsPassword ? saved : null)

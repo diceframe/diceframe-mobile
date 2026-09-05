@@ -60,7 +60,7 @@ Metro 的 `8081` 端口。`.env.local` 已被 Git 忽略，不会提交个人隧
 
 1. App 内"服务器地址"填 PC 的局域网地址（如 `192.168.1.5:18000`）
 2. Owner 输入访问密码登录；玩家从 Web 端复制分享链接，在 App「通过分享链接加入」粘贴
-3. 语音输入需服务端配置 ASR（OpenAI 兼容转写端点），否则麦克风按钮自动隐藏
+3. 语音输入需服务端在共享服务商目录中配置 ASR，并通过 `asr_provider_ref` 绑定有效服务商，否则麦克风按钮自动隐藏。服务器朗读的 OpenAI-compatible / GPT-SoVITS 引擎同样要求 `tts_provider_ref`；Edge TTS 和设备系统朗读无需引用。本地服务商可不填密钥，旧直填地址配置不再支持。
 
 说明：
 - `app.json` 已开启 `usesCleartextTraffic`，Android 允许局域网明文 HTTP

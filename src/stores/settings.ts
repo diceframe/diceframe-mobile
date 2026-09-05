@@ -7,7 +7,6 @@ import {
   configureApiClient,
   generateSessionToken,
   normalizeBaseUrl,
-  type ShareIdentity,
 } from '@/api/client'
 import {
   removeIdentity,
@@ -25,7 +24,7 @@ export type ResolvedTheme = 'light' | 'dark'
 /** 朗读引擎：server = 服务器合成（对齐 Web），system = 设备自带 TTS（expo-speech） */
 export type TtsEngine = 'server' | 'system'
 
-/** persist 落盘形状（不含运行时派生字段 share 与各 action） */
+/** persist 落盘形状（不含运行时状态与各 action） */
 interface PersistedSettings {
   baseUrl: string
   recentBaseUrls: string[]
@@ -81,12 +80,6 @@ interface SettingsState {
   shares: IdentitySlots
   /** 当前注入 api client 的身份对应的 gameKey；null 表示纯 Owner/大厅请求 */
   activeShareGame: string | null
-  /**
-   * 运行时派生冗余：= shares[activeShareGame]（不落盘）。
-   * 保留字段名是为了兼容既有消费方（login 的 setShare(null)、profile 摘要行），
-   * 语义已从「全局唯一身份」收窄为「当前注入的那一份」。
-   */
-  share: ShareIdentity | null
   /** TTS 播放速率（对齐 Web localStorage trpg_tts_rate） */
   ttsRate: number
   /** 朗读引擎；server 引擎不可用时对局页会整体隐藏朗读入口 */
@@ -118,11 +111,6 @@ interface SettingsState {
   activateShare: (gameKey: string | null) => void
   /** 清空全部玩家身份（换服务器/Owner 登录时旧身份一律作废） */
   clearShares: () => void
-  /**
-   * 兼容旧签名（login.tsx 等既有调用方）：null = 清空全部玩家身份；
-   * 非 null = upsert 单局身份。新代码请用 upsert/remove/activate。
-   */
-  setShare: (share: ShareIdentity | null) => void
   setTtsRate: (rate: number) => void
   setTtsEngine: (engine: TtsEngine) => void
   setTtsAuto: (enabled: boolean) => void
@@ -133,15 +121,21 @@ interface SettingsState {
   markHydrated: () => void
 }
 
+export function activeIdentityOf(
+  state: Pick<SettingsState, 'shares' | 'activeShareGame'>,
+): PlayerIdentity | null {
+  return resolveActiveIdentity(state.shares, state.activeShareGame)
+}
+
 function syncApiClient(
-  state: Pick<SettingsState, 'baseUrl' | 'serverSessionTokens' | 'token' | 'share'>,
+  state: Pick<SettingsState, 'baseUrl' | 'serverSessionTokens' | 'token' | 'shares' | 'activeShareGame'>,
 ): void {
   const baseUrl = normalizeBaseUrl(state.baseUrl)
   configureApiClient({
     baseUrl,
     sessionToken: baseUrl ? state.serverSessionTokens[baseUrl] ?? null : null,
     token: state.token,
-    share: state.share,
+    share: activeIdentityOf(state),
   })
 }
 
@@ -149,7 +143,6 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
       ...defaultSettings(),
-      share: null,
       systemTheme: systemTheme(),
       hydrated: false,
       setBaseUrl: (url) => {
@@ -202,31 +195,26 @@ export const useSettingsStore = create<SettingsState>()(
         if (!identity.game) return
         const shares = upsertIdentity(get().shares, identity)
         // 新写入的身份随即成为当前注入（join 成功后马上进对局）
-        set({ shares, activeShareGame: identity.game, share: identity })
+        set({ shares, activeShareGame: identity.game })
         syncApiClient(get())
       },
       removeShare: (gameKey) => {
         const shares = removeIdentity(get().shares, gameKey)
         // 被移除的正是当前注入身份时必须同步清注入，否则后续请求还带旧 share query
         const clearing = get().activeShareGame === gameKey
-        const share = clearing ? null : get().share
-        set(clearing ? { shares, activeShareGame: null, share } : { shares })
+        set(clearing ? { shares, activeShareGame: null } : { shares })
         syncApiClient(get())
       },
       activateShare: (gameKey) => {
         const shares = get().shares
         const share = resolveActiveIdentity(shares, gameKey)
         // 槽位缺失（悬挂 key）时按无身份处理，不持久化无效 active 指向
-        set({ activeShareGame: share ? gameKey : null, share })
+        set({ activeShareGame: share ? gameKey : null })
         syncApiClient(get())
       },
       clearShares: () => {
-        set({ shares: {}, activeShareGame: null, share: null })
+        set({ shares: {}, activeShareGame: null })
         syncApiClient(get())
-      },
-      setShare: (share) => {
-        if (share) get().upsertShare(share)
-        else get().clearShares()
       },
       setTtsRate: (rate) => set({ ttsRate: rate }),
       setTtsEngine: (ttsEngine) => set({ ttsEngine }),

@@ -19,7 +19,7 @@ import {
   normalizeBaseUrl,
   validateAccessToken,
 } from '@/api/client'
-import { useSettingsStore } from '@/stores/settings'
+import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
 import { useThemeToken } from '@/lib/theme'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 
@@ -79,7 +79,7 @@ export default function LoginScreen() {
       baseUrl: normalizeBaseUrl(settings.baseUrl),
       sessionToken: currentSessionToken(),
       token: settings.token,
-      share: settings.share,
+      share: activeIdentityOf(settings),
     }
   }
 
@@ -126,13 +126,13 @@ export default function LoginScreen() {
       if (normalized !== settings.baseUrl) {
         // 新服务器：本机的 GM 密码与玩家身份一律作废
         settings.setToken(null)
-        settings.setShare(null)
+        settings.clearShares()
       }
       settings.setBaseUrl(normalized)
       if (needsPassword) settings.setToken(password)
       // 密码本按台存访问密码；免密服务器清掉可能过期的旧记录
       settings.rememberServerPassword(normalized, needsPassword ? password : '')
-      settings.setShare(null)
+      settings.clearShares()
       pendingClientRestoreRef.current = null
       router.replace('/overview')
     } catch (e) {

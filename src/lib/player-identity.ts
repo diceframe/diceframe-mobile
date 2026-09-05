@@ -1,8 +1,7 @@
 /**
- * 多局玩家身份的纯逻辑：槽位增删、当前身份解析、启动分流判定、persist 迁移。
+ * 多局玩家身份的纯逻辑：槽位增删、当前身份解析、启动分流判定。
  *
- * 背景：玩家身份曾全局只有一份（settings.share），加入第二局会静默覆盖第一局。
- * 现在按 gameKey 分槽位保存（对齐 Web 端 trpg_play_user_<gameKey> 的每局缓存语义），
+ * 按 gameKey 分槽位保存（对齐 Web 端 trpg_play_user_<gameKey> 的每局缓存语义），
  * 这里只放可测纯函数；store 与 API 注入见 src/stores/settings.ts。
  */
 import type { ShareIdentity } from '@/api/client'
@@ -66,23 +65,4 @@ export function resolveStartupRoute(input: {
   if (input.identities.length === 1) return 'play'
   if (input.identities.length > 1) return 'selector'
   return 'owner'
-}
-
-export interface MigratedIdentityState {
-  shares: IdentitySlots
-  activeShareGame: string | null
-}
-
-/**
- * persist v0（全局单份 share）→ v1（按局槽位）：把老用户已保存的身份搬进
- * 它自己 gameKey 的槽位并设为当前活跃，升级后不能丢身份。
- * share 缺失或 gameKey 为空（脏数据）时迁移为空槽位，不产生悬挂 active key。
- */
-export function migrateShareSlots(persisted: unknown): MigratedIdentityState {
-  const legacy = (persisted ?? {}) as { share?: ShareIdentity | null }
-  const share = legacy.share
-  if (share && typeof share.game === 'string' && share.game) {
-    return { shares: { [share.game]: { ...share } }, activeShareGame: share.game }
-  }
-  return { shares: {}, activeShareGame: null }
 }

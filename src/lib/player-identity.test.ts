@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   listIdentities,
-  migrateShareSlots,
   removeIdentity,
   resolveActiveIdentity,
   resolveStartupRoute,
@@ -83,29 +82,5 @@ describe('启动分流判定', () => {
 
   it('零身份 → Owner 路径', () => {
     expect(resolveStartupRoute({ baseUrl: 'http://x', identities: [] })).toBe('owner')
-  })
-})
-
-describe('persist v0 → v1 迁移', () => {
-  it('旧的单份 share 搬进自身 gameKey 槽位并设为活跃', () => {
-    const migrated = migrateShareSlots({
-      baseUrl: 'http://x',
-      share: { game: 'game-old', user: 'u1', name: 'Aria' },
-    })
-    expect(migrated.shares['game-old']).toEqual({ game: 'game-old', user: 'u1', name: 'Aria' })
-    expect(migrated.activeShareGame).toBe('game-old')
-  })
-
-  it('旧数据无 share（Owner 用户）迁移为空槽位', () => {
-    const migrated = migrateShareSlots({ baseUrl: 'http://x', share: null })
-    expect(migrated.shares).toEqual({})
-    expect(migrated.activeShareGame).toBeNull()
-    expect(migrateShareSlots(undefined).shares).toEqual({})
-  })
-
-  it('share 缺 gameKey 的脏数据不产生悬挂 active key', () => {
-    const migrated = migrateShareSlots({ share: { game: '', user: 'u1' } })
-    expect(migrated.shares).toEqual({})
-    expect(migrated.activeShareGame).toBeNull()
   })
 })

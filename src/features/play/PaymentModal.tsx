@@ -39,7 +39,7 @@ export function PaymentModal({
   const t = useT()
   const [busy, setBusy] = React.useState(false)
   const [resolveError, setResolveError] = React.useState('')
-  const paymentId = String(payment?.id ?? payment?.payment_id ?? '')
+  const paymentId = String(payment?.id ?? '')
 
   function dismiss() {
     if (!busy && paymentId) onDismiss(paymentId)

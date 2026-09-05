@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-import { configureApiClient, currentToken, normalizeBaseUrl } from '@/api/client'
+import {
+  buildPlaySseUrl,
+  configureApiClient,
+  currentSessionToken,
+  currentShare,
+  currentToken,
+  normalizeBaseUrl,
+  shareQuery,
+} from '@/api/client'
 import { readThemeToken, resolveTheme } from '@/lib/theme'
-import { useSettingsStore } from './settings'
+import { activeIdentityOf, useSettingsStore } from './settings'
 
 // settings store 依赖 AsyncStorage（RN 模块），单测里换成内存实现。
 // vitest 会把 vi.mock 提升到文件顶部，实际先于上面的 import 执行。
@@ -64,9 +72,8 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
       token: null,
       shares: {},
       activeShareGame: null,
-      share: null,
     })
-    configureApiClient({ baseUrl: '', token: null, share: null })
+    configureApiClient({ baseUrl: '', token: null, share: null, sessionToken: null })
   })
 
   it('登录 → API client 同步 token → 登出 → token 清空且 client 同步', () => {
@@ -141,16 +148,78 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     const store = useSettingsStore.getState()
     store.setBaseUrl('http://a:18000')
     store.setToken('secret')
-    store.setShare({ game: 'g', user: 'u1' })
+    store.upsertShare({ game: 'g', user: 'u1' })
 
     store.setBaseUrl('http://b:18000')
     useSettingsStore.getState().setToken(null)
-    useSettingsStore.getState().setShare(null)
+    useSettingsStore.getState().clearShares()
 
     const state = useSettingsStore.getState()
     expect(state.baseUrl).toBe('http://b:18000')
     expect(state.token).toBeNull()
-    expect(state.share).toBeNull()
+    expect(state.shares).toEqual({})
+    expect(state.activeShareGame).toBeNull()
+    expect(activeIdentityOf(state)).toBeNull()
+    expect(currentShare()).toBeNull()
+    expect(shareQuery()).toBeNull()
+  })
+
+  it('多局加入、切换及同局重绑同步更新 API 分享参数，不串用房间凭据', () => {
+    const store = useSettingsStore.getState()
+    store.setBaseUrl('http://a:18000')
+    store.setToken('owner-token')
+    const sessionToken = currentSessionToken()
+    const first = { game: 'a', user: 'u-a', name: 'Aria', delegate: 'd-a', roomToken: 'r-a' }
+    const second = { game: 'b', user: 'u-b', roomToken: 'r-b' }
+    store.upsertShare(first)
+    store.upsertShare(second)
+    expect(activeIdentityOf(useSettingsStore.getState())).toEqual(second)
+    expect(Object.fromEntries(shareQuery()!)).toEqual({ game: 'b', user: 'u-b', share: '1', room_token: 'r-b' })
+
+    store.activateShare('a')
+    expect(currentShare()).toEqual(first)
+    expect(Object.fromEntries(shareQuery()!)).toEqual({
+      game: 'a', user: 'u-a', name: 'Aria', share: '1', delegate: 'd-a', room_token: 'r-a',
+    })
+    store.upsertShare({ game: 'a', user: 'rebound-user' })
+    expect(Object.fromEntries(shareQuery()!)).toEqual({ game: 'a', user: 'rebound-user', share: '1' })
+    expect(useSettingsStore.getState().shares.b).toEqual(second)
+    expect(currentToken()).toBe('owner-token')
+    expect(currentSessionToken()).toBe(sessionToken)
+  })
+
+  it.each([null, 'missing'])('取消激活或激活缺失槽位 %s 清空 API 注入但保留身份', (gameKey) => {
+    const store = useSettingsStore.getState()
+    const identity = { game: 'a', user: 'u-a' }
+    store.upsertShare(identity)
+    store.activateShare(gameKey)
+    expect(useSettingsStore.getState().activeShareGame).toBeNull()
+    expect(useSettingsStore.getState().shares).toEqual({ a: identity })
+    expect(activeIdentityOf(useSettingsStore.getState())).toBeNull()
+    expect(currentShare()).toBeNull()
+    expect(shareQuery()).toBeNull()
+  })
+
+  it('移除其他局不影响当前注入；移除当前局清空注入且不自动切到剩余身份', () => {
+    const store = useSettingsStore.getState()
+    const current = { game: 'a', user: 'u-a', roomToken: 'r-a' }
+    const remaining = { game: 'b', user: 'u-b' }
+    store.upsertShare(current)
+    store.upsertShare(remaining)
+    store.upsertShare({ game: 'c', user: 'u-c' })
+    store.activateShare('a')
+    store.removeShare('c')
+    store.removeShare('missing')
+    expect(useSettingsStore.getState().activeShareGame).toBe('a')
+    expect(currentShare()).toEqual(current)
+    expect(shareQuery()?.get('room_token')).toBe('r-a')
+
+    store.removeShare('a')
+    expect(useSettingsStore.getState().shares).toEqual({ b: remaining })
+    expect(useSettingsStore.getState().activeShareGame).toBeNull()
+    expect(activeIdentityOf(useSettingsStore.getState())).toBeNull()
+    expect(currentShare()).toBeNull()
+    expect(shareQuery()).toBeNull()
   })
 
   it.each([0, 1, 2])('v%d 升级到 v3 时丢弃旧凭据、身份和设备偏好，重置结果落盘', async (version) => {
@@ -190,7 +259,8 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
       themeMode: 'system',
       language: 'system',
     }
-    expect(useSettingsStore.getState()).toMatchObject({ ...defaults, share: null, hydrated: true })
+    expect(useSettingsStore.getState()).toMatchObject({ ...defaults, hydrated: true })
+    expect(currentShare()).toBeNull()
     expect(currentToken()).toBeNull()
     expect(JSON.parse((await AsyncStorage.getItem('diceframe-settings'))!)).toEqual({ version: 3, state: defaults })
   })
@@ -200,23 +270,44 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     store.setBaseUrl('http://new:18000')
     store.setToken('new-password')
     store.rememberServerPassword('http://new:18000', 'new-password')
-    store.upsertShare({ game: 'new-game', user: 'new-user' })
+    const identity = { game: 'new-game', user: 'new-user', name: 'Aria', delegate: 'delegate-a', roomToken: 'room-a' }
+    store.upsertShare(identity)
+    store.upsertShare({ game: 'other-game', user: 'other-user', roomToken: 'room-b' })
+    store.activateShare('new-game')
     store.setThemeMode('light')
     store.setLanguage('en')
     const saved = await AsyncStorage.getItem('diceframe-settings')
+    const sessionToken = currentSessionToken()
+    expect(JSON.parse(saved!).version).toBe(3)
+    expect(JSON.parse(saved!).state).not.toHaveProperty('share')
 
-    // 模拟后续两次启动从磁盘恢复，确保重置只发生在旧数据版本上。
+    // 模拟后续两次启动，API 内存态清空后应从 v3 槽位恢复完整身份与服务器会话。
     for (let startup = 0; startup < 2; startup += 1) {
       useSettingsStore.setState({ ...useSettingsStore.getInitialState() })
+      configureApiClient({ baseUrl: '', token: null, share: null, sessionToken: null })
       await AsyncStorage.setItem('diceframe-settings', saved!)
       await useSettingsStore.persist.rehydrate()
       expect(currentToken()).toBe('new-password')
       expect(useSettingsStore.getState()).toMatchObject({
         baseUrl: 'http://new:18000',
         serverPasswords: { 'http://new:18000': 'new-password' },
-        shares: { 'new-game': { game: 'new-game', user: 'new-user' } },
+        shares: {
+          'new-game': identity,
+          'other-game': { game: 'other-game', user: 'other-user', roomToken: 'room-b' },
+        },
+        activeShareGame: 'new-game',
+        hydrated: true,
         themeMode: 'light',
         language: 'en',
+      })
+      expect(activeIdentityOf(useSettingsStore.getState())).toEqual(identity)
+      expect(currentShare()).toEqual(identity)
+      expect(currentSessionToken()).toBe(sessionToken)
+      const sseUrl = new URL(buildPlaySseUrl('new-game', 'ticket'))
+      expect(sseUrl.origin).toBe('http://new:18000')
+      expect(Object.fromEntries(sseUrl.searchParams)).toEqual({
+        game: 'new-game', user: 'new-user', name: 'Aria', share: '1',
+        delegate: 'delegate-a', room_token: 'room-a', ticket: 'ticket',
       })
       expect(await AsyncStorage.getItem('diceframe-settings')).toBe(saved)
     }

@@ -713,7 +713,7 @@ export default function GameScreen() {
 
       {/* 权威经济提案：支持付款人、GM 奖励与多人分摊；稍后收起后顶栏保留入口。 */}
       <PaymentModal
-        key={String(currentPayment?.id || currentPayment?.payment_id || '')}
+        key={String(currentPayment?.id || '')}
         payment={currentPayment}
         currency={economyCurrency}
         playerName={(uid) =>

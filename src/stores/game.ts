@@ -10,7 +10,7 @@
 import { create } from 'zustand'
 
 import { ApiError, currentShare, errorMessage, fetchAppConfig } from '@/api/client'
-import { asrAvailable } from '@/lib/speech-config'
+import { asrAvailable, serverTtsAvailable } from '@/lib/speech-config'
 import {
   advanceGame,
   claimGm,
@@ -235,7 +235,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       if (isCurrent(gameKey, version) && !suspended) {
         set({
           asrEnabled: asrAvailable(config),
-          ttsEnabled: !!config.tts_provider && config.tts_provider !== 'browser',
+          ttsEnabled: serverTtsAvailable(config),
         })
       }
     } catch {
@@ -731,8 +731,8 @@ export function selectGmThinking(state: GameStore) {
 }
 
 /**
- * 当前身份需要处理的权威经济提案。新服务端优先投影 economy_proposals，旧服回退
- * pending_payments；GM 奖励、付款人和全队分摊分别按 approval_policy 路由。
+ * 当前身份需要处理的 economy_proposals 权威投影。
+ * GM 奖励、付款人和全队分摊分别按 approval_policy 路由。
  *
  * selector 结果按 detail/身份缓存，避免 zustand v5 因新数组引用反复重渲染。
  */

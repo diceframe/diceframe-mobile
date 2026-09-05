@@ -39,10 +39,6 @@ export function sectionMeta(section: SettingsSection, t: T): { title: string; su
   }
 }
 
-export function isSection(value: string | undefined): value is SettingsSection {
-  return !!value && SECTIONS.includes(value as SettingsSection)
-}
-
 /** 朗读引擎选项：server 对齐 Web 的服务器合成，system 用设备自带 TTS（零配置离线） */
 export const TTS_ENGINE_OPTIONS = [
   { value: 'server', labelKey: 'dfSettingsTtsEngineServer', hintKey: 'dfSettingsTtsEngineServerHint' },

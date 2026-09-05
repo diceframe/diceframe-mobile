@@ -26,7 +26,7 @@ import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import { useT } from '@/i18n/t'
 import { LANGUAGE_OPTIONS, THEME_OPTIONS, type SettingsSection } from '@/features/settings/config'
-import { useSettingsStore } from '@/stores/settings'
+import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
 
 interface MenuRowProps {
   icon: typeof Server
@@ -70,7 +70,8 @@ export default function ProfileScreen() {
   const router = useRouter()
   const t = useT()
   const settings = useSettingsStore()
-  const identity = settings.token ? t('dfProfileGmLoggedIn') : settings.share ? settings.share.name || t('dfProfilePlayerJoined') : t('dfSettingsNotLoggedIn')
+  const activeIdentity = activeIdentityOf(settings)
+  const identity = settings.token ? t('dfProfileGmLoggedIn') : activeIdentity ? activeIdentity.name || t('dfProfilePlayerJoined') : t('dfSettingsNotLoggedIn')
   // 语言值用原生名展示（跟设置页同一份列表）；跟随系统时才走文案字典
   const languageLabel =
     settings.language === 'system'

@@ -98,7 +98,7 @@ export default function Index() {
               onPress={() => enterGame(identity.game)}
             >
               <View className="min-w-0 flex-1 items-start gap-1">
-                {/* 对局名缺失（旧版本迁移的身份）时回退 gameKey */}
+                {/* 加入时未获取对局名则显示 gameKey */}
                 <Text className="font-semibold" numberOfLines={1}>
                   {identity.worldName || identity.game}
                 </Text>

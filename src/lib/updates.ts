@@ -63,7 +63,7 @@ export function getGitHubLatestReleaseUrl(repo: string): string {
 /**
  * 「检查更新」的兜底下载包名（发布工作流产物，README 发版节有说明）。
  * Release 页还挂 arm64-v8a / armeabi-v7a 拆分包，但下载项不能依赖 asset 顺序，
- * 兜底必须按名字锁定；缺 canonical 时回退首个 .apk（兼容手工上传的历史 Release）。
+ * 兜底必须按名字锁定，避免将不兼容架构的拆分包推荐给设备。
  */
 export const CANONICAL_APK_ASSET = 'diceframe-android.apk'
 
@@ -77,7 +77,7 @@ function isApkAsset(asset: GitHubReleaseAsset): boolean {
  * 推荐下载项：supportedAbis 是按优先级排序的设备 ABI 列表
  * （expo-device supportedCpuArchitectures = Build.SUPPORTED_ABIS），逐个匹配拆分包
  * 文件名（arm64-v8a 设备的列表靠后也含 armeabi-v7a，按序取即不会错配）。
- * 匹配不到或拿不到架构（Expo Go/Web）时回退 universal，再回退首个。
+ * 匹配不到或拿不到架构（Expo Go/Web）时仅回退 canonical universal，否则不推荐。
  */
 export function recommendApk(apks: AppUpdateApk[], supportedAbis?: string[] | null): AppUpdateApk | null {
   for (const abi of supportedAbis ?? []) {
@@ -87,7 +87,7 @@ export function recommendApk(apks: AppUpdateApk[], supportedAbis?: string[] | nu
     if (match) return match
   }
   const canonical = apks.find((apk) => apk.name.toLowerCase() === CANONICAL_APK_ASSET)
-  return canonical ?? apks[0] ?? null
+  return canonical ?? null
 }
 
 export function parseGitHubRelease(

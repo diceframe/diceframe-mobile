@@ -36,11 +36,9 @@ export function isNonBlockingPersonalPurchase(
     && !deferredFields.some((field) => Boolean(proposal[field]))
 }
 
-/** 新服务端以 economy_proposals 为权威投影；空数组时兼容旧服 pending_payments。 */
+/** economy_proposals 是唯一权威投影；缺失或为空时均无待处理提案。 */
 export function economyProposalList(detail?: GameDetail | null): PendingPayment[] {
-  return detail?.economy_proposals?.length
-    ? detail.economy_proposals
-    : detail?.pending_payments ?? []
+  return detail?.economy_proposals ?? []
 }
 
 export interface EconomyProposalPermissions {
@@ -59,8 +57,8 @@ export function economyProposalPermissions(
 ): EconomyProposalPermissions {
   if (proposal.status !== 'pending' || !actorId) return { canAccept: false, canReject: false }
   const payerUid = String(proposal.payer_uid || proposal.uid || '')
-  // 缺少策略字段的 pending_payments 会在服务端决议边界导入为旧版兼容提案。
-  const policy = String(proposal.approval_policy || 'payer_or_gm_legacy')
+  // 与服务端 resolver 一致：缺省策略为 payer，只有显式旧策略允许 GM 代批准。
+  const policy = String(proposal.approval_policy || 'payer')
   const isGm = actorId === gmUid
   if (policy === 'system') return { canAccept: false, canReject: false }
   if (policy === 'gm') return { canAccept: isGm, canReject: isGm }
@@ -76,6 +74,7 @@ export function economyProposalPermissions(
     const allowed = actorId === payerUid || isGm
     return { canAccept: allowed, canReject: allowed }
   }
+  // 服务端 resolver 的兜底分支同样按 payer 处理未知策略。
   return {
     canAccept: actorId === payerUid,
     canReject: actorId === payerUid || isGm,
@@ -100,7 +99,7 @@ export function nextEconomyProposal(
   dismissedIds: ReadonlySet<string>,
 ): PendingPayment | undefined {
   return proposals.find((proposal) => {
-    const id = String(proposal.id || proposal.payment_id || '')
+    const id = String(proposal.id || '')
     return id
       && !dismissedIds.has(id)
       && isEconomyProposalActionable(proposal, actorId, gmUid)
