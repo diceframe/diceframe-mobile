@@ -59,6 +59,7 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
       baseUrl: '',
       recentBaseUrls: [],
       serverSessionTokens: {},
+      serverPasswords: {},
       token: null,
       shares: {},
       activeShareGame: null,
@@ -106,6 +107,33 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     expect(useSettingsStore.getState().recentBaseUrls).toEqual(['http://b:18000'])
     expect(useSettingsStore.getState().serverSessionTokens).not.toHaveProperty('http://a:18000')
     expect(useSettingsStore.getState().baseUrl).toBe('http://b:18000')
+  })
+
+  it('密码本按台记录访问密码；空密码 = 移除记录（免密服务器不留条目）', () => {
+    const store = useSettingsStore.getState()
+    store.rememberServerPassword('http://a:18000', 'pw-a')
+    store.rememberServerPassword('http://b:18000/', 'pw-b')
+    expect(useSettingsStore.getState().serverPasswords).toEqual({
+      'http://a:18000': 'pw-a',
+      'http://b:18000': 'pw-b',
+    })
+
+    // 同一台服务器改密 → 覆盖；免密 → 移除
+    useSettingsStore.getState().rememberServerPassword('a:18000', 'pw-a2')
+    expect(useSettingsStore.getState().serverPasswords['http://a:18000']).toBe('pw-a2')
+    useSettingsStore.getState().rememberServerPassword('http://a:18000', '')
+    expect(useSettingsStore.getState().serverPasswords).not.toHaveProperty('http://a:18000')
+    expect(useSettingsStore.getState().serverPasswords['http://b:18000']).toBe('pw-b')
+  })
+
+  it('忘掉服务器时连带清除密码本里对应的密码', () => {
+    const store = useSettingsStore.getState()
+    store.setBaseUrl('http://a:18000')
+    useSettingsStore.getState().setBaseUrl('http://b:18000')
+    useSettingsStore.getState().rememberServerPassword('http://a:18000', 'pw-a')
+    useSettingsStore.getState().removeRecentServer('http://a:18000')
+
+    expect(useSettingsStore.getState().serverPasswords).not.toHaveProperty('http://a:18000')
   })
 
   it('换服务器清空 token 与玩家身份', () => {

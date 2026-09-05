@@ -38,9 +38,9 @@ CI（`.github/workflows/ci.yml`）= typecheck + test + lint 三项全绿才算�
 src/
 ├── app/          # expo-router 路由，薄壳：index 分流、(auth) 登录/加入、(tabs) 一级 Tab
 │                 # （overview 对局 / characters 角色 / lorebook 世界书 / profile 我的）、
-│                 # (profile) 二级页（settings/worlds/memory/rules/plugins/peer/logs/legal）、
+│                 # (profile) 二级页（settings/ 子路由含服务器/身份/外观等、worlds/memory/rules/plugins/peer/logs/legal）、
 │                 # play/[gameKey] 对局页。路由逻辑尽量下沉到 features/hooks
-├── features/     # 按领域的界面与业务组件（overview / play / characters / lorebook / worlds…）
+├── features/     # 按领域的界面与业务组件（play / characters / lorebook / worlds / create / join / settings…）
 ├── hooks/        # 数据域 hooks（useCharacters、useWorlds…），内部走 api/ + stores/
 ├── i18n/         # react-i18next：index 初始化、keyset（key 全量类型）、useT/getT、
 │                 # messages/web = 上游镜像段，messages/mobile = df 前缀功能簇

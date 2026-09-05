@@ -25,7 +25,7 @@ import { Icon } from '@/components/ui/icon'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import { useT } from '@/i18n/t'
-import { LANGUAGE_OPTIONS, type SettingsSection } from '@/app/(profile)/settings'
+import { LANGUAGE_OPTIONS, THEME_OPTIONS, type SettingsSection } from '@/features/settings/config'
 import { useSettingsStore } from '@/stores/settings'
 
 interface MenuRowProps {
@@ -66,9 +66,6 @@ function MenuGroup({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** 主题选项存 key 而非文案：模块级常量取不到 useT，渲染时再翻译 */
-const THEME_LABEL_KEYS = { system: 'dfSettingsThemeSystem', light: 'dfSettingsThemeLight', dark: 'dfSettingsThemeDark' } as const
-
 export default function ProfileScreen() {
   const router = useRouter()
   const t = useT()
@@ -81,7 +78,7 @@ export default function ProfileScreen() {
       : (LANGUAGE_OPTIONS.find((option) => option.value === settings.language)?.label ?? '')
 
   const openSetting = (section: SettingsSection) => {
-    router.push({ pathname: '/settings', params: { section } })
+    router.push(`/settings/${section}`)
   }
 
   return (
@@ -110,7 +107,7 @@ export default function ProfileScreen() {
           <MenuGroup>
             <MenuRow icon={Server} label={t('dfSettingsServer')} detail={settings.baseUrl ? settings.baseUrl.replace(/^https?:\/\//, '') : t('dfProfileServerNotConnected')} onPress={() => openSetting('server')} />
             <MenuRow icon={CircleUserRound} label={t('dfSettingsIdentity')} detail={identity} onPress={() => openSetting('identity')} />
-            <MenuRow icon={Palette} label={t('dfSettingsAppearance')} detail={t(THEME_LABEL_KEYS[settings.themeMode])} onPress={() => openSetting('appearance')} />
+            <MenuRow icon={Palette} label={t('dfSettingsAppearance')} detail={t(THEME_OPTIONS.find((option) => option.value === settings.themeMode)?.labelKey ?? 'dfSettingsThemeSystem')} onPress={() => openSetting('appearance')} />
             <MenuRow icon={Languages} label={t('dfSettingsLanguage')} detail={languageLabel} onPress={() => openSetting('language')} />
             <MenuRow icon={Volume2} label={t('dfSettingsSpeech')} detail={`${settings.ttsRate.toFixed(2)}x`} onPress={() => openSetting('speech')} />
             <MenuRow icon={Vibrate} label={t('dfSettingsHaptics')} detail={settings.hapticsEnabled ? t('dfProfileHapticsOn') : t('dfProfileHapticsOff')} onPress={() => openSetting('haptics')} />

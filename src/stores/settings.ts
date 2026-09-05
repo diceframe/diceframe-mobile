@@ -30,6 +30,8 @@ interface PersistedSettings {
   baseUrl: string
   recentBaseUrls: string[]
   serverSessionTokens: Record<string, string>
+  /** 服务器密码本：各服务器的访问密码存本机，一键切换时免重输（见 rememberServerPassword） */
+  serverPasswords: Record<string, string>
   token: string | null
   shares: IdentitySlots
   activeShareGame: string | null
@@ -52,6 +54,8 @@ interface SettingsState {
   recentBaseUrls: string[]
   /** 每台服务器独立的原生会话，防止跨实例串用 claim-gm/rebind 身份 */
   serverSessionTokens: Record<string, string>
+  /** 服务器密码本：baseUrl → 访问密码（仅存非空密码），供服务器页一键切换 */
+  serverPasswords: Record<string, string>
   /** Owner 访问密码（Bearer token）；null 表示未登录 */
   token: string | null
   /** 玩家身份槽位，按 gameKey 一局一份（多局并行，加入不再互相覆盖） */
@@ -81,6 +85,11 @@ interface SettingsState {
   hydrated: boolean
   setBaseUrl: (url: string) => void
   removeRecentServer: (url: string) => void
+  /**
+   * 密码本写入：password 非空 = 记录/更新该服务器的访问密码；
+   * 空 = 移除记录（服务器改为免密或密码语义失效时保持密码本真实）
+   */
+  rememberServerPassword: (url: string, password: string) => void
   setToken: (token: string | null) => void
   /** 写入/更新一局身份并设为当前注入（join 成功路径） */
   upsertShare: (identity: PlayerIdentity) => void
@@ -123,6 +132,7 @@ export const useSettingsStore = create<SettingsState>()(
       baseUrl: '',
       recentBaseUrls: [],
       serverSessionTokens: {},
+      serverPasswords: {},
       token: null,
       shares: {},
       activeShareGame: null,
@@ -153,10 +163,28 @@ export const useSettingsStore = create<SettingsState>()(
           if (!target || target === state.baseUrl) return state
           const serverSessionTokens = { ...state.serverSessionTokens }
           delete serverSessionTokens[target]
+          // 忘掉服务器 = 连它的密码一起忘掉，密码本不留孤儿条目
+          const serverPasswords = { ...state.serverPasswords }
+          delete serverPasswords[target]
           return {
             recentBaseUrls: state.recentBaseUrls.filter((item) => item !== target),
             serverSessionTokens,
+            serverPasswords,
           }
+        })
+      },
+      rememberServerPassword: (url, password) => {
+        const target = normalizeBaseUrl(url)
+        if (!target) return
+        set((state) => {
+          if (!password) {
+            if (!state.serverPasswords[target]) return state
+            const serverPasswords = { ...state.serverPasswords }
+            delete serverPasswords[target]
+            return { serverPasswords }
+          }
+          if (state.serverPasswords[target] === password) return state
+          return { serverPasswords: { ...state.serverPasswords, [target]: password } }
         })
       },
       setToken: (token) => {
@@ -211,6 +239,7 @@ export const useSettingsStore = create<SettingsState>()(
         baseUrl: state.baseUrl,
         recentBaseUrls: state.recentBaseUrls,
         serverSessionTokens: state.serverSessionTokens,
+        serverPasswords: state.serverPasswords,
         token: state.token,
         shares: state.shares,
         activeShareGame: state.activeShareGame,
@@ -228,6 +257,7 @@ export const useSettingsStore = create<SettingsState>()(
           baseUrl: '',
           recentBaseUrls: [],
           serverSessionTokens: {},
+          serverPasswords: {},
           token: null,
           shares: {},
           activeShareGame: null,

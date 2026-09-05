@@ -1,6 +1,6 @@
 import * as React from 'react'
-import { ActivityIndicator, Platform, Pressable, ScrollView, View } from 'react-native'
-import { Dices, Server, X } from 'lucide-react-native'
+import { ActivityIndicator, Platform, Pressable, ScrollView, TextInput, View } from 'react-native'
+import { Dices, Eye, EyeOff } from 'lucide-react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useT } from '@/i18n/t'
@@ -15,6 +15,7 @@ import {
   currentSessionToken,
   errorMessage,
   fetchAppConfig,
+  generateSessionToken,
   normalizeBaseUrl,
   validateAccessToken,
 } from '@/api/client'
@@ -25,19 +26,25 @@ import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 /** 服务器连接 + Owner 登录；已连接时进入即“换服务器”流程 */
 export default function LoginScreen() {
   const router = useRouter()
-  const { mode } = useLocalSearchParams<{ mode?: string }>()
+  // 服务器页一键切换遇「该服务器需要密码而密码本没有」时带地址跳转过来，预填表单
+  const { address } = useLocalSearchParams<{ address?: string }>()
   const t = useT()
   const settings = useSettingsStore()
 
-  const [serverUrl, setServerUrl] = React.useState(settings.baseUrl)
+  const [serverUrl, setServerUrl] = React.useState(
+    () => normalizeBaseUrl(typeof address === 'string' ? address : '') || settings.baseUrl
+  )
   const keyboardHeight = useKeyboardHeight()
   const primary = useThemeToken('primary')
   const gold = useThemeToken('gold')
-  const [passwordNeeded, setPasswordNeeded] = React.useState<boolean | null>(null)
+  const mutedForeground = useThemeToken('mutedForeground')
   const [password, setPassword] = React.useState('')
-  const [busy, setBusy] = React.useState<'server' | 'login' | null>(null)
+  const [showPassword, setShowPassword] = React.useState(false)
+  const [busy, setBusy] = React.useState<'login' | null>(null)
   const [error, setError] = React.useState('')
   const mountedRef = React.useRef(true)
+  const scrollRef = React.useRef<ScrollView>(null)
+  const passwordInputRef = React.useRef<TextInput>(null)
   const pendingClientRestoreRef = React.useRef<Parameters<typeof configureApiClient>[0] | null>(null)
 
   React.useEffect(() => {
@@ -54,34 +61,16 @@ export default function LoginScreen() {
   // 进入页面时的模式快照：已有服务器 = “换服务器”流程。
   // 用快照而不是响应式读取，避免首次连接成功保存 baseUrl 后页面中途翻转。
   const [switching] = React.useState(() => settings.baseUrl !== '')
-  const switchingServer = mode === 'switch'
 
-  // 已连接过服务器时进入本页自动探测：直接显示密码框（或开放服务器直入按钮），
-  // 不需要用户先按一次“连接”。
-  React.useEffect(() => {
-    if ((!settings.baseUrl && !isWeb) || switchingServer) return
-    let active = true
-    async function probe() {
-      setBusy('server')
-      try {
-        const config = await fetchAppConfig()
-        if (active) setPasswordNeeded(!!config.access_password?.configured)
-      } catch {
-        // 探测失败（服务器离线等）：留在手动流程，由用户重按连接
-      } finally {
-        if (active) setBusy(null)
-      }
-    }
-    probe()
-    return () => {
-      active = false
-    }
-  }, [settings.baseUrl, switchingServer, isWeb])
+  // 表单在品牌区下方：键盘弹出后内容超出可视区，Android 不会自动把聚焦框
+  // 滚入视口，聚焦任意输入框都滚到底部——表单区（地址/密码/登录）正好完整
+  // 露出在键盘上方（等键盘动画结束再滚，300ms 覆盖两端时长）
+  function scrollToForm() {
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 300)
+  }
 
   function selectServerUrl(url: string) {
     setServerUrl(url)
-    setPassword('')
-    setPasswordNeeded(null)
     setError('')
   }
 
@@ -99,21 +88,40 @@ export default function LoginScreen() {
     pendingClientRestoreRef.current = null
   }
 
-  async function connectServer(candidateUrl = serverUrl) {
-    const normalized = normalizeBaseUrl(candidateUrl)
+  async function login() {
+    // 输入框地址与内存态可能脱同步，validateAccessToken 读的是内存态，所以
+    // 校验前先对齐；settings 只在校验通过后落盘，失败时不改动已保存的连接
+    const normalized = normalizeBaseUrl(serverUrl)
     setServerUrl(normalized)
     if (!normalized && !isWeb) {
       setError(t('dfCommonNetworkError'))
       return
     }
-    setBusy('server')
-    setPasswordNeeded(null)
+    setBusy('login')
     setError('')
     try {
-      // 跨服务器探测绝不能携带当前实例的 Owner token 或玩家分享身份。
+      // 跨服务器请求绝不能携带当前实例的 Owner token 或玩家分享身份；
+      // 会话 token 同样换一次性新值（对齐 join 的候选探测）
       prepareCandidateClient()
-      configureApiClient({ baseUrl: normalized, token: null, share: null })
-      const config = await fetchAppConfig()
+      configureApiClient({ baseUrl: normalized, token: null, share: null, sessionToken: generateSessionToken() })
+      // 一次提交完成“探测 + 校验”：先拿服务器配置判断是否设了访问密码，
+      // 设了才校验密码；没设密码的服务器填不填都能直接进
+      let config
+      try {
+        config = await fetchAppConfig()
+      } catch (e) {
+        // 探测失败按“连不上服务器”提示，不落入“密码不正确”的语义
+        const detail = errorMessage(e)
+        const target = normalized || t('dfLoginCurrentAddress')
+        throw new Error(
+          detail ? `${t('dfCommonNetworkError')}（${target}：${detail}）` : t('dfCommonNetworkError')
+        )
+      }
+      const needsPassword = !!config.access_password?.configured
+      if (needsPassword) {
+        if (!password) throw new Error(t('dfLoginPasswordRequired'))
+        await validateAccessToken(password)
+      }
       if (!mountedRef.current) return
       if (normalized !== settings.baseUrl) {
         // 新服务器：本机的 GM 密码与玩家身份一律作废
@@ -121,39 +129,14 @@ export default function LoginScreen() {
         settings.setShare(null)
       }
       settings.setBaseUrl(normalized)
-      pendingClientRestoreRef.current = null
-      setPasswordNeeded(!!config.access_password?.configured)
-    } catch (e) {
-      // 候选服务器探测失败后恢复当前已连接实例，不能让 API 内存态停在坏地址上。
-      restoreCurrentClient()
-      if (mountedRef.current) {
-        const detail = errorMessage(e)
-        const target = normalized || t('dfLoginCurrentAddress')
-        setError(detail ? `${t('dfCommonNetworkError')}（${target}：${detail}）` : t('dfCommonNetworkError'))
-      }
-    } finally {
-      if (mountedRef.current) setBusy(null)
-    }
-  }
-
-  async function login() {
-    // 输入框地址可能与 client 内存 baseUrl 脱同步（改了地址但没按“连接”就直接登录），
-    // validateAccessToken 读的是内存态，所以校验前先对齐；settings 只在校验通过后落盘，
-    // 失败时不改动已保存的服务器连接
-    const normalized = normalizeBaseUrl(serverUrl)
-    setBusy('login')
-    setError('')
-    try {
-      prepareCandidateClient()
-      configureApiClient({ baseUrl: normalized, token: null, share: null })
-      await validateAccessToken(password)
-      if (!mountedRef.current) return
-      settings.setBaseUrl(normalized)
-      settings.setToken(password)
+      if (needsPassword) settings.setToken(password)
+      // 密码本按台存访问密码；免密服务器清掉可能过期的旧记录
+      settings.rememberServerPassword(normalized, needsPassword ? password : '')
       settings.setShare(null)
       pendingClientRestoreRef.current = null
       router.replace('/overview')
     } catch (e) {
+      // 候选服务器请求失败后恢复当前已连接实例，不能让 API 内存态停在坏地址上。
       restoreCurrentClient()
       if (mountedRef.current) {
         setError(e instanceof Error && e.message ? e.message : t('dfLoginWrongPassword'))
@@ -161,11 +144,6 @@ export default function LoginScreen() {
     } finally {
       if (mountedRef.current) setBusy(null)
     }
-  }
-
-  function enterOpen() {
-    settings.setShare(null)
-    router.replace('/overview')
   }
 
   return (
@@ -179,6 +157,7 @@ export default function LoginScreen() {
       {/* 键盘避让：底部垫高键盘实际高度，表单区可滚动（见 use-keyboard-height 注释） */}
       <View className="flex-1" style={{ paddingBottom: keyboardHeight }}>
         <ScrollView
+          ref={scrollRef}
           className="flex-1"
           contentContainerClassName="flex-grow justify-center gap-6 px-6"
           keyboardShouldPersistTaps="handled"
@@ -206,63 +185,6 @@ export default function LoginScreen() {
 
         <View className="gap-3">
           <Text variant="small">{t('serverAddress')}</Text>
-          {settings.recentBaseUrls.length > 0 ? (
-            <View className="gap-2">
-              <Text variant="small" className="text-muted-foreground">
-                {t('dfLoginRecentServers')}
-              </Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerClassName="gap-2"
-                keyboardShouldPersistTaps="handled"
-              >
-                {settings.recentBaseUrls.map((url) => {
-                  const current = url === settings.baseUrl
-                  return (
-                    <View
-                      key={url}
-                      className={`max-w-80 flex-row items-center overflow-hidden rounded-full border ${
-                        current ? 'border-primary bg-primary/10' : 'border-border bg-muted/60'
-                      } ${busy !== null ? 'opacity-50' : ''}`}
-                    >
-                      <Pressable
-                        onPress={() => {
-                          selectServerUrl(url)
-                          void connectServer(url)
-                        }}
-                        disabled={busy !== null}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: current, disabled: busy !== null }}
-                        className="min-w-0 flex-row items-center gap-2 py-2 pl-3 pr-2 active:opacity-70"
-                      >
-                        <Server size={14} color={current ? primary : gold} />
-                        <Text variant="small" numberOfLines={1} className="max-w-48">
-                          {url.replace(/^https?:\/\//, '')}
-                        </Text>
-                        {current ? (
-                          <Text variant="small" className="font-semibold text-primary">
-                            {t('dfLoginCurrentServer')}
-                          </Text>
-                        ) : null}
-                      </Pressable>
-                      {!current ? (
-                        <Pressable
-                          onPress={() => settings.removeRecentServer(url)}
-                          disabled={busy !== null}
-                          accessibilityRole="button"
-                          accessibilityLabel={t('dfLoginForgetServer', { address: url })}
-                          className="h-9 w-9 items-center justify-center border-l border-border active:bg-muted"
-                        >
-                          <X size={14} color={gold} />
-                        </Pressable>
-                      ) : null}
-                    </View>
-                  )
-                })}
-              </ScrollView>
-            </View>
-          ) : null}
           <Input
             value={serverUrl}
             onChangeText={selectServerUrl}
@@ -271,43 +193,51 @@ export default function LoginScreen() {
             autoCorrect={false}
             keyboardType="url"
             editable={busy === null}
+            onFocus={scrollToForm}
           />
-          <Button onPress={() => void connectServer()} disabled={busy !== null}>
-            {busy === 'server' ? (
+        </View>
+
+        <View className="gap-3">
+          <Text variant="small">{t('dfLoginPasswordLabel')}</Text>
+          {/* 密码可见切换：眼睛绝对定位叠在输入框右缘（inline）。关键：
+              Input 带 shadow-sm 会映射 Android elevation，导致后绘制的兄弟
+              被盖在不透明输入框之下，必须给眼睛更高的 elevation 才可见 */}
+          <View className="relative">
+            <Input
+              ref={passwordInputRef}
+              value={password}
+              onChangeText={setPassword}
+              placeholder={t('dfLoginPasswordPlaceholder')}
+              secureTextEntry={!showPassword}
+              editable={busy === null}
+              autoCapitalize="none"
+              autoCorrect={false}
+              className="pr-12"
+              onFocus={scrollToForm}
+            />
+            <Pressable
+              onPress={() => setShowPassword((v) => !v)}
+              disabled={busy === 'login'}
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? t('dfLoginHidePassword') : t('dfLoginShowPassword')}
+              className="absolute right-1 top-1 h-8 w-10 items-center justify-center active:opacity-70"
+              style={{ elevation: 3 }}
+            >
+              {showPassword ? (
+                <EyeOff size={18} color={mutedForeground} />
+              ) : (
+                <Eye size={18} color={mutedForeground} />
+              )}
+            </Pressable>
+          </View>
+          <Button onPress={() => void login()} disabled={busy !== null}>
+            {busy === 'login' ? (
               <ActivityIndicator className="text-primary-foreground" />
             ) : (
-              <Text>{switching ? t('dfServerSwitch') : t('connectServer')}</Text>
+              <Text>{t('dfLoginSubmit')}</Text>
             )}
           </Button>
         </View>
-
-        {passwordNeeded !== null && (
-          <View className="gap-3">
-            {passwordNeeded ? (
-              <>
-                <Text variant="small">{t('dfLoginPasswordLabel')}</Text>
-                <Input
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder={t('dfLoginPasswordPlaceholder')}
-                  secureTextEntry
-                  editable={busy === null}
-                />
-                <Button onPress={login} disabled={busy !== null || !password}>
-                  {busy === 'login' ? (
-                    <ActivityIndicator className="text-primary-foreground" />
-                  ) : (
-                    <Text>{t('dfLoginSubmit')}</Text>
-                  )}
-                </Button>
-              </>
-            ) : (
-              <Button variant="secondary" onPress={enterOpen} disabled={busy !== null}>
-                <Text>{t('dfLoginEnterOpen')}</Text>
-              </Button>
-            )}
-          </View>
-        )}
 
         {error ? <Text className="text-destructive">{error}</Text> : null}
 
