@@ -18,7 +18,6 @@ jobs:
 
     env:
       CI: "1"
-      DICEFRAME_UPLOAD_STORE_FILE: ${{ runner.temp }}/diceframe-upload.jks
       DICEFRAME_UPLOAD_STORE_PASSWORD: ${{ secrets.DICEFRAME_UPLOAD_STORE_PASSWORD }}
       DICEFRAME_UPLOAD_KEY_ALIAS: ${{ secrets.DICEFRAME_UPLOAD_KEY_ALIAS }}
       DICEFRAME_UPLOAD_KEY_PASSWORD: ${{ secrets.DICEFRAME_UPLOAD_KEY_PASSWORD }}
@@ -50,9 +49,11 @@ jobs:
               exit 1
             fi
           done
+          export DICEFRAME_UPLOAD_STORE_FILE="$RUNNER_TEMP/diceframe-upload.jks"
           umask 077
           printf '%s' "$DICEFRAME_UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$DICEFRAME_UPLOAD_STORE_FILE"
           test -s "$DICEFRAME_UPLOAD_STORE_FILE"
+          echo "DICEFRAME_UPLOAD_STORE_FILE=$DICEFRAME_UPLOAD_STORE_FILE" >> "$GITHUB_ENV"
 
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean --no-install
@@ -71,7 +72,7 @@ jobs:
       - name: Remove signing key
         if: always()
         shell: bash
-        run: rm -f "$DICEFRAME_UPLOAD_STORE_FILE"
+        run: rm -f "$RUNNER_TEMP/diceframe-upload.jks"
 
       - name: Prepare artifact
         shell: bash
