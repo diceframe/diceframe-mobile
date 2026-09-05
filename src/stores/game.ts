@@ -368,7 +368,8 @@ export const useGameStore = create<GameStore>((set, get) => {
       set({ actionBusy: true })
       try {
         await submitAction(gameKey, text.trim())
-        if (get().gameKey === gameKey) await get().refresh()
+        // 提交成功就结束发送态；全量刷新包含地图等慢请求，不能继续挡住输入/语音浮层。
+        if (get().gameKey === gameKey) void get().refresh()
       } catch (error) {
         const message = errorMessage(error)
         if (

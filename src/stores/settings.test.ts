@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 import { configureApiClient, currentToken, normalizeBaseUrl } from '@/api/client'
 import { readThemeToken, resolveTheme } from '@/lib/theme'
@@ -152,29 +153,72 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     expect(state.share).toBeNull()
   })
 
-  it('v2 升级只保留设备偏好并清空旧连接域', async () => {
-    const migrate = useSettingsStore.persist.getOptions().migrate
-    expect(migrate).toBeTypeOf('function')
-    const result = await migrate!({
-      baseUrl: 'http://old:18000',
-      token: 'secret',
-      share: { game: 'old-game', user: 'old-user' },
-      shares: { 'old-game': { game: 'old-game', user: 'old-user' } },
-      activeShareGame: 'old-game',
-      themeMode: 'light',
-      language: 'ja',
-    }, 1) as Record<string, unknown>
+  it.each([0, 1, 2])('v%d 升级到 v3 时丢弃旧凭据、身份和设备偏好，重置结果落盘', async (version) => {
+    await AsyncStorage.setItem('diceframe-settings', JSON.stringify({
+      version,
+      state: {
+        baseUrl: 'http://old:18000',
+        recentBaseUrls: ['http://old:18000'],
+        serverSessionTokens: { 'http://old:18000': 'old-session' },
+        serverPasswords: { 'http://old:18000': 'secret' },
+        token: 'secret',
+        share: { game: 'old-game', user: 'old-user' },
+        shares: { 'old-game': { game: 'old-game', user: 'old-user' } },
+        activeShareGame: 'old-game',
+        ttsRate: 2,
+        ttsEngine: 'system',
+        ttsAuto: false,
+        hapticsEnabled: false,
+        themeMode: 'light',
+        language: 'ja',
+      },
+    }))
+    await useSettingsStore.persist.rehydrate()
 
-    expect(result).toMatchObject({
+    const defaults = {
       baseUrl: '',
       recentBaseUrls: [],
       serverSessionTokens: {},
+      serverPasswords: {},
       token: null,
       shares: {},
       activeShareGame: null,
-      themeMode: 'light',
-      language: 'ja',
-    })
-    expect(result).not.toHaveProperty('share')
+      ttsRate: 1,
+      ttsEngine: 'server',
+      ttsAuto: true,
+      hapticsEnabled: true,
+      themeMode: 'system',
+      language: 'system',
+    }
+    expect(useSettingsStore.getState()).toMatchObject({ ...defaults, share: null, hydrated: true })
+    expect(currentToken()).toBeNull()
+    expect(JSON.parse((await AsyncStorage.getItem('diceframe-settings'))!)).toEqual({ version: 3, state: defaults })
+  })
+
+  it('v3 重新登录后的设置正常持久化，后续启动不再清空', async () => {
+    const store = useSettingsStore.getState()
+    store.setBaseUrl('http://new:18000')
+    store.setToken('new-password')
+    store.rememberServerPassword('http://new:18000', 'new-password')
+    store.upsertShare({ game: 'new-game', user: 'new-user' })
+    store.setThemeMode('light')
+    store.setLanguage('en')
+    const saved = await AsyncStorage.getItem('diceframe-settings')
+
+    // 模拟后续两次启动从磁盘恢复，确保重置只发生在旧数据版本上。
+    for (let startup = 0; startup < 2; startup += 1) {
+      useSettingsStore.setState({ ...useSettingsStore.getInitialState() })
+      await AsyncStorage.setItem('diceframe-settings', saved!)
+      await useSettingsStore.persist.rehydrate()
+      expect(currentToken()).toBe('new-password')
+      expect(useSettingsStore.getState()).toMatchObject({
+        baseUrl: 'http://new:18000',
+        serverPasswords: { 'http://new:18000': 'new-password' },
+        shares: { 'new-game': { game: 'new-game', user: 'new-user' } },
+        themeMode: 'light',
+        language: 'en',
+      })
+      expect(await AsyncStorage.getItem('diceframe-settings')).toBe(saved)
+    }
   })
 })

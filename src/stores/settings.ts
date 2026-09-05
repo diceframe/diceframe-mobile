@@ -43,6 +43,25 @@ interface PersistedSettings {
   language: LocalePreference
 }
 
+/** 新安装与数据版本重置使用同一套默认值，不转换旧数据。 */
+function defaultSettings(): PersistedSettings {
+  return {
+    baseUrl: '',
+    recentBaseUrls: [],
+    serverSessionTokens: {},
+    serverPasswords: {},
+    token: null,
+    shares: {},
+    activeShareGame: null,
+    ttsRate: 1,
+    ttsEngine: 'server',
+    ttsAuto: true,
+    hapticsEnabled: true,
+    themeMode: 'system',
+    language: 'system',
+  }
+}
+
 function systemTheme(): ResolvedTheme {
   return Appearance.getColorScheme() === 'light' ? 'light' : 'dark'
 }
@@ -129,20 +148,8 @@ function syncApiClient(
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
-      baseUrl: '',
-      recentBaseUrls: [],
-      serverSessionTokens: {},
-      serverPasswords: {},
-      token: null,
-      shares: {},
-      activeShareGame: null,
+      ...defaultSettings(),
       share: null,
-      ttsRate: 1,
-      ttsEngine: 'server',
-      ttsAuto: true,
-      hapticsEnabled: true,
-      themeMode: 'system',
-      language: 'system',
       systemTheme: systemTheme(),
       hydrated: false,
       setBaseUrl: (url) => {
@@ -232,8 +239,8 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'diceframe-settings',
-      // v2 重置旧版连接域：多服务器模型不继承单服务器凭据，升级后重新连接一次。
-      version: 2,
+      // v3 不兼容旧数据：升级后清空全部本地设置，重新连接服务器。
+      version: 3,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         baseUrl: state.baseUrl,
@@ -250,25 +257,7 @@ export const useSettingsStore = create<SettingsState>()(
         themeMode: state.themeMode,
         language: state.language,
       }),
-      migrate: (persisted) => {
-        // 多服务器切换不能沿用旧版单服务器凭据；白名单保留设备偏好，连接域重新建立。
-        const saved = persisted as Partial<PersistedSettings>
-        return {
-          baseUrl: '',
-          recentBaseUrls: [],
-          serverSessionTokens: {},
-          serverPasswords: {},
-          token: null,
-          shares: {},
-          activeShareGame: null,
-          ttsRate: saved.ttsRate ?? 1,
-          ttsEngine: saved.ttsEngine ?? 'server',
-          ttsAuto: saved.ttsAuto ?? true,
-          hapticsEnabled: saved.hapticsEnabled ?? true,
-          themeMode: saved.themeMode ?? 'system',
-          language: saved.language ?? 'system',
-        }
-      },
+      migrate: () => defaultSettings(),
       onRehydrateStorage: () => (state) => {
         if (state) {
           syncApiClient(state)

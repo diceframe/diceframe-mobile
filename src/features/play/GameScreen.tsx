@@ -48,7 +48,7 @@ import { UtilitySheet } from '@/features/play/UtilitySheet'
 import { useGameHaptics, playGameHaptic } from '@/features/play/useHaptics'
 import { useVoiceInput } from '@/features/play/useVoiceInput'
 import { useT, type T } from '@/i18n/t'
-import { appendActionText } from '@/lib/action-text'
+import { gameLifecycleAction } from '@/lib/game-lifecycle'
 import {
   economyCurrencyLabel,
   economyProposalList,
@@ -142,9 +142,7 @@ export default function GameScreen() {
     ids: string[]
   }>({ scope: '', ids: [] })
 
-  const voice = useVoiceInput(gameKey, (text) => {
-    setDraft((current) => appendActionText(current, text))
-  })
+  const voice = useVoiceInput(gameKey, sendVoice)
   const speaker = useSpeaker(gameKey)
   // 朗读可用性 = 用户选的引擎能出声（system 引擎随设备自带 TTS 恒可用，
   // server 引擎跟随服务器 TTS 配置 serverTtsEnabled）；首次加载只记基线不回放历史
@@ -187,11 +185,8 @@ export default function GameScreen() {
   React.useEffect(() => {
     let previousState = AppState.currentState
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (previousState === 'active' && nextState !== 'active') {
-        useGameStore.getState().pause()
-      } else if (previousState !== 'active' && nextState === 'active') {
-        useGameStore.getState().resume()
-      }
+      const action = gameLifecycleAction(previousState, nextState)
+      if (action) useGameStore.getState()[action]()
       previousState = nextState
     })
     return () => subscription.remove()
@@ -211,6 +206,22 @@ export default function GameScreen() {
       router.replace({ pathname: '/join' })
     }
   }, [isGm, userId, detail, router])
+
+  async function sendVoice(text: string) {
+    // 录音/编辑期间对局可能已经变化，发送时重新检查当前状态。
+    const current = useGameStore.getState()
+    if (current.gameKey !== gameKey || current.detail?.state === 'ended') {
+      throw new Error(t('dfPlayGameEnded'))
+    }
+    if (current.actionBusy || current.gmBusy) throw new Error(t('dfPlayVoiceSendBusy'))
+    if (current.detail?.pending_luck_decisions?.length) throw new Error(t('dfPlayResolveLuckFirst'))
+    if (economyProposalList(current.detail).some(
+      (proposal) => proposal.status === 'pending'
+        && !isNonBlockingPersonalPurchase(proposal, String(current.detail?.run_id || '')),
+    )) throw new Error(t('apiErrors.economy_decision_pending'))
+    await current.submit(text)
+    void playGameHaptic('submit')
+  }
 
   async function send() {
     const text = draft.trim()
