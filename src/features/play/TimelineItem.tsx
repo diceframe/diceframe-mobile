@@ -247,7 +247,9 @@ export function TimelineItem({
       ))}
 
       {entry.gm_response ? (
-        <Card className="gap-0 p-4">
+        // 半透明底（对齐 Web 电影感对局页）：叙事卡是时间线主内容，透明度给到
+        // 80%，既透出场景氛围又保证长段落可读；再低会和玩家气泡（12%）难以区分。
+        <Card className="gap-0 bg-card/80 p-4">
           <View className="mb-1.5 flex-row items-center gap-2">
             <Text variant="small" className="flex-1 text-muted-foreground">
               {t('dfPlayGmRoundLabel', { round: entry.round ?? '?' })}
@@ -292,7 +294,7 @@ export function TimelineItem({
       ) : null}
 
       {(entry.story_recaps ?? []).map((recap, index) => (
-        <Card key={index} className="border-dashed p-3">
+        <Card key={index} className="border-dashed bg-card/60 p-3">
           <Text variant="small" className="text-muted-foreground">
             {t('dfPlayRecapRange', { from: recap.from_round, to: recap.to_round })}
           </Text>

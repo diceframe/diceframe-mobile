@@ -236,7 +236,8 @@ export function GameTimeline({
 
       {gmThinking ? (
         <NativeOnlyAnimatedView entering={FadeIn.duration(200)}>
-          <Card className="gap-0 p-4">
+          {/* 与 TimelineItem 的 GM 回合卡同款半透明底 */}
+          <Card className="gap-0 bg-card/80 p-4">
             <Text variant="small" className="mb-1.5 text-muted-foreground">
               {t('dfPlayGmThinking')}
             </Text>

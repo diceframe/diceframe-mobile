@@ -9,8 +9,9 @@ import type { AssetSource } from '@/api/assets'
 /**
  * 对局时间线的沉浸式背景：数据源是 detail.scene_image（服务端最新场景图引用，
  * 自动生图完成后由 set_scene_image 更新，经 SSE 刷新到端上），因此每次生图
- * 结束背景会自动切换为最新那张。图上叠一层高透明度背景色，时间线卡片均为
- * 不透明底色，仅卡片间隙透出场景氛围（对齐 Web 沉浸式对局页）。
+ * 结束背景会自动切换为最新那张。图上叠一层高透明度背景色压暗画面，GM 叙事卡
+ * 为半透明底（bg-card/80），玩家气泡与标签徽章本就是同色半透明，场景氛围可
+ * 透过各层级隐约可见（对齐 Web 电影感对局页 play-cinematic）。
  */
 export function SceneBackdrop({ source }: { source: AssetSource | null }) {
   const t = useT()
