@@ -110,14 +110,31 @@ SHA-256 校验文件：
 - `DiceFrame-android-armeabi-v7a.apk`：armv7 瘦身包（较旧机型）；
 - `DiceFrame-android.apk`：universal 全量包（体积最大，作为兜底/通用下载项）。
 
-拆分配置由 `plugins/withAbiSplits.js` 在 prebuild 时注入。该工作流使用测试签名，
-适合自用和内测，不用于 Google Play 正式发布。Artifact 保留 14 天。
+拆分配置由 `plugins/withAbiSplits.js` 在 prebuild 时注入。Artifact 保留 14 天。
+工作流使用固定的正式签名，需先在仓库 Actions secrets 中配置以下四项；必须沿用
+已发布 APK 的签名密钥，不能为每次构建重新生成，否则 Android 无法覆盖安装：
+
+- `DICEFRAME_UPLOAD_KEYSTORE_BASE64`：现有签名 keystore 文件的 Base64 内容；
+- `DICEFRAME_UPLOAD_STORE_PASSWORD`：keystore 密码；
+- `DICEFRAME_UPLOAD_KEY_ALIAS`：签名密钥别名；
+- `DICEFRAME_UPLOAD_KEY_PASSWORD`：签名密钥密码。
+
+缺少任一项时工作流停止，不回退调试签名。本地构建由
+`scripts/configure-android-signing.ps1` 配置用户级 Gradle 属性，使用同一份密钥。
+本地构建前运行 `npx expo prebuild --platform android --no-install` 同步版本与原生配置，
+避免已存在的 `android/` 沿用旧 `versionName` / `versionCode`。
 
 ### 发新版与客户端「检查更新」
 
-客户端在 **我的 → 检查更新** 里读取本仓库 GitHub Releases 的 latest release，
-与 `app.json` 的 `expo.version` 比较后提示下载 release 里的 `.apk` asset
-（读取手机架构自动匹配拆分包，匹配不到时回退 `DiceFrame-android.apk`）。
+客户端进入首页、返回首页或应用回到前台时，会静默读取本仓库 GitHub Releases 的
+latest release，与已安装 APK 的原生版本比较（Expo Go / Web 回退 `expo.version`）。
+发现新版后，首页右上角铃铛显示
+红点，点击直接查看版本说明并下载 APK；**我的 → 检查更新** 也可进入同一页面手动检查。
+更新页与首页共享结果，自动检查成功后 6 小时内复用缓存，失败后 15 分钟再试，
+手动检查不受该间隔限制。缓存仅保留在本次应用运行期间，重新启动会再次检查；
+网络失败不弹窗，也不会清除已发现的新版提醒，红点持续显示至检测结果不再有新版。
+GitHub API 限流或检查失败时，更新页提供直接打开 GitHub 发布页的入口。
+APK 会按手机架构自动匹配拆分包，匹配不到时回退 `DiceFrame-android.apk`。
 因此发新版时必须保持三者同步：
 
 1. 升级 `app.json` 的 `expo.version` 与 `android.versionCode`（如 `0.1.0` → `0.2.0`）；
@@ -125,7 +142,9 @@ SHA-256 校验文件：
 3. 把构建产物（至少 `DiceFrame-android.apk`）作为 Release asset 上传（Actions Artifact 不算，
    客户端找不到 APK asset 会报「最新发布没有可下载的 APK」）。
 
-任何一步漏掉，已安装的客户端都会误判「已经是最新版本」。
+每次可检测的升级都要提高 `expo.version`，Android 的 `versionCode` 也必须递增。
+只提高构建号不会触发新版提醒。Release 缺少 APK 会导致检查失败；签名不一致会导致
+覆盖安装失败。发布前应核对 APK 的原生版本、构建号与签名，不能只检查配置文件。
 
 ## 目录导览
 

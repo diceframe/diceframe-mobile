@@ -1,5 +1,5 @@
 import { ActivityIndicator, Linking, View } from 'react-native'
-import { Download, RefreshCw } from 'lucide-react-native'
+import { Download, ExternalLink, RefreshCw } from 'lucide-react-native'
 
 import { SettingsSectionScreen } from '@/features/settings/section-screen'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { Icon } from '@/components/ui/icon'
 import { Text } from '@/components/ui/text'
 import { useT, type T } from '@/i18n/t'
 import { useAppUpdates } from '@/hooks/useAppUpdates'
+import { GITHUB_RELEASE_PAGE } from '@/api/updates'
 
 /** 拆分包文件名 → 用户可读的架构标签；识别不了的（如 universal）展示原文件名 */
 function apkOptionLabel(name: string, t: T): string {
@@ -19,7 +20,7 @@ function apkOptionLabel(name: string, t: T): string {
 
 export default function UpdatesSettingsScreen() {
   const t = useT()
-  const updates = useAppUpdates()
+  const updates = useAppUpdates({ autoCheck: true })
 
   return (
     <SettingsSectionScreen section="updates">
@@ -34,7 +35,16 @@ export default function UpdatesSettingsScreen() {
             {updates.checking ? <ActivityIndicator className="text-primary-foreground" /> : <Icon as={RefreshCw} size={15} />}
             <Text>{updates.checking ? t('dfUpdatesChecking') : t('dfUpdatesCheckNow')}</Text>
           </Button>
-          {updates.error ? <Text variant="small" className="text-destructive">{updates.error}</Text> : null}
+          {updates.error ? (
+            <View className="gap-2">
+              <Text variant="small" className="text-destructive">{updates.error}</Text>
+              <Text variant="small">{t('dfUpdatesReleasePageHint')}</Text>
+              <Button variant="outline" onPress={() => void Linking.openURL(GITHUB_RELEASE_PAGE)}>
+                <Icon as={ExternalLink} size={15} />
+                <Text>{t('dfUpdatesOpenReleasePage')}</Text>
+              </Button>
+            </View>
+          ) : null}
           {updates.result ? (
             <View className="gap-3 rounded-xl border border-border bg-card p-4">
               <View className="gap-1">

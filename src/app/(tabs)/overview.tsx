@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, StyleSheet, useWindowDimensions, View } from
 import { GlassView } from 'expo-glass-effect'
 import { useNavigation, useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
-import { Check, ListChecks, Plus, ScrollText, Trash2, X } from 'lucide-react-native'
+import { Bell, Check, ListChecks, Plus, ScrollText, Trash2, X } from 'lucide-react-native'
 
 import { PageHeader } from '@/components/page-header'
 import { SceneCover } from '@/components/patterns/scene-cover'
@@ -24,6 +24,7 @@ import { appLayoutForWidth } from '@/lib/layout'
 import { confirmDestructive } from '@/lib/confirm'
 import { useThemeToken } from '@/lib/theme'
 import { useT } from '@/i18n/t'
+import { useAppUpdates } from '@/hooks/useAppUpdates'
 
 type SortMode = 'recent' | 'oldest' | 'name' | 'round'
 
@@ -231,6 +232,7 @@ export default function OverviewScreen() {
   const { gameListColumns } = appLayoutForWidth(width)
   const mutedForeground = useThemeToken('mutedForeground')
   const coverBase = useThemeToken('card')
+  const updates = useAppUpdates({ autoCheck: true })
 
   const [games, setGames] = React.useState<GameSummary[] | null>(null)
   const [error, setError] = React.useState('')
@@ -267,7 +269,10 @@ export default function OverviewScreen() {
 
   // 聚焦时刷新（对齐 Web 的 onMounted load）
   React.useEffect(() => {
-    return navigation.addListener('focus', () => setReloadToken((t) => t + 1))
+    return navigation.addListener('focus', () => {
+      setReloadToken((t) => t + 1)
+      void updates.check({ automatic: true })
+    })
   }, [navigation])
 
   function refresh() {
@@ -339,10 +344,28 @@ export default function OverviewScreen() {
         title={t('dfOverviewTitle')}
         className="px-0"
         right={
-          <Button size="sm" onPress={openCreate} accessibilityLabel={t('dfOverviewNew')}>
-            <Icon as={Plus} size={16} />
-            <Text>{t('dfOverviewNew')}</Text>
-          </Button>
+          <View className="flex-row items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-11 w-11"
+              onPress={() => router.push('/(profile)/settings/updates')}
+              accessibilityLabel={updates.result?.isNewer
+                ? t('dfUpdatesNewVersionFound', { version: updates.result.latestVersion })
+                : t('dfUpdatesTitle')}
+            >
+              <View className="relative p-1" pointerEvents="none">
+                <Icon as={Bell} size={21} />
+                {updates.result?.isNewer ? (
+                  <View className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-background bg-destructive" />
+                ) : null}
+              </View>
+            </Button>
+            <Button size="sm" onPress={openCreate} accessibilityLabel={t('dfOverviewNew')}>
+              <Icon as={Plus} size={16} />
+              <Text>{t('dfOverviewNew')}</Text>
+            </Button>
+          </View>
         }
       />
 

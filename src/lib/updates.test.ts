@@ -1,8 +1,23 @@
 import { describe, expect, it } from 'vitest'
 
-import { compareVersions, getGitHubLatestReleaseUrl, parseGitHubRelease, recommendApk } from './updates'
+import { compareVersions, getGitHubLatestReleaseUrl, parseGitHubRelease, recommendApk, resolveAppVersion } from './updates'
 
 describe('GitHub APK 更新检查', () => {
+  it('以已安装 APK 的版本为准，避免开发配置提前升级导致漏报', () => {
+    expect(resolveAppVersion({
+      configVersion: '0.5.0', nativeVersion: '0.4.0', nativeBuildVersion: '6', isExpoGo: false,
+    })).toEqual({ version: '0.4.0', buildVersion: '6' })
+  })
+
+  it('Expo Go 不使用宿主版本和构建号，Web 回退应用配置', () => {
+    expect(resolveAppVersion({
+      configVersion: '0.5.0', nativeVersion: '57.0.0', nativeBuildVersion: '570', isExpoGo: true,
+    })).toEqual({ version: '0.5.0', buildVersion: null })
+    expect(resolveAppVersion({ configVersion: '0.5.0', isExpoGo: false }))
+      .toEqual({ version: '0.5.0', buildVersion: null })
+    expect(resolveAppVersion({ isExpoGo: false })).toEqual({ version: '0.0.0', buildVersion: null })
+  })
+
   it('按语义版本判断新版', () => {
     expect(compareVersions('1.2.0', '1.1.9')).toBe(1)
     expect(compareVersions('v1.2.0', '1.2')).toBe(0)

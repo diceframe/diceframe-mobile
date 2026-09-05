@@ -37,6 +37,19 @@ export interface AppUpdateInfo {
   isNewer: boolean
 }
 
+/** APK 升级必须比较已安装二进制的版本；开发宿主的版本不能当成 DiceFrame 版本。 */
+export function resolveAppVersion(current: {
+  configVersion?: string | null
+  nativeVersion?: string | null
+  nativeBuildVersion?: string | null
+  isExpoGo: boolean
+}): AppVersionInfo {
+  return {
+    version: (!current.isExpoGo && current.nativeVersion) || current.configVersion || '0.0.0',
+    buildVersion: current.isExpoGo ? null : current.nativeBuildVersion ?? null,
+  }
+}
+
 export function normalizeReleaseVersion(value: string): string {
   return value.trim().replace(/^v/i, '')
 }

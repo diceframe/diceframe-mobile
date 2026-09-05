@@ -1,52 +1,46 @@
-import { useState } from 'react'
-import Constants from 'expo-constants'
+import { useEffect } from 'react'
+import { AppState } from 'react-native'
+import Constants, { ExecutionEnvironment } from 'expo-constants'
 import * as Application from 'expo-application'
 import * as Device from 'expo-device'
 
 import { fetchLatestRelease } from '@/api/updates'
-import { getT } from '@/i18n/t'
-import { parseGitHubRelease, type AppUpdateInfo } from '@/lib/updates'
+import { parseGitHubRelease, resolveAppVersion } from '@/lib/updates'
+import { createAppUpdatesStore } from '@/stores/app-updates'
 
-interface CheckUpdatesState {
-  checking: boolean
-  result: AppUpdateInfo | null
-  error: string | null
-}
-
-/** app.json 的 expo.version 是发版比较基准；构建号取原生侧（Expo Go 里为 null） */
 function getCurrentAppVersion() {
-  return {
-    version: Constants.expoConfig?.version ?? '0.0.0',
-    buildVersion: Application.nativeBuildVersion,
-  }
+  return resolveAppVersion({
+    configVersion: Constants.expoConfig?.version,
+    nativeVersion: Application.nativeApplicationVersion,
+    nativeBuildVersion: Application.nativeBuildVersion,
+    isExpoGo: Constants.executionEnvironment === ExecutionEnvironment.StoreClient,
+  })
 }
 
-export function useAppUpdates() {
-  const [state, setState] = useState<CheckUpdatesState>({ checking: false, result: null, error: null })
+// 首页提醒和设置页共享检查结果，点击铃铛即可看到已发现的版本与下载入口。
+const useAppUpdatesStore = createAppUpdatesStore(async () => {
+  const payload = await fetchLatestRelease()
+  // supportedAbis 按优先级排序，parse 内按序匹配拆分包（arm64 优先于 armeabi-v7a）。
+  return parseGitHubRelease(payload, getCurrentAppVersion(), {
+    supportedAbis: Device.supportedCpuArchitectures,
+  })
+})
 
-  const check = async () => {
-    setState((current) => ({ ...current, checking: true, error: null }))
+export function useAppUpdates({ autoCheck = false }: { autoCheck?: boolean } = {}) {
+  const state = useAppUpdatesStore()
+  const { check } = state
 
-    try {
-      const payload = await fetchLatestRelease()
-      // supportedAbis 按优先级排序，parse 内按序匹配拆分包（arm64 优先于 armeabi-v7a）
-      const result = parseGitHubRelease(
-        payload,
-        getCurrentAppVersion(),
-        { supportedAbis: Device.supportedCpuArchitectures },
-      )
-      setState({ checking: false, result, error: null })
-      return result
-    } catch (error) {
-      const message = error instanceof Error ? error.message : getT()('dfUpdatesCheckFailed')
-      setState((current) => ({ ...current, checking: false, error: message }))
-      return null
-    }
-  }
+  useEffect(() => {
+    if (!autoCheck) return
+    void check({ automatic: true })
+    const subscription = AppState.addEventListener('change', (status) => {
+      if (status === 'active') void check({ automatic: true })
+    })
+    return () => subscription.remove()
+  }, [autoCheck, check])
 
   return {
     ...state,
     current: getCurrentAppVersion(),
-    check,
   }
 }

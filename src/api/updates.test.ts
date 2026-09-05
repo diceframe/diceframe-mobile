@@ -9,6 +9,7 @@ function mockResponse(status: number, json: () => Promise<unknown>) {
 describe('GitHub latest release 拉取', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 
   it('请求 latest 端点并携带 GitHub Accept 头', async () => {
@@ -23,13 +24,25 @@ describe('GitHub latest release 拉取', () => {
     expect(init.headers).toEqual({ Accept: 'application/vnd.github+json' })
   })
 
+  it('请求超过十五秒时中止并给出本地化错误', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('fetch', vi.fn((_url, init: RequestInit) => new Promise((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+    })))
+    const request = fetchLatestRelease()
+    const assertion = expect(request).rejects.toThrow('检查更新失败')
+    await vi.advanceTimersByTimeAsync(15_000)
+    await assertion
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('404 映射为「还没有 GitHub Release」', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse(404, async () => ({}))))
     await expect(fetchLatestRelease()).rejects.toThrow('还没有 GitHub Release')
   })
 
-  it('403 映射为限流提示', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse(403, async () => ({}))))
+  it.each([403, 429])('%s 映射为限流提示', async (status) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse(status, async () => ({}))))
     await expect(fetchLatestRelease()).rejects.toThrow('GitHub API 暂时限流，请稍后再试')
   })
 

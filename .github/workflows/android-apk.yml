@@ -18,6 +18,10 @@ jobs:
 
     env:
       CI: "1"
+      DICEFRAME_UPLOAD_STORE_FILE: ${{ runner.temp }}/diceframe-upload.jks
+      DICEFRAME_UPLOAD_STORE_PASSWORD: ${{ secrets.DICEFRAME_UPLOAD_STORE_PASSWORD }}
+      DICEFRAME_UPLOAD_KEY_ALIAS: ${{ secrets.DICEFRAME_UPLOAD_KEY_ALIAS }}
+      DICEFRAME_UPLOAD_KEY_PASSWORD: ${{ secrets.DICEFRAME_UPLOAD_KEY_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -33,6 +37,23 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      # 发给用户的包必须沿用同一签名；缺密钥时停止，避免生成无法覆盖旧版的 APK。
+      - name: Restore release signing key
+        shell: bash
+        env:
+          DICEFRAME_UPLOAD_KEYSTORE_BASE64: ${{ secrets.DICEFRAME_UPLOAD_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          for name in DICEFRAME_UPLOAD_KEYSTORE_BASE64 DICEFRAME_UPLOAD_STORE_PASSWORD DICEFRAME_UPLOAD_KEY_ALIAS DICEFRAME_UPLOAD_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing repository secret: $name"
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$DICEFRAME_UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$DICEFRAME_UPLOAD_STORE_FILE"
+          test -s "$DICEFRAME_UPLOAD_STORE_FILE"
+
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean --no-install
 
@@ -46,6 +67,11 @@ jobs:
       - name: Build release APK
         run: ./gradlew assembleRelease --no-daemon
         working-directory: android
+
+      - name: Remove signing key
+        if: always()
+        shell: bash
+        run: rm -f "$DICEFRAME_UPLOAD_STORE_FILE"
 
       - name: Prepare artifact
         shell: bash
