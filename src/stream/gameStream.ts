@@ -33,6 +33,8 @@ export interface GameStreamHandlers {
   onError: (message: string) => void
 }
 
+/** 只限制票据与首次建连，live 后不按静默时长断开（服务端无心跳）。 */
+const CONNECT_TIMEOUT_MS = 15000
 const RECONNECT_DELAY_MS = 5000
 const POLL_FALLBACK_MS = 30000
 /** 连续失败达到该次数即视为降级（仍持续重连） */
@@ -62,6 +64,25 @@ export function createGameStream(
   let pollTimer: ReturnType<typeof setInterval> | null = null
   let consecutiveFailures = 0
   let cursor = ''
+  let attempt = 0
+  let ticketController: AbortController | null = null
+  let connectTimer: ReturnType<typeof setTimeout> | null = null
+
+  function clearConnectTimeout() {
+    if (connectTimer !== null) clearTimeout(connectTimer)
+    connectTimer = null
+  }
+
+  function closeConnection() {
+    // stop/start 或超时后的旧票据、旧事件不能再接管新连接。
+    attempt += 1
+    clearConnectTimeout()
+    ticketController?.abort()
+    ticketController = null
+    source?.removeAllEventListeners()
+    source?.close()
+    source = null
+  }
 
   function setStatus(status: StreamStatus) {
     handlers.onStatusChange(status)
@@ -97,9 +118,7 @@ export function createGameStream(
   }
 
   function handleCloseOrError() {
-    source?.removeAllEventListeners()
-    source?.close()
-    source = null
+    closeConnection()
     if (stopped) return
     consecutiveFailures += 1
     if (consecutiveFailures >= DEGRADED_AFTER_FAILURES) {
@@ -113,19 +132,27 @@ export function createGameStream(
 
   async function connect() {
     if (stopped) return
+    const version = ++attempt
+    const isCurrent = () => !stopped && version === attempt
     setStatus('connecting')
+    ticketController = new AbortController()
+    connectTimer = setTimeout(() => {
+      if (isCurrent()) handleCloseOrError()
+    }, CONNECT_TIMEOUT_MS)
     let ticket: string
     try {
-      ticket = await requestSseTicket(gameKey)
+      ticket = await requestSseTicket(gameKey, ticketController.signal)
     } catch (error) {
+      if (!isCurrent()) return
+      closeConnection()
       handlers.onError(errorMessage(error))
-      if (stopped) return
       setStatus('degraded')
       ensurePollFallback()
       scheduleReconnect()
       return
     }
-    if (stopped) return
+    if (!isCurrent()) return
+    ticketController = null
 
     const es = new EventSource(buildPlaySseUrl(gameKey, ticket, getCursor()), {
       method: 'GET',
@@ -134,14 +161,15 @@ export function createGameStream(
     source = es
 
     es.addEventListener('open', () => {
-      if (stopped) return
+      if (!isCurrent()) return
+      clearConnectTimeout()
       consecutiveFailures = 0
       stopPollFallback()
       setStatus('live')
     })
 
     es.addEventListener('message', (event) => {
-      if (stopped) return
+      if (!isCurrent()) return
       const message = event as { data?: string | null; lastEventId?: string | null }
       if (message.lastEventId) cursor = message.lastEventId
       let payload: GameSsePayload | null = null
@@ -155,7 +183,10 @@ export function createGameStream(
 
     es.addEventListener('error', () => {
       // timeout/exception 等异常也统一从 error 事件进来
-      handleCloseOrError()
+      if (isCurrent()) handleCloseOrError()
+    })
+    es.addEventListener('close', () => {
+      if (isCurrent()) handleCloseOrError()
     })
   }
 
@@ -163,15 +194,15 @@ export function createGameStream(
     start() {
       if (!stopped) return
       stopped = false
+      consecutiveFailures = 0
+      cursor = getCursor()
       void connect()
     },
     stop() {
       stopped = true
       clearTimers()
       stopPollFallback()
-      source?.removeAllEventListeners()
-      source?.close()
-      source = null
+      closeConnection()
       setStatus('idle')
     },
   }

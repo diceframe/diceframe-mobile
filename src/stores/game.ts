@@ -201,6 +201,8 @@ export const useGameStore = create<GameStore>((set, get) => {
   let tableTalkRequestVersion = 0
   let suspended = false
   let refreshTimer: ReturnType<typeof setTimeout> | null = null
+  let claimController: AbortController | null = null
+  let claimTimer: ReturnType<typeof setTimeout> | null = null
 
   // 凭据只留在闭包，不写入可检查的 store 状态；异步响应还须匹配原服务器与分享身份。
   function captureIdentity() {
@@ -251,6 +253,10 @@ export const useGameStore = create<GameStore>((set, get) => {
   }
 
   function stopStream() {
+    claimController?.abort()
+    claimController = null
+    if (claimTimer !== null) clearTimeout(claimTimer)
+    claimTimer = null
     stream?.stop()
     stream = null
   }
@@ -305,7 +311,9 @@ export const useGameStore = create<GameStore>((set, get) => {
           set({ streamStatus: status })
           // 无可重放 ID 的问答不会随游标补发；首次连接也要覆盖初次拉取到订阅之间的空窗。
           if (status === 'live' && previousStatus !== 'live') {
-            void get().refreshTableTalk()
+            // 唤醒时 REST 可能先于网络恢复而失败或挂起，订阅成功后补齐整局数据。
+            if (get().error || !get().detail || get().loading) void get().refresh()
+            else void get().refreshTableTalk()
           }
         },
         onError: (message) => {
@@ -316,7 +324,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     stream.start()
   }
 
-  async function connect(gameKey: string, isPlayer: boolean, version: number) {
+  async function refreshSpeechConfig(gameKey: string, version: number) {
     try {
       const config = await fetchAppConfig()
       if (isCurrent(gameKey, version) && !suspended) {
@@ -329,12 +337,23 @@ export const useGameStore = create<GameStore>((set, get) => {
       // 配置拉不到时保持语音功能隐藏即可
     }
 
+  }
+
+  async function connect(gameKey: string, isPlayer: boolean, version: number) {
+    if (!isCurrent(gameKey, version) || suspended) return
+    set({ streamStatus: 'connecting' })
+    // 语音配置和页面数据都可能在唤醒时挂起，不能成为实时连接的前置条件。
+    void refreshSpeechConfig(gameKey, version)
+
     // Owner 在新设备登录后，会话 uid 是全新的、不在存档玩家列表里，
     // 直接订阅 SSE 会 403「未加入本局」。先 claim-gm 把当前会话
     // 绑定为存档 GM 身份（对齐 Web loadPlayContext 的做法）。
     if (!isPlayer) {
+      const controller = new AbortController()
+      claimController = controller
+      claimTimer = setTimeout(() => controller.abort(), 15000)
       try {
-        const gmUid = await claimGm(gameKey)
+        const gmUid = await claimGm(gameKey, controller.signal)
         if (gmUid && isCurrent(gameKey, version) && !suspended) set({ userId: gmUid })
       } catch {
         // 404=存档没有可恢复的 GM 身份（纯玩家分享局）；其余失败不阻断入局
@@ -342,8 +361,8 @@ export const useGameStore = create<GameStore>((set, get) => {
     }
 
     if (!isCurrent(gameKey, version) || suspended) return
-    await get().refresh()
     startStream(gameKey, version)
+    void get().refresh()
   }
 
   return {
@@ -373,20 +392,24 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     pause() {
-      if (!get().gameKey) return
+      if (!get().gameKey || suspended) return
       connectionVersion += 1
       refreshVersion += 1
       suspended = true
       clearRefreshTimer()
       stopStream()
-      set({ streamStatus: 'idle' })
+      set({ streamStatus: 'idle', loading: false })
     },
 
     resume() {
       const { gameKey, isGm } = get()
-      if (!gameKey || !suspended) return
+      if (!gameKey) return
+      // 解锁可能只有 inactive/焦点变化，不能依赖先收到 background 才允许恢复。
       connectionVersion += 1
+      refreshVersion += 1
       suspended = false
+      clearRefreshTimer()
+      stopStream()
       void connect(gameKey, !isGm, connectionVersion)
     },
 

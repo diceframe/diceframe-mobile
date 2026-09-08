@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { AppState, Pressable, useWindowDimensions, View } from 'react-native'
+import { AppState, Platform, Pressable, useWindowDimensions, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft, MoreHorizontal } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -52,7 +52,7 @@ import { UtilitySheet } from '@/features/play/UtilitySheet'
 import { useGameHaptics, playGameHaptic } from '@/features/play/useHaptics'
 import { useVoiceInput } from '@/features/play/useVoiceInput'
 import { useT, type T } from '@/i18n/t'
-import { gameLifecycleAction } from '@/lib/game-lifecycle'
+import { createGameLifecycle } from '@/lib/game-lifecycle'
 import {
   economyCurrencyLabel,
   economyProposalList,
@@ -202,14 +202,28 @@ export default function GameScreen() {
   }, [gameKey])
 
   React.useEffect(() => {
-    let previousState = AppState.currentState
-    const subscription = AppState.addEventListener('change', (nextState) => {
-      const action = gameLifecycleAction(previousState, nextState)
-      if (action) useGameStore.getState()[action]()
-      previousState = nextState
+    const lifecycle = createGameLifecycle(AppState.currentState, {
+      pause: () => useGameStore.getState().pause(),
+      resume: () => useGameStore.getState().resume(),
     })
-    return () => subscription.remove()
-  }, [])
+    const subscription = AppState.addEventListener('change', lifecycle.change)
+    // Android 锁屏/遮挡可能只通知焦点变化；Web 唤醒也不保证触发 visibilitychange。
+    const blur = Platform.OS === 'android' ? AppState.addEventListener('blur', lifecycle.blur) : null
+    const focus = Platform.OS === 'android' ? AppState.addEventListener('focus', lifecycle.focus) : null
+    if (Platform.OS === 'web') {
+      window.addEventListener('blur', lifecycle.blur)
+      window.addEventListener('focus', lifecycle.focus)
+    }
+    return () => {
+      subscription.remove()
+      blur?.remove()
+      focus?.remove()
+      if (Platform.OS === 'web') {
+        window.removeEventListener('blur', lifecycle.blur)
+        window.removeEventListener('focus', lifecycle.focus)
+      }
+    }
+  }, [gameKey])
 
   // 玩家身份失效（被踢/存档重置）时只清该局的身份槽位、回加入页重新加入；
   // 多局身份各自独立，不能连坐其他局的保存身份

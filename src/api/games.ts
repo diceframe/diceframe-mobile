@@ -148,18 +148,20 @@ export async function verifyRoomPassword(gameKey: string, password: string): Pro
  * 把当前会话绑定为存档的 GM 身份（换设备登录 Owner 后恢复房主身份，
  * 对齐 Web loadPlayContext 无 user 参数时的 claim-gm 调用）。
  */
-export async function claimGm(gameKey: string): Promise<string | null> {
+export async function claimGm(gameKey: string, signal?: AbortSignal): Promise<string | null> {
   const result = await api<{ ok?: boolean; user_id?: string }>(gamePath(gameKey, '/claim-gm'), {
     method: 'POST',
     body: '{}',
+    signal,
   })
   return result.user_id ?? null
 }
 
 /** SSE 一次性票据（30s TTL）；票据请求本身走鉴权（Bearer 或分享参数） */
-export async function requestSseTicket(gameKey: string): Promise<string> {
+export async function requestSseTicket(gameKey: string, signal?: AbortSignal): Promise<string> {
   const result = await api<{ ticket?: string }>(gamePath(gameKey, '/sse-ticket'), {
     method: 'POST',
+    signal,
   })
   if (!result.ticket) throw new Error('未能获取实时流票据')
   return result.ticket
