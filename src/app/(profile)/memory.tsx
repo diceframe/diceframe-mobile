@@ -2,6 +2,7 @@ import * as React from 'react'
 import { FlatList, View } from 'react-native'
 import { Brain, Search, X } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { fetchGames } from '@/api/games'
 import {
@@ -12,6 +13,7 @@ import {
 } from '@/api/library'
 import type { GameSummary } from '@/api/types'
 import { PageHeader } from '@/components/page-header'
+import { PageNavigation } from '@/components/patterns/page-navigation'
 import { Sheet } from '@/components/patterns/sheet'
 import { SheetSelect } from '@/components/patterns/sheet-select'
 import { Screen } from '@/components/screen'
@@ -25,58 +27,99 @@ import { useT } from '@/i18n/t'
 import { errorMessage } from '@/api/client'
 import { formatDateTime } from '@/lib/datetime'
 import { memoryDisplayText } from '@/lib/memory-display'
+import { useKeyboardHeight } from '@/lib/use-keyboard-height'
+import {
+  createMemoryPagination,
+  MEMORY_PAGE_SIZE,
+  memoryPageMeta,
+  memoryPaginationReducer,
+} from '@/lib/memory-pagination'
 
 export default function MemoryScreen() {
   const router = useRouter()
   const t = useT()
+  const keyboardHeight = useKeyboardHeight()
+  const insets = useSafeAreaInsets()
   const [games, setGames] = React.useState<GameSummary[]>([])
-  const [gameKey, setGameKey] = React.useState('')
-  const [memories, setMemories] = React.useState<MemoryRecord[]>([])
+  const [pagination, dispatch] = React.useReducer(memoryPaginationReducer, undefined, createMemoryPagination)
+  const { gameKey, keyword, page, memories, loading, requestId, contextId } = pagination
+  const meta = memoryPageMeta(pagination)
   const [query, setQuery] = React.useState('')
-  const [loading, setLoading] = React.useState(true)
-  const [error, setError] = React.useState('')
+  const [gamesLoading, setGamesLoading] = React.useState(true)
+  const [gamesError, setGamesError] = React.useState('')
+  const [gamesAttempt, setGamesAttempt] = React.useState(0)
+  const [mutationBusy, setMutationBusy] = React.useState(false)
+  const mutationLock = React.useRef(false)
+  const editSession = React.useRef(0)
+  const error = gamesError || pagination.error
 
   React.useEffect(() => {
+    let active = true
     async function loadGames() {
       try {
         const result = await fetchGames()
+        if (!active) return
         const next = result.games ?? []
         setGames(next)
-        setGameKey((current) => current || next[0]?.game_key || '')
+        setGamesError('')
+        dispatch({ type: 'game', gameKey: next[0]?.game_key || '' })
       } catch (cause) {
-        setError(errorMessage(cause))
+        if (active) setGamesError(errorMessage(cause))
+      } finally {
+        if (active) setGamesLoading(false)
       }
     }
-    queueMicrotask(() => void loadGames())
-  }, [])
+    void loadGames()
+    return () => { active = false }
+  }, [gamesAttempt])
 
-  async function load(targetGameKey: string, keyword = '') {
-    if (!targetGameKey) {
-      setMemories([])
-      setLoading(false)
-      return
+  React.useEffect(() => {
+    if (!gameKey) return
+    let active = true
+    async function load() {
+      try {
+        const response = await fetchMemories(gameKey, keyword, {
+          limit: MEMORY_PAGE_SIZE,
+          offset: (page - 1) * MEMORY_PAGE_SIZE,
+        })
+        if (active) dispatch({ type: 'success', requestId, response })
+      } catch (cause) {
+        if (active) dispatch({ type: 'failure', requestId, error: errorMessage(cause) })
+      }
     }
-    setLoading(true)
-    try {
-      const result = await fetchMemories(targetGameKey, keyword)
-      setMemories(result.memories ?? result.entries ?? [])
-      setError('')
-    } catch (cause) {
-      setError(errorMessage(cause))
-    } finally {
-      setLoading(false)
+    void load()
+    return () => { active = false }
+  }, [gameKey, keyword, page, requestId])
+
+  function retry() {
+    if (gamesError) {
+      setGamesLoading(true)
+      setGamesError('')
+      setGamesAttempt((attempt) => attempt + 1)
+    } else {
+      dispatch({ type: 'refresh' })
     }
   }
 
-  React.useEffect(() => {
-    queueMicrotask(() => void load(gameKey))
-  }, [gameKey])
+  function search(value = query) {
+    closeEdit()
+    dispatch({ type: 'search', keyword: value })
+  }
 
   async function remove(id: number) {
-    const result = await deleteMemory(gameKey, id)
-    if (result.ok === false)
-      throw new Error(result.error || t('dfMemoryDeleteFailed'))
-    await load(gameKey, query)
+    if (mutationLock.current || loading) return
+    mutationLock.current = true
+    setMutationBusy(true)
+    try {
+      const result = await deleteMemory(gameKey, id)
+      if (result.ok === false) throw new Error(result.error || t('dfMemoryDeleteFailed'))
+      dispatch({ type: 'refresh', contextId })
+    } catch (cause) {
+      dispatch({ type: 'mutationFailure', contextId, error: errorMessage(cause, 'dfMemoryDeleteFailed') })
+    } finally {
+      mutationLock.current = false
+      setMutationBusy(false)
+    }
   }
 
   // 服务端 PUT /memories/{id} 只接受 entity/relation/value/confidence 四个字段
@@ -85,9 +128,9 @@ export default function MemoryScreen() {
   const [editEntity, setEditEntity] = React.useState('')
   const [editRelation, setEditRelation] = React.useState('')
   const [editValue, setEditValue] = React.useState('')
-  const [editBusy, setEditBusy] = React.useState(false)
 
   function closeEdit() {
+    editSession.current += 1
     setEditOpen(false)
     setEditingId(null)
     setEditEntity('')
@@ -96,6 +139,8 @@ export default function MemoryScreen() {
   }
 
   function openEdit(item: MemoryRecord) {
+    if (mutationLock.current || loading) return
+    editSession.current += 1
     setEditingId(item.id)
     setEditEntity(String(item.entity ?? ''))
     setEditRelation(String(item.relation ?? ''))
@@ -106,27 +151,32 @@ export default function MemoryScreen() {
   }
 
   async function saveEdit() {
-    if (!editingId || !editValue.trim()) return
-    setEditBusy(true)
+    if (editingId === null || !editValue.trim() || mutationLock.current) return
+    mutationLock.current = true
+    const session = editSession.current
+    setMutationBusy(true)
     try {
-      await updateMemory(gameKey, editingId, {
+      const result = await updateMemory(gameKey, editingId, {
         entity: editEntity.trim(),
         relation: editRelation.trim(),
         value: editValue.trim(),
       })
-      closeEdit()
-      await load(gameKey, query)
+      if (result.ok === false) throw new Error(result.error || t('dfMemoryEditFailed'))
+      // 取消或切换上下文后，旧保存结果不能关闭后续编辑会话。
+      if (editSession.current === session) closeEdit()
+      dispatch({ type: 'refresh', contextId })
     } catch (cause) {
-      setError(errorMessage(cause, 'dfMemoryEditFailed'))
+      dispatch({ type: 'mutationFailure', contextId, error: errorMessage(cause, 'dfMemoryEditFailed') })
     } finally {
-      setEditBusy(false)
+      mutationLock.current = false
+      setMutationBusy(false)
     }
   }
 
   return (
     <Screen
       className="px-4"
-      style={{ width: '100%', maxWidth: 840, alignSelf: 'center' }}
+      style={{ width: '100%', maxWidth: 840, alignSelf: 'center', paddingBottom: Math.max(keyboardHeight, insets.bottom) }}
     >
       <PageHeader
         title={t('dfMemoryTitle')}
@@ -137,6 +187,9 @@ export default function MemoryScreen() {
       {error ? (
         <View className="mb-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3">
           <Text className="text-destructive">{error}</Text>
+          <Button size="sm" variant="outline" disabled={loading || gamesLoading || mutationBusy} onPress={retry}>
+            <Text>{t('retry')}</Text>
+          </Button>
         </View>
       ) : null}
       <View className="mb-3">
@@ -146,7 +199,11 @@ export default function MemoryScreen() {
             value: game.game_key,
           }))}
           value={gameKey}
-          onValueChange={setGameKey}
+          onValueChange={(value) => {
+            setQuery('')
+            closeEdit()
+            dispatch({ type: 'game', gameKey: value })
+          }}
           placeholder={t('dfProfileSelectGame')}
         />
       </View>
@@ -156,39 +213,44 @@ export default function MemoryScreen() {
           <Input
             value={query}
             onChangeText={setQuery}
-            onSubmitEditing={() => void load(gameKey, query)}
+            onSubmitEditing={() => search()}
+            editable={!!gameKey}
             placeholder={t('dfMemorySearchPlaceholder')}
             className="flex-1 rounded-none border-0 bg-transparent px-0 shadow-none"
           />
         </View>
-        {query ? (
+        {query || keyword ? (
           <Button
             size="icon"
             variant="outline"
+            accessibilityLabel={t('clear')}
+            disabled={!gameKey}
             onPress={() => {
               setQuery('')
-              void load(gameKey)
+              search('')
             }}
           >
             <Icon as={X} size={18} />
           </Button>
-        ) : (
-          <Button
-            size="sm"
-            disabled={!gameKey}
-            onPress={() => void load(gameKey, query)}
-          >
-            <Text>{t('search')}</Text>
-          </Button>
-        )}
+        ) : null}
+        <Button size="sm" disabled={!gameKey} onPress={() => search()}>
+          <Text>{t('search')}</Text>
+        </Button>
       </View>
+      {gameKey && pagination.total !== null ? (
+        <View className="mb-3 gap-1">
+          <Text variant="small">{t('memoryMeta', { total: meta.total, start: meta.start, end: meta.end })}</Text>
+          {keyword ? <Text variant="small">{t('keywords')} · {keyword}</Text> : null}
+        </View>
+      ) : null}
       <FlatList
+        key={`${gameKey}:${keyword}:${page}`}
         data={memories}
         keyExtractor={(item) => String(item.id)}
         className="flex-1"
         contentContainerClassName="gap-2 pb-8"
-        refreshing={loading}
-        onRefresh={() => void load(gameKey, query)}
+        refreshing={loading || gamesLoading}
+        onRefresh={retry}
         renderItem={({ item }) => (
           <Card className="gap-3 py-4">
             <CardContent className="gap-3 px-4">
@@ -216,6 +278,7 @@ export default function MemoryScreen() {
                   <Button
                     size="sm"
                     variant="ghost"
+                    disabled={loading || mutationBusy}
                     onPress={() => openEdit(item)}
                   >
                     <Text>{t('edit')}</Text>
@@ -223,6 +286,7 @@ export default function MemoryScreen() {
                   <Button
                     size="sm"
                     variant="ghost"
+                    disabled={loading || mutationBusy}
                     onPress={() => void remove(item.id)}
                   >
                     <Text className="text-destructive">{t('forget')}</Text>
@@ -233,7 +297,7 @@ export default function MemoryScreen() {
           </Card>
         )}
         ListEmptyComponent={
-          !loading ? (
+          !loading && !gamesLoading && !error ? (
             <View className="items-center gap-2 rounded-xl border border-dashed border-border px-6 py-12">
               <Icon as={Brain} size={28} className="text-muted-foreground" />
               <Text className="font-semibold">
@@ -246,6 +310,15 @@ export default function MemoryScreen() {
           ) : null
         }
       />
+      {gameKey && pagination.total !== null && meta.pages > 1 ? (
+        <PageNavigation
+          key={`${pagination.contextId}`}
+          page={page}
+          pages={meta.pages}
+          disabled={loading || mutationBusy}
+          onPageChange={(next) => dispatch({ type: 'page', page: next })}
+        />
+      ) : null}
 
       <Sheet open={editOpen} onClose={closeEdit} className="h-auto">
         <View className="gap-4 pt-1">
@@ -278,7 +351,7 @@ export default function MemoryScreen() {
             </Button>
             <Button
               className="flex-1"
-              disabled={editBusy || !editValue.trim()}
+              disabled={mutationBusy || !editValue.trim()}
               onPress={() => void saveEdit()}
             >
               <Text>{t('dfCommonSave')}</Text>

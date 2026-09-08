@@ -106,7 +106,9 @@ describe('library API contracts', () => {
     await fetchMemories('guild#42', '公爵')
     await deleteMemory('guild#42', 7)
 
-    expect(mockedApi).toHaveBeenNthCalledWith(1, '/games/guild%2342/memories?keyword=%E5%85%AC%E7%88%B5')
+    expect(mockedApi).toHaveBeenNthCalledWith(1, '/games/guild%2342/memories', {
+      query: { keyword: '公爵', limit: undefined, offset: undefined },
+    })
     expect(mockedApi).toHaveBeenNthCalledWith(2, '/games/guild%2342/memories/7', { method: 'DELETE' })
   })
 })

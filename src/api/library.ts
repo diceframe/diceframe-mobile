@@ -179,9 +179,22 @@ export function deleteCustomRule(ruleId: string) {
   return api<{ ok?: boolean; error?: string }>(`/rules/${encodeURIComponent(ruleId)}`, { method: 'DELETE' })
 }
 
-export function fetchMemories(gameKey: string, keyword = '') {
-  const query = keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''
-  return api<{ entries?: MemoryRecord[]; memories?: MemoryRecord[]; total?: number }>(`/games/${encodeURIComponent(gameKey)}/memories${query}`)
+export function fetchMemories(
+  gameKey: string,
+  keyword = '',
+  pagination?: { limit: number; offset: number },
+) {
+  // 不传分页的调用方沿用 HTTP 默认 50 条；档案页明确传入 limit/offset。
+  const limit = pagination
+    ? Number.isFinite(pagination.limit) ? Math.min(200, Math.max(1, Math.floor(pagination.limit))) : 50
+    : undefined
+  const offset = pagination
+    ? Number.isFinite(pagination.offset) ? Math.max(0, Math.floor(pagination.offset)) : 0
+    : undefined
+  return api<{ entries?: MemoryRecord[]; memories?: MemoryRecord[]; total?: number }>(
+    `/games/${encodeURIComponent(gameKey)}/memories`,
+    { query: { keyword: keyword || undefined, limit, offset } },
+  )
 }
 
 export function updateMemory(gameKey: string, entryId: number, patch: Partial<MemoryRecord>) {
