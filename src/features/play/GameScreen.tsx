@@ -29,6 +29,7 @@ import { CharacterPanel } from '@/features/play/CharacterPanel'
 import { CharacterPortraitSheet } from '@/features/play/CharacterPortraitSheet'
 import { GameContextRow } from '@/features/play/GameContextRow'
 import { GameTimeline } from '@/features/play/GameTimeline'
+import { GameSettingsSheet } from '@/features/play/GameSettingsSheet'
 import { KpQuestionSheet } from '@/features/play/KpQuestionSheet'
 import { TableTalkPanel } from '@/features/play/TableTalkPanel'
 import { GmPanelSheet } from '@/features/play/GmPanelSheet'
@@ -113,6 +114,7 @@ export default function GameScreen() {
   const canAskKp = useGameStore(selectCanAskKp)
   const tableTalkCount = useGameStore((s) => s.tableTalk.length)
   const tableTalkError = useGameStore((s) => s.tableTalkError)
+  const identityRevision = useGameStore((s) => s.tableTalkRevision)
 
   const [draft, setDraft] = React.useState('')
   const [characterOpen, setCharacterOpen] = React.useState(false)
@@ -132,6 +134,7 @@ export default function GameScreen() {
   >([])
   const [worldLoading, setWorldLoading] = React.useState(false)
   const [roomPasswordOpen, setRoomPasswordOpen] = React.useState(false)
+  const [gameSettingsOpen, setGameSettingsOpen] = React.useState(false)
   const [kpQuestionOpen, setKpQuestionOpen] = React.useState(false)
   const [tableTalkOpen, setTableTalkOpen] = React.useState(false)
   const [cardsOpen, setCardsOpen] = React.useState(false)
@@ -660,6 +663,7 @@ export default function GameScreen() {
         health={health}
         busy={busy}
         onOpenRoomPassword={() => setRoomPasswordOpen(true)}
+        onOpenGameSettings={() => setGameSettingsOpen(true)}
         onOpenWorldSwitch={() => void openWorldSwitch()}
         onOpenPaymentComposer={() => setPaymentComposerOpen(true)}
       />
@@ -715,6 +719,23 @@ export default function GameScreen() {
         <Text variant="h3">{t('tableTalkTitle')}</Text>
         <TableTalkPanel gameKey={gameKey} />
       </Sheet>
+      {isGm ? (
+        <GameSettingsSheet
+          key={`${gameKey}:${identityRevision}`}
+          gameKey={gameKey}
+          open={gameSettingsOpen}
+          onClose={() => setGameSettingsOpen(false)}
+          narrativePerspective={detail?.narrative_perspective}
+          onSaved={(savedGameKey, change) => {
+            const current = useGameStore.getState()
+            if (current.gameKey !== savedGameKey || current.tableTalkRevision !== identityRevision) return
+            if ('narrativePerspective' in change && current.detail) {
+              useGameStore.setState({ detail: { ...current.detail, narrative_perspective: change.narrativePerspective } })
+            }
+            void current.refresh()
+          }}
+        />
+      ) : null}
 
       {/* 房间密码 */}
       <RoomPasswordModal

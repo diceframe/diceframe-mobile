@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Shield,
   ShieldOff,
+  Settings,
   UserCircle,
   Users,
   WalletCards,
@@ -42,6 +43,7 @@ interface GmSheetProps {
   onToggleMode: () => void
   onToggleAccess: () => void
   onRoomPassword: () => void
+  onGameSettings: () => void
   onWorldSwitch: () => void
   onCreatePayment: () => void
   onExport: () => void
@@ -69,6 +71,7 @@ export function GmSheet({
   onToggleMode,
   onToggleAccess,
   onRoomPassword,
+  onGameSettings,
   onWorldSwitch,
   onCreatePayment,
   onExport,
@@ -211,6 +214,10 @@ export function GmSheet({
         <Text variant="small" className="font-semibold text-muted-foreground">
           {t('mode')}
         </Text>
+        <Button variant="outline" disabled={busy} onPress={onGameSettings}>
+          <Icon as={Settings} size={14} />
+          <Text>{t('settingsTitle')}</Text>
+        </Button>
         <Button variant="outline" disabled={busy} onPress={onToggleMode}>
           <Icon as={detail.solo_mode ? Users : UserCircle} size={14} />
           <Text>{detail.solo_mode ? t('dfPlaySwitchToMulti') : t('dfPlaySwitchToSolo')}</Text>

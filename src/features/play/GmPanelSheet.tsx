@@ -52,6 +52,7 @@ interface GmPanelSheetProps {
   busy: boolean
   /** 面板内只负责收起自己；房间密码/换世界/支付提案弹窗由宿主屏幕持有 */
   onOpenRoomPassword: () => void
+  onOpenGameSettings: () => void
   onOpenWorldSwitch: () => void
   onOpenPaymentComposer: () => void
 }
@@ -70,6 +71,7 @@ export function GmPanelSheet({
   health,
   busy,
   onOpenRoomPassword,
+  onOpenGameSettings,
   onOpenWorldSwitch,
   onOpenPaymentComposer,
 }: GmPanelSheetProps) {
@@ -265,6 +267,10 @@ export function GmPanelSheet({
             onToggleAccess={() =>
               void runGm(() => useGameStore.getState().toggleAccess())
             }
+            onGameSettings={() => {
+              onOpenChange(false)
+              onOpenGameSettings()
+            }}
             onRoomPassword={() => {
               onOpenChange(false)
               onOpenRoomPassword()
