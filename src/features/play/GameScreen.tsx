@@ -29,6 +29,8 @@ import { CharacterPanel } from '@/features/play/CharacterPanel'
 import { CharacterPortraitSheet } from '@/features/play/CharacterPortraitSheet'
 import { GameContextRow } from '@/features/play/GameContextRow'
 import { GameTimeline } from '@/features/play/GameTimeline'
+import { KpQuestionSheet } from '@/features/play/KpQuestionSheet'
+import { TableTalkPanel } from '@/features/play/TableTalkPanel'
 import { GmPanelSheet } from '@/features/play/GmPanelSheet'
 import { GAME_STATE_LABEL_KEYS } from '@/features/play/HealthPanel'
 import { MapWorkspace } from '@/features/play/MapWorkspace'
@@ -60,6 +62,7 @@ import { appLayoutForWidth } from '@/lib/layout'
 import { levelUpAttributes, levelUpPoints } from '@/lib/level-up'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import {
+  selectCanAskKp,
   selectGmThinking,
   selectMyPendingPayments,
   useGameStore,
@@ -107,6 +110,9 @@ export default function GameScreen() {
   const health = useGameStore((s) => s.health)
   const gmThinking = useGameStore(selectGmThinking)
   const myPendingPayments = useGameStore(selectMyPendingPayments)
+  const canAskKp = useGameStore(selectCanAskKp)
+  const tableTalkCount = useGameStore((s) => s.tableTalk.length)
+  const tableTalkError = useGameStore((s) => s.tableTalkError)
 
   const [draft, setDraft] = React.useState('')
   const [characterOpen, setCharacterOpen] = React.useState(false)
@@ -126,6 +132,8 @@ export default function GameScreen() {
   >([])
   const [worldLoading, setWorldLoading] = React.useState(false)
   const [roomPasswordOpen, setRoomPasswordOpen] = React.useState(false)
+  const [kpQuestionOpen, setKpQuestionOpen] = React.useState(false)
+  const [tableTalkOpen, setTableTalkOpen] = React.useState(false)
   const [cardsOpen, setCardsOpen] = React.useState(false)
   const [cards, setCards] = React.useState<
     import('@/api/types').CharacterCard[]
@@ -573,7 +581,27 @@ export default function GameScreen() {
               disabledReason={composerDisabledReason}
               quickActions={detail?.quick_actions ?? []}
               voice={voice}
-              topControls={gmRoundControls}
+              topControls={(
+                <>
+                  {gmRoundControls}
+                  {canAskKp || tableTalkCount > 0 || tableTalkError ? (
+                    <View className="flex-row flex-wrap gap-2 px-3 pt-2">
+                      {canAskKp ? (
+                        <Button size="sm" variant="outline" onPress={() => setKpQuestionOpen(true)}>
+                          <Text>{t('kpQuestionAction')}</Text>
+                        </Button>
+                      ) : null}
+                      {tableTalkCount > 0 || tableTalkError ? (
+                        <Button size="sm" variant="ghost" onPress={() => setTableTalkOpen(true)}>
+                          <Text className={tableTalkError ? 'text-destructive' : ''}>
+                            {t('tableTalkTitle')}{tableTalkCount > 0 ? ` · ${tableTalkCount}` : ''}
+                          </Text>
+                        </Button>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </>
+              )}
             />
           </View>
 
@@ -677,6 +705,16 @@ export default function GameScreen() {
         onClose={() => setWorldSwitchOpen(false)}
         onSwitch={(worldId) => void handleWorldSwitch(worldId)}
       />
+
+      <KpQuestionSheet
+        gameKey={gameKey}
+        open={kpQuestionOpen}
+        onClose={() => setKpQuestionOpen(false)}
+      />
+      <Sheet open={tableTalkOpen} onClose={() => setTableTalkOpen(false)}>
+        <Text variant="h3">{t('tableTalkTitle')}</Text>
+        <TableTalkPanel gameKey={gameKey} />
+      </Sheet>
 
       {/* 房间密码 */}
       <RoomPasswordModal

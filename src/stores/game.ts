@@ -1,15 +1,17 @@
 /**
  * 对局状态 store（职责镜像 Web composables/useGame.ts）。
  *
- * - refresh() 并行拉取 detail/characters/log/private-log/map（SSE 只做变更信号）
+ * - refresh() 并行拉取 detail/characters/log/private-log/map/table-talk（SSE 只做变更信号）
  * - SSE：narration_delta 累积为 liveNarration（"GM 思考中"流式气泡），
- *   其余事件合并后触发完整刷新；游标随事件更新，断线重连时带回服务端
+ *   table_talk_changed 仅刷新独立频道，其余事件合并后完整刷新；游标随事件更新供重连恢复
  * - 身份判定：client 上下文中存在匹配本局的分享身份 → 玩家模式；否则 GM 模式
  * - 切到后台暂停连接，回到前台刷新并恢复 SSE，避免后台持续轮询耗电
  */
 import { create } from 'zustand'
 
-import { ApiError, currentShare, errorMessage, fetchAppConfig } from '@/api/client'
+import { ApiError, buildUrl, currentSessionToken, currentShare, currentToken, errorMessage, fetchAppConfig } from '@/api/client'
+import { askKpQuestion, canAskKpQuestion, fetchTableTalk, isTableTalkUnsupported, type KpQuestionVisibility } from '@/api/table-talk'
+import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
 import { asrAvailable, serverTtsAvailable } from '@/lib/speech-config'
 import {
   advanceGame,
@@ -61,6 +63,7 @@ import type {
   PrivateMessage,
   RuleAttribute,
   RuleMeta,
+  TableTalkExchange,
   WorldCandidate,
 } from '@/api/types'
 import {
@@ -93,6 +96,19 @@ interface GameStore {
   logPage: number
   logTotalPages: number
   privateMessages: PrivateMessage[]
+  tableTalk: TableTalkExchange[]
+  tableTalkSupported: boolean | null
+  tableTalkLoading: boolean
+  tableTalkError: string
+  /** 入局/身份/重置代次，供表单 key 隔离草稿和私密回答。 */
+  tableTalkRevision: number
+  kpQuestionBusy: boolean
+  kpQuestionAnswer: string
+  kpQuestionError: string
+  kpQuestionSupported: boolean | null
+  refreshTableTalk: () => Promise<void>
+  askKp: (question: string, visibility?: KpQuestionVisibility) => Promise<void>
+  clearKpQuestion: () => void
   map: MapData | null
   liveNarration: string
   cursor: string
@@ -157,6 +173,15 @@ const initial = {
       loadingOlderLog: false,
   logTotalPages: 1,
   privateMessages: [],
+  tableTalk: [],
+  tableTalkSupported: null,
+  tableTalkLoading: false,
+  tableTalkError: '',
+  tableTalkRevision: 0,
+  kpQuestionBusy: false,
+  kpQuestionAnswer: '',
+  kpQuestionError: '',
+  kpQuestionSupported: null,
   map: null,
   liveNarration: '',
   cursor: '',
@@ -172,8 +197,54 @@ export const useGameStore = create<GameStore>((set, get) => {
   let stream: GameStream | null = null
   let connectionVersion = 0
   let refreshVersion = 0
+  let tableTalkVersion = 0
+  let tableTalkRequestVersion = 0
   let suspended = false
   let refreshTimer: ReturnType<typeof setTimeout> | null = null
+
+  // 凭据只留在闭包，不写入可检查的 store 状态；异步响应还须匹配原服务器与分享身份。
+  function captureIdentity() {
+    const baseUrl = buildUrl('/')
+    const token = currentToken()
+    const session = currentSessionToken()
+    const share = JSON.stringify(currentShare())
+    return () => baseUrl === buildUrl('/') && token === currentToken()
+      && (session === null || session === currentSessionToken()) && share === JSON.stringify(currentShare())
+  }
+
+  function clearTableTalk() {
+    tableTalkVersion += 1
+    tableTalkRequestVersion += 1
+    set({
+      tableTalk: [], tableTalkSupported: null, tableTalkLoading: false, tableTalkError: '',
+      kpQuestionBusy: false, kpQuestionAnswer: '', kpQuestionError: '', kpQuestionSupported: null,
+      tableTalkRevision: tableTalkVersion,
+    })
+  }
+
+  // settings 先 set 再同步 API；先清空旧身份的数据，微任务中再用已同步的新身份入局。
+  useSettingsStore.subscribe((next, previous) => {
+    const nextIdentity = activeIdentityOf(next)
+    const previousIdentity = activeIdentityOf(previous)
+    if (next.baseUrl === previous.baseUrl && next.token === previous.token
+      && next.serverSessionTokens[next.baseUrl] === previous.serverSessionTokens[previous.baseUrl]
+      && JSON.stringify(nextIdentity) === JSON.stringify(previousIdentity)) return
+    const gameKey = get().gameKey
+    if (!gameKey) return
+    connectionVersion += 1
+    refreshVersion += 1
+    clearRefreshTimer()
+    stopStream()
+    clearTableTalk()
+    set({ ...initial, gameKey, tableTalkRevision: tableTalkVersion })
+    const version = connectionVersion
+    queueMicrotask(() => {
+      if (!isCurrent(gameKey, version)) return
+      const wasSuspended = suspended
+      get().enter(gameKey)
+      if (wasSuspended) get().pause()
+    })
+  })
 
   function isCurrent(gameKey: string, version: number): boolean {
     return connectionVersion === version && get().gameKey === gameKey
@@ -207,6 +278,8 @@ export const useGameStore = create<GameStore>((set, get) => {
       {
         onEvent: (effect: GameSseEffect, payload: GameSsePayload, cursor: string) => {
           if (!isCurrent(gameKey, version) || suspended) return
+          // 桌边问答可能没有可重放 ID；新连接尚无 ID 时不能清掉已知游标。
+          cursor = cursor || get().cursor
           if (effect === 'narration-delta') {
             set({ cursor, liveNarration: get().liveNarration + (payload.text ?? '') })
             return
@@ -220,10 +293,20 @@ export const useGameStore = create<GameStore>((set, get) => {
             return
           }
           set({ cursor })
+          if (payload.type === 'table_talk_changed') {
+            void get().refreshTableTalk()
+            return
+          }
           scheduleRefresh(gameKey, version)
         },
         onStatusChange: (status: StreamStatus) => {
-          if (isCurrent(gameKey, version) && !suspended) set({ streamStatus: status })
+          if (!isCurrent(gameKey, version) || suspended) return
+          const previousStatus = get().streamStatus
+          set({ streamStatus: status })
+          // 无可重放 ID 的问答不会随游标补发；首次连接也要覆盖初次拉取到订阅之间的空窗。
+          if (status === 'live' && previousStatus !== 'live') {
+            void get().refreshTableTalk()
+          }
         },
         onError: (message) => {
           if (isCurrent(gameKey, version) && !suspended && message) set({ error: message })
@@ -274,7 +357,8 @@ export const useGameStore = create<GameStore>((set, get) => {
       suspended = false
       clearRefreshTimer()
       stopStream()
-      set({ ...initial, gameKey, userId: isPlayer ? share!.user : '', isGm: !isPlayer })
+      clearTableTalk()
+      set({ ...initial, gameKey, userId: isPlayer ? share!.user : '', isGm: !isPlayer, tableTalkRevision: tableTalkVersion })
       void connect(gameKey, isPlayer, connectionVersion)
     },
 
@@ -284,7 +368,8 @@ export const useGameStore = create<GameStore>((set, get) => {
       suspended = false
       clearRefreshTimer()
       stopStream()
-      set({ ...initial })
+      clearTableTalk()
+      set({ ...initial, tableTalkRevision: tableTalkVersion })
     },
 
     pause() {
@@ -306,9 +391,10 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     async refresh() {
-      const { gameKey, log: previousLog, isGm } = get()
+      const { gameKey, log: previousLog, detail: previousDetail, isGm } = get()
       if (!gameKey) return
       const requestVersion = ++refreshVersion
+      const sameIdentity = captureIdentity()
       set({ loading: true })
       try {
         const [detail, characters, log, privateLog, map, health] = await Promise.all([
@@ -318,12 +404,18 @@ export const useGameStore = create<GameStore>((set, get) => {
           fetchPrivateLog(gameKey),
           fetchMap(gameKey),
           isGm ? fetchHealth(gameKey, true) : Promise.resolve({ events: [] }),
+          get().refreshTableTalk(),
         ])
-        if (get().gameKey !== gameKey || requestVersion !== refreshVersion) return
+        if (get().gameKey !== gameKey || requestVersion !== refreshVersion || !sameIdentity()) return
         const newLog = log.log ?? []
         // 新回合写入 log 时清掉上一轮的流式气泡，避免"思考中"与正式输出重复。
         // 第一页满员后长度不再增长，须按最新条目的 round 判断。
         const clearNarration = hasNewRound(previousLog, newLog)
+        const runChanged = !!previousDetail?.run_id && previousDetail.run_id !== detail.run_id
+        const playerRemoved = !isGm && !!get().userId
+          && !(characters.players ?? []).some((player) => player.user_id === get().userId)
+        if (runChanged || playerRemoved) clearTableTalk()
+        if (playerRemoved) set({ tableTalkError: errorMessage(new ApiError('Player required', 403, 'PLAYER_NOT_IN_GAME')) })
         set({
           detail,
           players: characters.players ?? [],
@@ -339,11 +431,80 @@ export const useGameStore = create<GameStore>((set, get) => {
           loading: false,
           liveNarration: clearNarration ? '' : get().liveNarration,
         })
+        // 远端重开也换 run_id；旧频道请求与新 run 不可混用，须重取当前记录。
+        if (runChanged && !playerRemoved) await get().refreshTableTalk()
       } catch (error) {
-        if (get().gameKey === gameKey && requestVersion === refreshVersion) {
+        if (get().gameKey === gameKey && requestVersion === refreshVersion && sameIdentity()) {
+          if (error instanceof ApiError && [401, 403, 404].includes(error.status)) clearTableTalk()
           set({ error: errorMessage(error), loading: false })
         }
       }
+    },
+
+    async refreshTableTalk() {
+      const { gameKey, tableTalkSupported } = get()
+      if (!gameKey || tableTalkSupported === false) return
+      const version = tableTalkVersion
+      const requestVersion = ++tableTalkRequestVersion
+      const sameIdentity = captureIdentity()
+      const isCurrentRequest = () => get().gameKey === gameKey && tableTalkVersion === version
+        && tableTalkRequestVersion === requestVersion && sameIdentity()
+      set({ tableTalkLoading: true })
+      try {
+        const result = await fetchTableTalk(gameKey)
+        if (isCurrentRequest()) set({ tableTalk: result.exchanges, tableTalkSupported: true, tableTalkError: '' })
+      } catch (error) {
+        if (!isCurrentRequest()) return
+        if (isTableTalkUnsupported(error)) {
+          set({ tableTalk: [], tableTalkSupported: false, tableTalkError: '' })
+        } else {
+          // 独立频道失败不阻断行动页加载；权限、限流与服务端错误仍在面板内明确展示。
+          if (error instanceof ApiError && [401, 403].includes(error.status)) {
+            // 权限失效也废弃尚未完成的私密提问，避免它稍后重新写回答案。
+            clearTableTalk()
+            set({ kpQuestionError: errorMessage(error) })
+          }
+          set({ tableTalk: [], tableTalkError: errorMessage(error) })
+        }
+      } finally {
+        if (isCurrentRequest()) set({ tableTalkLoading: false })
+      }
+    },
+
+    async askKp(question, visibility = 'private') {
+      const state = get()
+      const { gameKey, userId } = state
+      if (state.kpQuestionBusy || !question.trim()) return
+      if (state.kpQuestionSupported === false) return
+      if (!canAskKpQuestion(gameKey, userId, state.players, currentShare(), !!currentToken())) {
+        set({ kpQuestionError: errorMessage(new ApiError('Player required', 403, 'PLAYER_NOT_IN_GAME')) })
+        return
+      }
+      const version = tableTalkVersion
+      const sameIdentity = captureIdentity()
+      const isCurrentRequest = () => get().gameKey === gameKey && get().userId === userId
+        && tableTalkVersion === version && sameIdentity()
+      set({ kpQuestionBusy: true, kpQuestionAnswer: '', kpQuestionError: '' })
+      try {
+        const response = await askKpQuestion(gameKey, question, visibility)
+        if (!isCurrentRequest()) return
+        set({ kpQuestionAnswer: response.answer, kpQuestionSupported: true })
+        // 公开问答只刷新独立频道，绝不调用行动接口或写入 round log。
+        if (response.visibility === 'party') await get().refreshTableTalk()
+      } catch (error) {
+        if (isCurrentRequest()) {
+          set({ kpQuestionError: errorMessage(error), kpQuestionSupported: isTableTalkUnsupported(error) ? false : get().kpQuestionSupported })
+        }
+      } finally {
+        if (isCurrentRequest()) set({ kpQuestionBusy: false })
+      }
+    },
+
+    clearKpQuestion() {
+      if (!get().kpQuestionBusy) set({
+        kpQuestionAnswer: '',
+        kpQuestionError: get().kpQuestionSupported === false ? get().kpQuestionError : '',
+      })
     },
 
     async loadOlderLog() {
@@ -556,6 +717,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     async resetGame() {
       const { gameKey } = get()
       if (!gameKey) return
+      clearTableTalk()
       set({ gmBusy: true })
       try {
         await resetGame(gameKey)
@@ -571,6 +733,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     async restartGame() {
       const { gameKey } = get()
       if (!gameKey) return
+      clearTableTalk()
       set({ gmBusy: true })
       try {
         await restartGame(gameKey)
@@ -750,6 +913,11 @@ export function selectPendingLuck(state: GameStore): CheckResult[] {
 export function selectMySheet(state: GameStore) {
   if (!state.userId) return null
   return state.players.find((player) => player.user_id === state.userId)?.character_sheet ?? null
+}
+
+/** 提问须有本局角色；GM 也不能凭管理权限冒用未认领的角色。 */
+export function selectCanAskKp(state: GameStore): boolean {
+  return canAskKpQuestion(state.gameKey, state.userId, state.players, currentShare(), !!currentToken())
 }
 
 /** “GM 思考中”：判定阶段 或 正在流式输出 */
