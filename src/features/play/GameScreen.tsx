@@ -57,6 +57,7 @@ import {
   nextEconomyProposal,
 } from '@/lib/economy-prompts'
 import { appLayoutForWidth } from '@/lib/layout'
+import { levelUpAttributes, levelUpPoints } from '@/lib/level-up'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import {
   selectGmThinking,
@@ -160,6 +161,12 @@ export default function GameScreen() {
   const submittedActions = detail?.multiplayer?.submitted_actions ?? []
   const privateMessages = useGameStore((s) => s.privateMessages)
   const myPlayer = players.find((player) => player.user_id === userId) ?? null
+  const mySheet = myPlayer?.character_sheet ?? null
+  const allocationRules = ruleAttrs.length ? ruleAttrs : ruleMeta?.attributes ?? []
+  const availablePoints = levelUpPoints(mySheet)
+  const canAllocatePoints = availablePoints > 0
+    && detail?.ruleset_runtime?.capabilities?.character_lifecycle !== 'rules_aware'
+    && levelUpAttributes(mySheet, allocationRules).length > 0
   const paymentScope = `${gameKey}:${detail?.run_id || ''}`
   const dismissedPaymentIds = dismissedPayments.scope === paymentScope
     ? dismissedPayments.ids
@@ -495,6 +502,7 @@ export default function GameScreen() {
           sidebarOpen={sidebarOpen}
           sidebarTab={sidebarTab}
           onOpenCharacter={() => setCharacterOpen(true)}
+          attributePoints={canAllocatePoints ? availablePoints : 0}
           onOpenStoryTool={openStoryTool}
           showPendingPayments={myPendingPayments.length > 0 && !currentPayment}
           pendingPaymentsCount={myPendingPayments.length}
@@ -587,20 +595,27 @@ export default function GameScreen() {
         className="h-[80%]"
         scrollable={false}
       >
-        <View className="flex-1 gap-4 pt-1">
-          <CharacterPanel
-            gameKey={gameKey}
-            player={myPlayer}
-            ruleAttrs={ruleAttrs}
-            ruleMeta={ruleMeta}
-            onEditPortrait={() => setPortraitOpen(true)}
-          />
-          {isGm && (
-            <Button variant="outline" onPress={() => void openCards()}>
-              <Text>{t('dfCharacterCardSelect')}</Text>
-            </Button>
-          )}
-        </View>
+        {characterOpen ? (
+          <View className="flex-1 gap-4 pt-1">
+            <CharacterPanel
+              key={`${gameKey}:${detail?.run_id ?? ''}:${userId}`}
+              gameKey={gameKey}
+              player={myPlayer}
+              ruleAttrs={ruleAttrs}
+              ruleMeta={ruleMeta}
+              onEditPortrait={() => setPortraitOpen(true)}
+              busy={busy}
+              onAllocatePoints={canAllocatePoints
+                ? (additions) => useGameStore.getState().allocatePoints(additions)
+                : undefined}
+            />
+            {isGm && (
+              <Button variant="outline" onPress={() => void openCards()}>
+                <Text>{t('dfCharacterCardSelect')}</Text>
+              </Button>
+            )}
+          </View>
+        ) : null}
       </Sheet>
 
       {/* GM 桌面管理抽屉（流程/玩家/健康事件）；房间密码等弹窗仍由本屏持有 */}

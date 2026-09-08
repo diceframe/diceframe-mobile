@@ -12,6 +12,7 @@ interface GameContextRowProps {
   sidebarOpen: boolean
   sidebarTab: 'plot' | 'map'
   onOpenCharacter: () => void
+  attributePoints: number
   onOpenStoryTool: (tab: 'plot' | 'map') => void
   /** 待处理经济提案：>0 且当前没有弹窗时展示「稍后」恢复入口 */
   showPendingPayments: boolean
@@ -29,6 +30,7 @@ export function GameContextRow({
   sidebarOpen,
   sidebarTab,
   onOpenCharacter,
+  attributePoints,
   onOpenStoryTool,
   showPendingPayments,
   pendingPaymentsCount,
@@ -47,9 +49,19 @@ export function GameContextRow({
       contentContainerClassName="items-center gap-1 px-3 py-1"
       showsHorizontalScrollIndicator={false}
     >
-      <Button size="sm" variant="ghost" onPress={onOpenCharacter}>
+      <Button
+        size="sm"
+        variant="ghost"
+        onPress={onOpenCharacter}
+        accessibilityLabel={attributePoints > 0
+          ? `${t('dfPlayTabCharacter')} · ${t('pointsToAllocate', { points: attributePoints })}`
+          : t('dfPlayTabCharacter')}
+      >
         <Icon as={User} size={16} />
         <Text>{t('dfPlayTabCharacter')}</Text>
+        {attributePoints > 0 ? (
+          <Text className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">+{attributePoints}</Text>
+        ) : null}
       </Button>
       {!isWideTablet && (
         <>

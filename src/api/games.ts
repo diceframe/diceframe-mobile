@@ -33,7 +33,7 @@ import type {
   WorldCandidate,
   WorldTemplatesResponse,
 } from './types'
-import { contentLanguage } from '@/i18n/t'
+import { contentLanguage, getT } from '@/i18n/t'
 import { api, apiBlob } from './client'
 
 function gamePath(gameKey: string, suffix = ''): string {
@@ -466,6 +466,21 @@ export async function resolvePayment(
   )
   if (result.ok === false) throw new Error(result.error ?? '支付决议失败')
   return result
+}
+
+// ---------- 升级属性点 ----------
+
+export async function allocateCharacterPoints(
+  gameKey: string,
+  userId: string,
+  attributes: Record<string, number>,
+): Promise<void> {
+  const result = await api<{ ok?: boolean; error?: string }>(
+    gamePath(gameKey, `/character/${encodeURIComponent(userId)}`),
+    { method: 'PUT', body: JSON.stringify({ attributes }) },
+  )
+  // 点数扣减与衍生资源由服务端计算，客户端只提交属性目标值。
+  if (result.ok === false || result.error) throw new Error(result.error || getT()('saveFailed'))
 }
 
 // ---------- 角色肖像 ----------

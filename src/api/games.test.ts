@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from './client'
 import {
+  allocateCharacterPoints,
   createPaymentProposal,
   regenerateSwipe,
   switchSwipe,
@@ -58,6 +59,27 @@ describe('games API economy contracts', () => {
       method: 'POST',
       body: JSON.stringify(payload),
     })
+  })
+})
+
+describe('games API level-up contracts', () => {
+  beforeEach(() => {
+    mockedApi.mockReset()
+    mockedApi.mockResolvedValue({ ok: true })
+  })
+
+  it('向当前玩家 PUT 属性值，不自行提交剩余点数或其它角色字段', async () => {
+    const attributes = { str: 19, dex: 12, custom: 7 }
+    await allocateCharacterPoints('game/a', 'user/1', attributes)
+    expect(mockedApi).toHaveBeenCalledWith('/games/game%2Fa/character/user%2F1', {
+      method: 'PUT',
+      body: JSON.stringify({ attributes }),
+    })
+  })
+
+  it.each([{ ok: false, error: '角色不存在' }, { error: '规则拒绝操作' }])('保留服务端拒绝原因供面板显示', async (response) => {
+    mockedApi.mockResolvedValue(response)
+    await expect(allocateCharacterPoints('game', 'user', { str: 19 })).rejects.toThrow(response.error)
   })
 })
 

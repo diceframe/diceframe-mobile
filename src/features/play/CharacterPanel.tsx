@@ -4,6 +4,7 @@ import { Pressable, ScrollView, View } from 'react-native'
 
 import { RemoteAvatar } from '@/components/patterns/remote-avatar'
 import { StatusBadge } from '@/components/patterns/status-badge'
+import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
@@ -20,7 +21,9 @@ import {
   type CharacterItemLabels,
 } from '@/lib/character-items'
 import { characterStatusFlags, deathSaveCounts } from '@/lib/character-status'
+import { levelUpPoints } from '@/lib/level-up'
 
+import { AttributeAllocation } from './AttributeAllocation'
 import { characterAttributeRows } from './characterAttributes'
 import { useAssetUri } from './useAssetUri'
 
@@ -159,7 +162,8 @@ function ItemRow({
 
 /**
  * 角色面板（对齐 Web CharacterPanel）：状态徽章只读展示，物品按 装备/背包/
- * 关键物品 分组并可展开详情；头像经 onEditPortrait 走对局内更换。
+ * 关键物品 分组并可展开详情；头像经 onEditPortrait 走对局内更换，
+ * 升级属性点在属性区原地分配，不另开弹窗。
  */
 export function CharacterPanel({
   gameKey,
@@ -167,13 +171,19 @@ export function CharacterPanel({
   ruleAttrs,
   ruleMeta,
   onEditPortrait,
+  onAllocatePoints,
+  busy = false,
 }: {
   gameKey: string
   player: Player | null
   ruleAttrs: RuleAttribute[]
   ruleMeta: RuleMeta | null
   onEditPortrait?: () => void
+  onAllocatePoints?: (additions: Record<string, number>) => Promise<void>
+  busy?: boolean
 }) {
+  const [allocating, setAllocating] = React.useState(false)
+  const allocationRules = ruleAttrs.length ? ruleAttrs : ruleMeta?.attributes ?? []
   const sheet = player?.character_sheet ?? null
   const avatar = avatarSource(gameKey, sheet?.portrait)
   const specialStats = ruleMeta?.rule_special_stats ?? []
@@ -276,16 +286,35 @@ export function CharacterPanel({
 
       {attributes.length > 0 && (
         <Section title={t('dfCharacterSectionAttributes')}>
-          <View className="flex-row flex-wrap gap-2">
-            {attributes.map((attribute) => (
-              <PanelCard key={attribute.key}>
-                <Text variant="small" numberOfLines={1}>
-                  {attribute.label}
-                </Text>
-                <Text className="font-mono text-xl font-semibold">{attribute.value}</Text>
-              </PanelCard>
-            ))}
-          </View>
+          {allocating && sheet && onAllocatePoints ? (
+            <AttributeAllocation
+              // 回滚或其它客户端改变属性后，旧草稿不能继续套用。
+              key={JSON.stringify([sheet.attributes, sheet.level_up_points, allocationRules])}
+              sheet={sheet}
+              rules={allocationRules}
+              busy={busy}
+              onSave={onAllocatePoints}
+              onClose={() => setAllocating(false)}
+            />
+          ) : (
+            <>
+              <View className="flex-row flex-wrap gap-2">
+                {attributes.map((attribute) => (
+                  <PanelCard key={attribute.key}>
+                    <Text variant="small" numberOfLines={1}>
+                      {attribute.label}
+                    </Text>
+                    <Text className="font-mono text-xl font-semibold">{attribute.value}</Text>
+                  </PanelCard>
+                ))}
+              </View>
+              {onAllocatePoints && levelUpPoints(sheet) > 0 ? (
+                <Button variant="outline" disabled={busy} onPress={() => setAllocating(true)}>
+                  <Text>{t('allocateAttributePointsWithCount', { points: levelUpPoints(sheet) })}</Text>
+                </Button>
+              ) : null}
+            </>
+          )}
         </Section>
       )}
 

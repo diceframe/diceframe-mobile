@@ -16,6 +16,9 @@ export const play = {
     dfPlayRoundState: '第 {{round}} 回合 · {{state}}',
     dfPlayErrorRetry: '{{error}} · 点击重试',
     dfPlayMoreActions: '更多操作',
+    dfPlayLevelUpInvalid: '当前无法分配这些属性点，请检查角色状态、剩余点数和属性上限后重试。',
+    dfPlayAttributeIncrease: '增加{{name}}',
+    dfPlayAttributeDecrease: '撤回{{name}}加点',
     // 对局状态（顶栏与系统健康面板共用）
     dfStateSetup: '准备中',
     dfStateWaiting: '等待行动',
@@ -155,7 +158,7 @@ export const play = {
     dfCharacterSectionEquipment: '装备',
     dfCharacterSectionInventory: '背包',
     dfCharacterSectionKeyItems: '关键物品',
-    dfCharacterEditHint: '属性与状态为只读；点按头像可更换，详细编辑请使用角色卡功能',
+    dfCharacterEditHint: '获得升级属性点后可在属性区分配；点按头像可更换，详细编辑请使用角色卡功能',
     // 角色卡
     dfCharacterCardSelect: '选择角色卡',
     dfCharacterCardsTitle: '角色卡库',
@@ -199,6 +202,9 @@ export const play = {
     dfPlayRoundState: 'Round {{round}} · {{state}}',
     dfPlayErrorRetry: '{{error}} · Tap to retry',
     dfPlayMoreActions: 'More Actions',
+    dfPlayLevelUpInvalid: 'Cannot allocate these points now. Check your character, remaining points, and attribute limits, then try again.',
+    dfPlayAttributeIncrease: 'Increase {{name}}',
+    dfPlayAttributeDecrease: 'Undo a point added to {{name}}',
     // Game state (header & system health panel)
     dfStateSetup: 'Preparing',
     dfStateWaiting: 'Waiting for Action',
@@ -338,7 +344,7 @@ export const play = {
     dfCharacterSectionEquipment: 'Equipment',
     dfCharacterSectionInventory: 'Backpack',
     dfCharacterSectionKeyItems: 'Key Items',
-    dfCharacterEditHint: 'Attributes and status are read-only. Tap the portrait to change it; use Character Cards for detailed edits.',
+    dfCharacterEditHint: 'Allocate earned level-up points in the attributes section. Tap the portrait to change it; use Character Cards for detailed edits.',
     // Character cards
     dfCharacterCardSelect: 'Choose a Character Card',
     dfCharacterCardsTitle: 'Character Card Library',
@@ -382,6 +388,9 @@ export const play = {
     dfPlayRoundState: '第{{round}}ラウンド · {{state}}',
     dfPlayErrorRetry: '{{error}} · タップして再試行',
     dfPlayMoreActions: 'その他の操作',
+    dfPlayLevelUpInvalid: '現在、このポイントは配分できません。キャラクターの状態、残りポイント、能力値の上限を確認して再試行してください。',
+    dfPlayAttributeIncrease: '{{name}}を増やす',
+    dfPlayAttributeDecrease: '{{name}}への配分を1ポイント戻す',
     // セッション状態（ヘッダーとシステム状態パネル共通）
     dfStateSetup: '準備中',
     dfStateWaiting: '行動待ち',
@@ -521,7 +530,7 @@ export const play = {
     dfCharacterSectionEquipment: '装備',
     dfCharacterSectionInventory: 'バックパック',
     dfCharacterSectionKeyItems: '重要アイテム',
-    dfCharacterEditHint: '能力値と状態は閲覧のみです。アイコンをタップすると変更できます。詳細編集はキャラクターカード機能をご利用ください',
+    dfCharacterEditHint: '獲得した成長ポイントは能力値欄で配分できます。アイコンをタップすると変更できます。詳細編集はキャラクターカード機能をご利用ください',
     // キャラクターカード
     dfCharacterCardSelect: 'キャラクターカードを選択',
     dfCharacterCardsTitle: 'キャラクターカードライブラリ',

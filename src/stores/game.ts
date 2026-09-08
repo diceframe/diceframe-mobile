@@ -13,6 +13,7 @@ import { ApiError, currentShare, errorMessage, fetchAppConfig } from '@/api/clie
 import { asrAvailable, serverTtsAvailable } from '@/lib/speech-config'
 import {
   advanceGame,
+  allocateCharacterPoints,
   claimGm,
   createPaymentProposal,
   fetchCharacters,
@@ -70,6 +71,8 @@ import {
   type StreamStatus,
 } from '@/stream/gameStream'
 import { hasNewRound } from '@/lib/game-state'
+import { buildLevelUpAttributes } from '@/lib/level-up'
+import { UserFacingError } from '@/lib/user-facing-error'
 import { mergePendingLuck } from '@/lib/check-details'
 import {
   economyProposalList,
@@ -129,6 +132,7 @@ interface GameStore {
   fetchCharacterCards: () => Promise<CharacterCardsResponse>
   applyCharacterCard: (card: CharacterCard) => Promise<void>
   updatePortrait: (portrait: CharacterSheet['portrait']) => Promise<void>
+  allocatePoints: (additions: Record<string, number>) => Promise<void>
   // 世界观候选
   fetchWorldCandidates: () => Promise<WorldCandidate[]>
   // 生成图
@@ -620,6 +624,29 @@ export const useGameStore = create<GameStore>((set, get) => {
         throw error
       } finally {
         if (get().gameKey === gameKey) set({ gmBusy: false })
+      }
+    },
+
+    async allocatePoints(additions) {
+      const { gameKey, userId, detail, players, ruleAttrs, ruleMeta, actionBusy, gmBusy } = get()
+      const sheet = players.find((player) => player.user_id === userId)?.character_sheet ?? null
+      const attributes = buildLevelUpAttributes(
+        sheet, ruleAttrs.length ? ruleAttrs : ruleMeta?.attributes ?? [], additions,
+      )
+      if (!gameKey || !userId || actionBusy || gmBusy || !attributes
+        || detail?.ruleset_runtime?.capabilities?.character_lifecycle === 'rules_aware') {
+        throw new UserFacingError('dfPlayLevelUpInvalid')
+      }
+      const version = connectionVersion
+      set({ gmBusy: true })
+      try {
+        await allocateCharacterPoints(gameKey, userId, attributes)
+        if (isCurrent(gameKey, version)) await get().refresh()
+      } catch (error) {
+        if (isCurrent(gameKey, version)) set({ error: errorMessage(error) })
+        throw error
+      } finally {
+        if (isCurrent(gameKey, version)) set({ gmBusy: false })
       }
     },
 
