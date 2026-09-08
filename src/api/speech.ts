@@ -25,10 +25,10 @@ export async function transcribeAudio(
   mimeType: string,
   lang = '',
 ): Promise<string> {
-  const query = lang ? `?lang=${encodeURIComponent(lang)}` : ''
   const result = await api<TranscriptionResponse>(
-    `/games/${encodeURIComponent(gameKey)}/transcription${query}`,
+    `/games/${encodeURIComponent(gameKey)}/transcription`,
     {
+      query: { lang: lang || undefined },
       method: 'POST',
       headers: { 'Content-Type': mimeType },
       body: audio as unknown as BodyInit,

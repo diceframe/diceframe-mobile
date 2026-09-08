@@ -132,8 +132,12 @@ export function shareQuery(): URLSearchParams | null {
 
 export function buildUrl(path: string, extra?: URLSearchParams): string {
   const normalized = path.startsWith('/') ? path : `/${path}`
-  const q = extra ? new URLSearchParams(extra) : null
-  return `${context.baseUrl}/api${normalized}${q && q.size > 0 ? (normalized.includes('?') ? '&' : '?') + q.toString() : ''}`
+  if (!extra?.size) return `${context.baseUrl}/api${normalized}`
+  const queryIndex = normalized.indexOf('?')
+  const pathname = queryIndex < 0 ? normalized : normalized.slice(0, queryIndex)
+  const q = new URLSearchParams(queryIndex < 0 ? '' : normalized.slice(queryIndex + 1))
+  extra.forEach((value, key) => q.set(key, value))
+  return `${context.baseUrl}/api${pathname}?${q.toString()}`
 }
 
 export function buildStaticAssetUrl(path: string): string {
@@ -203,24 +207,47 @@ function handleUnauthorized(response: Response, isPlayerShare: boolean): void {
   }
 }
 
+export type ApiQuery = Record<string, string | number | boolean | null | undefined>
+
+export interface ApiRequestInit extends RequestInit {
+  query?: ApiQuery
+}
+
+function requestQuery(query: ApiQuery | undefined, anonymous = false): URLSearchParams {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(query ?? {})) {
+    if (value !== null && value !== undefined) params.set(key, String(value))
+  }
+  // 当前分享身份优先于业务参数及 path 中的同名字段，避免重复参数产生鉴权歧义。
+  if (!anonymous) shareQuery()?.forEach((value, key) => params.set(key, value))
+  return params
+}
+
 export async function api<T = unknown>(
   path: string,
-  init: RequestInit = {},
+  init: ApiRequestInit = {},
   options: { anonymous?: boolean } = {},
 ): Promise<T> {
   const anonymous = options.anonymous === true
-  const url = buildUrl(path, anonymous ? undefined : shareQuery() ?? undefined)
-  const response = await fetch(url, { ...init, headers: buildHeaders(init, anonymous) })
+  const { query, ...requestInit } = init
+  const url = buildUrl(path, requestQuery(query, anonymous))
+  const response = await fetch(url, { ...requestInit, headers: buildHeaders(requestInit, anonymous) })
   const data = (await readJson(response)) as T & Record<string, unknown>
   handleUnauthorized(response, anonymous ? false : !!context.share)
   if (!response.ok) throw errorFrom(data, response.status)
   return data
 }
 
-export async function apiBlob(path: string, init: RequestInit = {}): Promise<Response> {
-  const url = buildUrl(path, shareQuery() ?? undefined)
-  const response = await fetch(url, { ...init, headers: buildHeaders(init) })
-  handleUnauthorized(response, !!context.share)
+export async function apiBlob(
+  path: string,
+  init: ApiRequestInit = {},
+  options: { anonymous?: boolean } = {},
+): Promise<Response> {
+  const anonymous = options.anonymous === true
+  const { query, ...requestInit } = init
+  const url = buildUrl(path, requestQuery(query, anonymous))
+  const response = await fetch(url, { ...requestInit, headers: buildHeaders(requestInit, anonymous) })
+  handleUnauthorized(response, anonymous ? false : !!context.share)
   if (!response.ok) {
     throw errorFrom(await readJson(response), response.status)
   }

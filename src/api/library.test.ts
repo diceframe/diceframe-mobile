@@ -46,7 +46,7 @@ describe('library API contracts', () => {
       body: JSON.stringify({ gold: 50 }),
     })
     expect(mockedApi).toHaveBeenNthCalledWith(4, '/character-cards/card%2Fa', { method: 'DELETE' })
-    expect(mockedApi).toHaveBeenNthCalledWith(5, '/rules/dnd5e/character-schema?language=zh-CN')
+    expect(mockedApi).toHaveBeenNthCalledWith(5, '/rules/dnd5e/character-schema', { query: { language: 'zh-CN' } })
   })
 
   it('keeps canonical world and lore entry IDs in route parameters', async () => {
@@ -90,7 +90,7 @@ describe('library API contracts', () => {
       description: '',
     })
 
-    expect(mockedApi).toHaveBeenNthCalledWith(1, '/rules?language=zh-CN')
+    expect(mockedApi).toHaveBeenNthCalledWith(1, '/rules', { query: { language: 'zh-CN' } })
     expect(mockedApi).toHaveBeenNthCalledWith(2, '/rules', {
       method: 'POST',
       body: JSON.stringify({

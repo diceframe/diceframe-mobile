@@ -4,6 +4,12 @@ import { api } from './client'
 import {
   allocateCharacterPoints,
   createPaymentProposal,
+  fetchAdventures,
+  fetchGeneratedImages,
+  fetchHealth,
+  fetchLog,
+  fetchRules,
+  fetchWorldTemplates,
   regenerateSwipe,
   switchSwipe,
   updateCharacterPortrait,
@@ -13,6 +19,54 @@ import {
 vi.mock('./client', () => ({ api: vi.fn() }))
 
 const mockedApi = vi.mocked(api)
+
+describe('games API query 契约', () => {
+  beforeEach(() => {
+    mockedApi.mockReset()
+    mockedApi.mockResolvedValue({})
+  })
+
+  it.each([undefined, 0, 2])('日志 page=%s 交给客户端序列化，保留首页 0', async (page) => {
+    await fetchLog('game/a', page)
+    expect(mockedApi).toHaveBeenCalledWith('/games/game%2Fa/log', { query: { page } })
+  })
+
+  it('规则与世界模板使用统一 language 参数', async () => {
+    await fetchRules('zh-CN')
+    expect(mockedApi).toHaveBeenLastCalledWith('/rules', { query: { language: 'zh-CN' } })
+    await fetchWorldTemplates('ja')
+    expect(mockedApi).toHaveBeenLastCalledWith('/world-templates', { query: { language: 'ja' } })
+  })
+
+  it('冒险包语言与过滤字段原样交给客户端编码，空过滤项省略', async () => {
+    await fetchAdventures('zh-CN', { ruleId: '规则/a', worldId: '世界 & 城市' })
+    expect(mockedApi).toHaveBeenLastCalledWith('/adventures', {
+      query: { language: 'zh-CN', rule_id: '规则/a', world_id: '世界 & 城市' },
+    })
+    await fetchAdventures('en', { ruleId: '', worldId: '' })
+    expect(mockedApi).toHaveBeenLastCalledWith('/adventures', {
+      query: { language: 'en', rule_id: undefined, world_id: undefined },
+    })
+  })
+
+  it('健康事件保持默认省略 include_resolved 的语义', async () => {
+    await fetchHealth('game/a')
+    expect(mockedApi).toHaveBeenLastCalledWith('/games/game%2Fa/health', {
+      query: { include_resolved: undefined },
+    })
+    await fetchHealth('game/a', true)
+    expect(mockedApi).toHaveBeenLastCalledWith('/games/game%2Fa/health', {
+      query: { include_resolved: true },
+    })
+  })
+
+  it('画廊 purpose 使用统一 query 参数', async () => {
+    await fetchGeneratedImages('game/a', 'scene & portrait')
+    expect(mockedApi).toHaveBeenCalledWith('/games/game%2Fa/generated-images', {
+      query: { purpose: 'scene & portrait' },
+    })
+  })
+})
 
 describe('games API swipe contracts', () => {
   beforeEach(() => {

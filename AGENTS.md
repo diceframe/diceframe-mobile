@@ -62,7 +62,10 @@ src/
    - 移动端读不到 `Set-Cookie`，会话 token 由客户端生成持久化并手动带 Cookie 头
      （Web 端行为不同，勿照搬 Web 代码）；
    - 玩家身份从 settings store `configureApiClient` 注入，拼进 query；
-   - 错误统一抛 `ApiError`（含 status/code/retryAfter）。
+   - 错误统一抛 `ApiError`（含 status/code/retryAfter）；
+   - 查询参数用 `api(path, { query: { keyword, limit, offset } })`（`apiBlob` 同样支持），
+     不手拼 `?` / `&` 或预先编码 query 值；client 省略 null/undefined，保留 0/false/空字符串并统一注入身份。
+     路径段仍须 `encodeURIComponent`，分页上限等业务校验保留在资源接口中。
 3. **`src/api/types.ts` 是主仓库 `frontend-v2/src/api/types.ts` 的全量镜像 + 文末「移动端扩展段」**。
    同步方式 = 整文件重拷上游版本后还原文末扩展段；镜像段的字段不要手改。
    移动端新增契约一律写进扩展段（与上游同名接口用 declaration merging 合并，同名成员类型必须一致）。

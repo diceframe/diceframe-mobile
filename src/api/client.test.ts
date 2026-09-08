@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ApiError,
   api,
+  apiBlob,
   buildPlaySseUrl,
   buildStaticAssetUrl,
   buildUrl,
@@ -64,6 +65,15 @@ describe('buildUrl / buildPlaySseUrl', () => {
     )
   })
 
+  it('合并 path 中的 query，同名字段只保留新值且不修改额外参数', () => {
+    const extra = new URLSearchParams('page=0&keyword=%E5%85%AC%E7%88%B5+%26+%E4%BC%AF%E7%88%B5')
+    expect(buildUrl('games/x/log?page=1&page=2&existing=hello%20world', extra)).toBe(
+      '/api/games/x/log?page=0&existing=hello+world&keyword=%E5%85%AC%E7%88%B5+%26+%E4%BC%AF%E7%88%B5',
+    )
+    expect(extra.get('existing')).toBeNull()
+    expect(buildUrl('/games/x?existing=hello%20world')).toBe('/api/games/x?existing=hello%20world')
+  })
+
   it('构造静态资源 URL 时不额外拼 /api', () => {
     configureApiClient({ baseUrl: 'http://h:18000' })
     expect(buildStaticAssetUrl('/avatars/v3/dnd5e/realistic-1.jpg')).toBe(
@@ -82,6 +92,71 @@ describe('buildUrl / buildPlaySseUrl', () => {
     expect(url).toContain('cursor=r3.p0.aaa.bbb')
     expect(url).toContain('user=u1')
     expect(url).toContain('room_token=rt1')
+  })
+})
+
+describe.each([
+  { name: 'api', request: api },
+  { name: 'apiBlob', request: apiBlob },
+])('$name query 契约', ({ request }) => {
+  it('统一编码，保留 0/false/显式空字符串，仅省略 null/undefined', async () => {
+    configureApiClient({ baseUrl: 'http://h' })
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }))
+    const signal = new AbortController().signal
+    const query = { keyword: '公爵 & 伯爵/+?#%', offset: 0, enabled: false, empty: '', absent: null, missing: undefined }
+
+    await request('/games/x/memories?limit=20&offset=99', {
+      method: 'POST',
+      body: '{}',
+      headers: { 'X-Test': 'kept' },
+      signal,
+      query,
+    })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('http://h/api/games/x/memories?limit=20&offset=0&keyword=%E5%85%AC%E7%88%B5+%26+%E4%BC%AF%E7%88%B5%2F%2B%3F%23%25&enabled=false&empty=')
+    expect(init).not.toHaveProperty('query')
+    expect(init).toMatchObject({ method: 'POST', body: '{}', signal })
+    expect(new Headers(init.headers).get('X-Test')).toBe('kept')
+    expect(new Headers(init.headers).get('X-TRPG-Confirm')).toBe('true')
+    expect(query.keyword).toBe('公爵 & 伯爵/+?#%')
+  })
+
+  it('空参数不产生多余问号', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }))
+    await request('/games', { query: { keyword: undefined, page: null } })
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/games')
+  })
+
+  it('当前分享身份覆盖 path 和业务 query 的同名字段，且每个字段只出现一次', async () => {
+    configureApiClient({
+      baseUrl: 'http://h',
+      share: { game: 'abc', user: 'u1', name: '骑士 & 法师', delegate: 'd1', roomToken: 'rt1' },
+    })
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }))
+    await request('/games/abc/log?game=old&user=old&user=duplicate&name=old&share=0&delegate=old&room_token=old&page=1', {
+      query: { game: 'other', user: 'other', name: 'other', share: false, delegate: 'other', room_token: 'other', page: 0 },
+    })
+
+    const query = new URL(fetchMock.mock.calls[0][0]).searchParams
+    for (const [key, value] of Object.entries({ game: 'abc', user: 'u1', name: '骑士 & 法师', share: '1', delegate: 'd1', room_token: 'rt1', page: '0' })) {
+      expect(query.getAll(key)).toEqual([value])
+    }
+  })
+
+  it('匿名请求保留业务 query，但不注入分享身份、Bearer 或会话', async () => {
+    configureApiClient({
+      baseUrl: 'http://h', token: 'secret', sessionToken: 'session',
+      share: { game: 'abc', user: 'u1', name: '骑士', delegate: 'd1', roomToken: 'rt1' },
+    })
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }))
+    await request('/config?existing=1', { query: { language: 'zh CN', page: 0 } }, { anonymous: true })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('http://h/api/config?existing=1&language=zh+CN&page=0')
+    expect(init).not.toHaveProperty('query')
+    expect(new Headers(init.headers).get('Authorization')).toBeNull()
+    expect(new Headers(init.headers).get('Cookie')).toBeNull()
   })
 })
 
@@ -206,7 +281,6 @@ describe('api()', () => {
         headers: { 'Content-Type': 'audio/mpeg' },
       }),
     )
-    const { apiBlob } = await import('./client')
     const response = await apiBlob('/games/abc/speech', { method: 'POST', body: '{}' })
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]))
   })

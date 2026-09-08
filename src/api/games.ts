@@ -53,8 +53,7 @@ export function fetchCharacters(gameKey: string): Promise<CharacterListResponse>
 }
 
 export function fetchLog(gameKey: string, page?: number): Promise<GameLogResponse> {
-  const suffix = typeof page === 'number' ? `/log?page=${page}` : '/log'
-  return api<GameLogResponse>(gamePath(gameKey, suffix))
+  return api<GameLogResponse>(gamePath(gameKey, '/log'), { query: { page } })
 }
 
 export function fetchPrivateLog(gameKey: string): Promise<PrivateLogResponse> {
@@ -170,7 +169,7 @@ export async function requestSseTicket(gameKey: string): Promise<string> {
 
 /** 世界模板列表（language 决定后端 locale overlay，桌面端同样默认传当前语言） */
 export function fetchWorldTemplates(language = contentLanguage()): Promise<WorldTemplatesResponse> {
-  return api<WorldTemplatesResponse>(`/world-templates?language=${encodeURIComponent(language)}`)
+  return api<WorldTemplatesResponse>('/world-templates', { query: { language } })
 }
 
 /** 冒险包列表（世界图鉴徽章用它映射 recommended_world_id → 冒险包名；创建向导按规则+世界过滤） */
@@ -178,15 +177,14 @@ export function fetchAdventures(
   language = contentLanguage(),
   filter?: { ruleId?: string; worldId?: string },
 ): Promise<{ adventures?: AdventureSummary[] }> {
-  const params = new URLSearchParams({ language })
-  if (filter?.ruleId) params.set('rule_id', filter.ruleId)
-  if (filter?.worldId) params.set('world_id', filter.worldId)
-  return api<{ adventures?: AdventureSummary[] }>(`/adventures?${params.toString()}`)
+  return api<{ adventures?: AdventureSummary[] }>('/adventures', {
+    query: { language, rule_id: filter?.ruleId || undefined, world_id: filter?.worldId || undefined },
+  })
 }
 
 /** 规则列表（language 决定后端 locale overlay，与世界模板列表保持一致） */
 export function fetchRules(language = contentLanguage()): Promise<RulesResponse> {
-  return api<RulesResponse>(`/rules?language=${encodeURIComponent(language)}`)
+  return api<RulesResponse>('/rules', { query: { language } })
 }
 
 // ---------- 对局生命周期（创建/删除/导出/导入/批量） ----------
@@ -270,8 +268,9 @@ export async function importGame(fileUri: string, fileName: string): Promise<str
 // ---------- 健康事件 ----------
 
 export function fetchHealth(gameKey: string, includeResolved = false): Promise<HealthResponse> {
-  const suffix = includeResolved ? '/health?include_resolved=true' : '/health'
-  return api<HealthResponse>(gamePath(gameKey, suffix))
+  return api<HealthResponse>(gamePath(gameKey, '/health'), {
+    query: { include_resolved: includeResolved || undefined },
+  })
 }
 
 export async function resolveHealthEvent(gameKey: string, eventId: string, action: 'resolve' | 'ignore'): Promise<void> {
@@ -545,5 +544,7 @@ export async function uploadMapBackground(fileName: string, fileData: string): P
 // ---------- 生成图画廊 ----------
 
 export function fetchGeneratedImages(gameKey: string, purpose = 'scene'): Promise<{ images?: GeneratedImageItem[] }> {
-  return api<{ images?: GeneratedImageItem[] }>(gamePath(gameKey, `/generated-images?purpose=${encodeURIComponent(purpose)}`))
+  return api<{ images?: GeneratedImageItem[] }>(gamePath(gameKey, '/generated-images'), {
+    query: { purpose },
+  })
 }
