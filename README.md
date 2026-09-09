@@ -4,6 +4,14 @@ DiceFrame（AI 跑团引擎）的 React Native 客户端。**v1 聚焦核心游�
 语音输入（原生录音，不受浏览器安全上下文限制——这是本客户端立项的直接原因）、
 实时流式叙事（SSE）、行动提交、检定/运气卡、角色面板、基础 GM 操作。
 
+## 演示视频
+
+[![DiceFrame 演示视频：你的选择，让世界回应](docs/images/diceframe-demo.jpg)](https://github.com/diceframe/diceframe-mobile/releases/download/0.5.3/DiceFrame-promo-real-components-1080p.mp4)
+
+[点击封面或此处打开演示视频（MP4，约 3.3 MB）](https://github.com/diceframe/diceframe-mobile/releases/download/0.5.3/DiceFrame-promo-real-components-1080p.mp4)。
+30 秒 · 1080p · 无声，展示行动提交、流式叙事、检定卡与角色面板。
+画面复用客户端真实组件，在 Expo Web 中使用示例对局数据录制。
+
 ## 技术栈
 
 | 项 | 选择 |
