@@ -6,9 +6,8 @@ DiceFrame（AI 跑团引擎）的 React Native 客户端。**v1 聚焦核心游�
 
 ## 演示视频
 
-[![DiceFrame 演示视频：你的选择，让世界回应](docs/images/diceframe-demo.jpg)](https://github.com/diceframe/diceframe-mobile/releases/download/0.5.3/DiceFrame-promo-real-components-1080p.mp4)
+https://github.com/user-attachments/assets/a2fc3bb7-375c-4fcc-aac1-b0cf2a89b886
 
-[点击封面或此处打开演示视频（MP4，约 3.3 MB）](https://github.com/diceframe/diceframe-mobile/releases/download/0.5.3/DiceFrame-promo-real-components-1080p.mp4)。
 30 秒 · 1080p · 无声，展示行动提交、流式叙事、检定卡与角色面板。
 画面复用客户端真实组件，在 Expo Web 中使用示例对局数据录制。
 
