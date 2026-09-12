@@ -267,6 +267,14 @@ export interface GameDetail {
   rest_session?: RestSessionStatus
   player_access_open?: boolean
   has_room_password?: boolean
+  economy_reward_policy?: { mode?: string; auto_reward_cap?: number }
+  combat_extension?: {
+    scheduler?: { kind?: string; ready?: string[]; gauges?: Record<string, number>; participants?: string[] }
+    entities?: string[]
+    entity_names?: Record<string, string>
+    actions?: Array<{ id: string; kind: string; name: string; costs: Array<{ resource: string; amount: unknown }>; consume_item?: { item: string; qty: number } }>
+    pools?: Record<string, Record<string, { current: number; maximum: number | null }>>
+  }
   multiplayer?: Multiplayer
   quick_actions?: string[]
   economy_proposals?: PendingPayment[]
@@ -1144,8 +1152,31 @@ export interface RulesetGameplayView {
     reactions: Record<string, number>
     pending_decisions: RulesetPendingDecision[]
     actors: RulesetCombatTarget[]
+    encounter_instance_id?: string
+    encounter_preset_id?: string
+    origin_step_id?: string
+    /** story=剧情绑定遭遇；sandbox=不属于冒险包的自由遭遇。 */
+    mode?: 'story' | 'sandbox' | string
+    adventure_binding?: {
+      adventure_id: string
+      step_id: string
+      encounter_preset_id: string
+      encounter_instance_id: string
+    } | null
   }
   encounter_presets: RulesetEncounterPreset[]
+  /** 服务端权威遭遇访问状态，前端据此区分剧情绑定 / 尚未准备 / 自由遭遇。 */
+  encounter_access?: {
+    mode: 'blocked' | 'story' | 'sandbox' | string
+    status: 'blocked' | 'pending' | 'active' | 'resolved' | string
+    can_start: boolean
+    unprepared: boolean
+    adventure_id?: string
+    encounter_preset_id?: string
+    encounter_instance_id?: string
+    origin_step_id?: string
+    catalog?: 'adventure' | 'bundle' | string
+  }
   encounter_request?: {
     status: 'pending' | string
     source?: string
