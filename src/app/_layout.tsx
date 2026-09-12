@@ -14,6 +14,7 @@ import { ErrorBoundary } from '@/components/error-boundary'
 import { configureApiClient } from '@/api/client'
 import { Toaster } from 'sonner-native'
 import { useLocaleSync } from '@/hooks/useLocaleSync'
+import { useServerCompatCheck } from '@/hooks/useServerCompatCheck'
 import { useResolvedTheme, useThemeToken } from '@/lib/theme'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -33,6 +34,8 @@ export default function RootLayout() {
 
   // 语言偏好 → i18n 单例；切换语言时全树经 useTranslation 重渲染
   useLocaleSync()
+  // 已连接服务器升级后与 App 版本脱钩时，进前台前弹一次兼容提醒
+  useServerCompatCheck()
 
   React.useEffect(() => {
     setSystemTheme(systemColorScheme === 'light' ? 'light' : 'dark')

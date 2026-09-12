@@ -23,6 +23,7 @@ import {
   joinFormReady,
 } from '@/lib/join-form'
 import { parseShareLink, type ParsedShareLink } from '@/lib/share-link'
+import { ServerCompatBlocked, fetchServerCompat, serverCompatErrorText } from '@/lib/server-compat'
 import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
 import { useT } from '@/i18n/t'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
@@ -107,6 +108,12 @@ export default function JoinScreen() {
           delegate: result.delegate,
         },
       })
+      // 双向版本兼容：先于对局详情探测，不兼容直接拦在链接解析这一步
+      // （旧服务器无版本字段则放行；探测失败按 joinGame 的既有错误路径走）
+      const probe = await fetchServerCompat()
+      if (probe.status === 'app-too-old' || probe.status === 'server-too-old') {
+        throw new ServerCompatBlocked(probe.status, probe.config)
+      }
       const gameDetail = await fetchGameDetail(result.game)
       if (!mountedRef.current) return
       setParsed(result)
@@ -126,7 +133,9 @@ export default function JoinScreen() {
     } catch (e) {
       if (pendingClientRestoreRef.current) configureApiClient(pendingClientRestoreRef.current)
       pendingClientRestoreRef.current = null
-      if (mountedRef.current) setError(errorMessage(e))
+      if (mountedRef.current) {
+        setError(e instanceof ServerCompatBlocked ? serverCompatErrorText(e.status, e.config) : errorMessage(e))
+      }
     } finally {
       if (mountedRef.current) setBusy(false)
     }

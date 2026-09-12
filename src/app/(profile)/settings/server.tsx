@@ -18,6 +18,7 @@ import {
 } from '@/api/client'
 import { useT } from '@/i18n/t'
 import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
+import { ServerCompatBlocked, checkServerCompatibility, serverCompatErrorText } from '@/lib/server-compat'
 
 export default function ServerSettingsScreen() {
   const router = useRouter()
@@ -54,6 +55,11 @@ export default function ServerSettingsScreen() {
       }
       configureApiClient({ baseUrl: url, token: null, share: null, sessionToken: generateSessionToken() })
       const config = await fetchAppConfig()
+      // 双向版本兼容：App 过旧或服务器过旧都不得切换过去（旧服务器无版本字段则放行）
+      const compat = checkServerCompatibility(config)
+      if (compat === 'app-too-old' || compat === 'server-too-old') {
+        throw new ServerCompatBlocked(compat, config)
+      }
       const needsPassword = !!config.access_password?.configured
       const saved = snapshot.serverPasswords[url] ?? ''
       if (needsPassword && !saved) {
@@ -80,7 +86,7 @@ export default function ServerSettingsScreen() {
       if (switchClientRestoreRef.current) configureApiClient(switchClientRestoreRef.current)
       switchClientRestoreRef.current = null
       if (switchMountedRef.current) {
-        setSwitchError(errorMessage(e))
+        setSwitchError(e instanceof ServerCompatBlocked ? serverCompatErrorText(e.status, e.config) : errorMessage(e))
       }
     } finally {
       if (switchMountedRef.current) setSwitchingUrl(null)

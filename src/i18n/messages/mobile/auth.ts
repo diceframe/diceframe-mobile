@@ -37,6 +37,10 @@ export const auth = {
     dfIdentityPickerTitle: "选择要继续的对局",
     dfIdentityPickerSubtitle: "这台设备保存了多个对局的玩家身份",
     dfIdentityPickerLobby: "进入大厅",
+    dfServerCompatTitle: "版本不兼容",
+    dfServerCompatAppTooOld: "服务器（v{{server}}）比当前 App（v{{app}}）新，继续使用可能无法正常工作。请升级 DiceFrame App 后重试。",
+    dfServerCompatServerTooOld: "当前 App（v{{app}}）需要 v{{minServer}} 或更高版本的服务器，而当前服务器是 v{{server}}。请先升级服务器再连接。",
+    dfServerCompatConfirm: "知道了",
   },
   en: {
     dfLoginJoinInstead: "I'm a player — join via a share link →",
@@ -73,6 +77,10 @@ export const auth = {
     dfIdentityPickerTitle: "Pick a game to continue",
     dfIdentityPickerSubtitle: "This device keeps player identities for several games",
     dfIdentityPickerLobby: "Enter the lobby",
+    dfServerCompatTitle: "Version incompatible",
+    dfServerCompatAppTooOld: "The server (v{{server}}) is newer than this app (v{{app}}), so things may not work correctly. Please update the DiceFrame app and try again.",
+    dfServerCompatServerTooOld: "This app (v{{app}}) needs a server on v{{minServer}} or later, but the server is v{{server}}. Please update the server first, then reconnect.",
+    dfServerCompatConfirm: "OK",
   },
   ja: {
     dfServerSwitch: "サーバーを切り替え",
@@ -109,5 +117,9 @@ export const auth = {
     dfIdentityPickerTitle: "続行する対局を選択",
     dfIdentityPickerSubtitle: "この端末には複数の対局のプレイヤー ID が保存されています",
     dfIdentityPickerLobby: "ロビーに入る",
+    dfServerCompatTitle: "バージョン非互換",
+    dfServerCompatAppTooOld: "サーバー（v{{server}}）は現在のアプリ（v{{app}}）より新しいため、正しく動作しない可能性があります。DiceFrame アプリを更新してから再試行してください。",
+    dfServerCompatServerTooOld: "このアプリ（v{{app}}）には v{{minServer}} 以降のサーバーが必要ですが、現在のサーバーは v{{server}} です。先にサーバーを更新してから接続してください。",
+    dfServerCompatConfirm: "OK",
   },
 } as const

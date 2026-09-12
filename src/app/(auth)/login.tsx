@@ -21,6 +21,7 @@ import {
   validateAccessToken,
 } from '@/api/client'
 import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
+import { ServerCompatBlocked, checkServerCompatibility, serverCompatErrorText } from '@/lib/server-compat'
 import { useThemeToken } from '@/lib/theme'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 
@@ -108,6 +109,11 @@ export default function LoginScreen() {
       // 一次提交完成“探测 + 校验”：先拿服务器配置判断是否设了访问密码，
       // 设了才校验密码；没设密码的服务器填不填都能直接进
       const config = await fetchAppConfig()
+      // 双向版本兼容：App 过旧或服务器过旧都在门口拦下（旧服务器无版本字段则放行）
+      const compat = checkServerCompatibility(config)
+      if (compat === 'app-too-old' || compat === 'server-too-old') {
+        throw new ServerCompatBlocked(compat, config)
+      }
       const needsPassword = !!config.access_password?.configured
       if (needsPassword) {
         if (!password) throw new UserFacingError('dfLoginPasswordRequired')
@@ -130,7 +136,7 @@ export default function LoginScreen() {
       // 候选服务器请求失败后恢复当前已连接实例，不能让 API 内存态停在坏地址上。
       restoreCurrentClient()
       if (mountedRef.current) {
-        setError(errorMessage(e))
+        setError(e instanceof ServerCompatBlocked ? serverCompatErrorText(e.status, e.config) : errorMessage(e))
       }
     } finally {
       if (mountedRef.current) setBusy(null)
