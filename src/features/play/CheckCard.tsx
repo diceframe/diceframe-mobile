@@ -141,6 +141,15 @@ export function CheckCard({
   if (detail.advantageNote) {
     detailRows.push({ key: 'checkAdvantageNote', options: { detail: detail.advantageNote } })
   }
+  // 规划器判定依据与 Web 同口径：三段各自走镜像 key，有内容的拼成一行「判定来源」
+  const plannerSources = [
+    detail.dcReason ? t('checkDcReason', { detail: detail.dcReason }) : '',
+    detail.advantageReason ? t('checkAdvantageReason', { detail: detail.advantageReason }) : '',
+    detail.modifierReason ? t('checkModifierReason', { detail: detail.modifierReason }) : '',
+  ].filter(Boolean)
+  if (plannerSources.length) {
+    detailRows.push({ key: 'checkPlannerSources', options: { detail: plannerSources.join('；') } })
+  }
   if (detail.assists) {
     detailRows.push({ key: 'checkAssist', options: { players: detail.assists } })
   }

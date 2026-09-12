@@ -166,6 +166,11 @@ export interface CheckResult {
   opponent_total?: number
   assist?: string[]
   planner_source?: string
+  /** 规划器最终采用的渠道来源与折叠审计（服务端权威）。 */
+  dc_reason?: string | null
+  advantage_reason?: string | null
+  modifier_reason?: string | null
+  planner_notes?: string[]
 }
 
 export interface PublicAction {

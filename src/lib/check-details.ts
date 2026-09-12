@@ -2,7 +2,7 @@
  * 检定卡纯逻辑：运气决议来源归并、算式与明细字段派生。
  *
  * 与 Web CheckRevealCard.vue 的展示口径一一对应（算式/骰面/成功线/修正明细/
- * 优势说明/协助），字段缺失时不硬造内容，只返回空值让组件跳过对应行。
+ * 优势说明/规划器判定依据/协助），字段缺失时不硬造内容，只返回空值让组件跳过对应行。
  */
 import type { CheckResult } from '@/api/types'
 import type { CheckStatus } from '@/lib/check-status'
@@ -92,6 +92,10 @@ export interface CheckDetail {
   modifierBreakdown: string
   /** 优势/劣势说明 */
   advantageNote: string
+  /** 规划器判定依据（难度/掷骰方式/环境修正，服务端权威文本），缺省为空串 */
+  dcReason: string
+  advantageReason: string
+  modifierReason: string
   /** 协助玩家名单（已 join 成展示串） */
   assists: string
 }
@@ -111,6 +115,9 @@ export function checkDetailOf(check: CheckResult, opponentFallback: string): Che
         : null,
     modifierBreakdown: check.modifier_breakdown || '',
     advantageNote: check.advantage_note || '',
+    dcReason: check.dc_reason || '',
+    advantageReason: check.advantage_reason || '',
+    modifierReason: check.modifier_reason || '',
     assists: check.assist?.length ? check.assist.join(', ') : '',
   }
 }

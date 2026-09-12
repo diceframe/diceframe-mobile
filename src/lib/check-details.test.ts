@@ -144,6 +144,26 @@ describe('checkDetailOf', () => {
       assists: '',
     })
   })
+
+  it('规划器判定依据按原样透传，缺失为空串（对齐 Web 判定来源行）', () => {
+    const detail = checkDetailOf(
+      check({
+        roll: 15,
+        dc_reason: '规则 dc_table 中等难度',
+        advantage_reason: '优势（伏击）',
+        modifier_reason: '狭窄地形 -2',
+      }),
+      '对手',
+    )
+    expect(detail.dcReason).toBe('规则 dc_table 中等难度')
+    expect(detail.advantageReason).toBe('优势（伏击）')
+    expect(detail.modifierReason).toBe('狭窄地形 -2')
+    expect(checkDetailOf(check({ roll: 15 }), '对手')).toMatchObject({
+      dcReason: '',
+      advantageReason: '',
+      modifierReason: '',
+    })
+  })
 })
 
 describe('checkAccentOf / statusLabelKeyOf', () => {
