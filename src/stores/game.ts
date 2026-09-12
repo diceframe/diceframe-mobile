@@ -51,6 +51,7 @@ import type {
   CharacterCardsResponse,
   CharacterSheet,
   CheckResult,
+  CommandResponse,
   GameDetail,
   GeneratedImageItem,
   HealthResponse,
@@ -129,8 +130,8 @@ interface GameStore {
   loadOlderLog: () => Promise<void>
   submit: (text: string) => Promise<void>
   decideLuck: (checkId: string, spend: boolean) => Promise<void>
-  advance: () => Promise<void>
-  rollback: () => Promise<void>
+  advance: () => Promise<CommandResponse>
+  rollback: () => Promise<CommandResponse>
   command: (text: string) => Promise<void>
   // GM 工具
   storyRecap: () => Promise<void>
@@ -589,10 +590,11 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     async advance() {
       const { gameKey } = get()
-      if (!gameKey) return
+      if (!gameKey) return { ok: false }
       try {
-        await advanceGame(gameKey)
+        const result = await advanceGame(gameKey)
         if (get().gameKey === gameKey) await get().refresh()
+        return result
       } catch (error) {
         const message = errorMessage(error)
         if (
@@ -609,9 +611,10 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     async rollback() {
       const { gameKey } = get()
-      if (!gameKey) return
-      await rollbackGame(gameKey)
+      if (!gameKey) return { ok: false }
+      const result = await rollbackGame(gameKey)
       if (get().gameKey === gameKey) await get().refresh()
+      return result
     },
 
     async command(text) {

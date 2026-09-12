@@ -1,7 +1,7 @@
 import * as React from 'react'
-import { AppState, Platform, Pressable, useWindowDimensions, View } from 'react-native'
+import { AppState, Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft, MoreHorizontal } from 'lucide-react-native'
+import { ChevronLeft, ChevronsRight, MoreHorizontal } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Sheet } from '@/components/patterns/sheet'
@@ -20,6 +20,7 @@ import {
 } from '@/api/games'
 import type {
   CharacterPortrait,
+  CommandResponse,
   GeneratedImageItem,
   PaymentProposalCreatePayload,
 } from '@/api/types'
@@ -52,6 +53,8 @@ import { UtilitySheet } from '@/features/play/UtilitySheet'
 import { useGameHaptics, playGameHaptic } from '@/features/play/useHaptics'
 import { useVoiceInput } from '@/features/play/useVoiceInput'
 import { useT, type T } from '@/i18n/t'
+import { confirmDestructive } from '@/lib/confirm'
+import { toastNotice } from '@/components/patterns/toast'
 import { createGameLifecycle } from '@/lib/game-lifecycle'
 import {
   economyCurrencyLabel,
@@ -279,12 +282,31 @@ export default function GameScreen() {
     }
   }
 
-  async function runGm(action: () => Promise<void>) {
+  // 服务端对暂停局/空行动局等场景返回 200 + ok:false + narration
+  // （如「当前不能推进」），静默刷新会让人误以为点了没反应，统一透传成 toast。
+  function gmActionNotice(result: CommandResponse | void) {
+    if (result?.ok === false && result.narration) toastNotice(result.narration)
+  }
+
+  async function runGm(action: () => Promise<CommandResponse | void>) {
     try {
-      await action()
+      gmActionNotice(await action())
     } catch (e) {
       useGameStore.setState({ error: errorMessage(e) })
     }
+  }
+
+  // 对局卡在「正在生成」时的恢复入口：与上游一致复用 advance 指令的
+  // force 语义（中止在飞生成并重新处理本回合），文案复用上游镜像 key。
+  async function handleForceAdvance() {
+    const confirmed = await confirmDestructive({
+      title: t('gmForceAdvanceConfirmTitle'),
+      message: t('gmForceAdvanceConfirm'),
+      confirmText: t('gmForceAdvance'),
+      cancelText: t('dfCommonCancel'),
+    })
+    if (!confirmed) return
+    void runGm(() => useGameStore.getState().advance())
   }
 
   async function openWorldSwitch() {
@@ -454,28 +476,61 @@ export default function GameScreen() {
   // SSE 刷新到端上即自动换背景；无生成图（builtin/缺 asset_id）时保持素底。
   const backdropSource = sceneImageSource(gameKey, detail?.scene_image)
 
-  // GM 回合流程常驻输入区上方；桌面管理入口只保留情境行一处，避免同屏重复。
-  const gmRoundControls = isGm ? (
-    <View className="flex-row gap-2 border-t border-border px-3 pt-2">
-      <Button
-        size="sm"
-        className="flex-1"
-        disabled={busy || hasBlockingEconomyProposal}
-        onPress={() => void runGm(() => useGameStore.getState().advance())}
+  // GM 回合流程与问 GM / 桌面对话合并为一条横向滚动栏（与快捷行动条同款交互）：
+  // 按钮自然宽度不再互相挤压，窄屏左右滑动；桌面管理入口只保留情境行一处。
+  const composerTopControls =
+    isGm || canAskKp || tableTalkCount > 0 || tableTalkError ? (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        className="border-t border-border"
+        contentContainerClassName="gap-2 px-3 pt-2"
       >
-        <Text>{t('dfPlayAdvance')}</Text>
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        className="flex-1"
-        disabled={busy}
-        onPress={() => void runGm(() => useGameStore.getState().rollback())}
-      >
-        <Text>{t('dfPlayRollback')}</Text>
-      </Button>
-    </View>
-  ) : null
+        {isGm ? (
+          <>
+            <Button
+              size="sm"
+              className="shrink-0"
+              disabled={busy || hasBlockingEconomyProposal}
+              onPress={() => void runGm(() => useGameStore.getState().advance())}
+            >
+              <Text>{t('dfPlayAdvance')}</Text>
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0"
+              disabled={busy}
+              onPress={() => void runGm(() => useGameStore.getState().rollback())}
+            >
+              <Text>{t('dfPlayRollback')}</Text>
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0"
+              disabled={busy}
+              onPress={() => void handleForceAdvance()}
+            >
+              <Icon as={ChevronsRight} size={16} />
+              <Text>{t('gmForceAdvance')}</Text>
+            </Button>
+          </>
+        ) : null}
+        {canAskKp ? (
+          <Button size="sm" variant="outline" className="shrink-0" onPress={() => setKpQuestionOpen(true)}>
+            <Text>{t('kpQuestionAction')}</Text>
+          </Button>
+        ) : null}
+        {tableTalkCount > 0 || tableTalkError ? (
+          <Button size="sm" variant="ghost" className="shrink-0" onPress={() => setTableTalkOpen(true)}>
+            <Text className={tableTalkError ? 'text-destructive' : ''}>
+              {t('tableTalkTitle')}{tableTalkCount > 0 ? ` · ${tableTalkCount}` : ''}
+            </Text>
+          </Button>
+        ) : null}
+      </ScrollView>
+    ) : null
 
   return (
     <Screen className="gap-0">
@@ -598,27 +653,7 @@ export default function GameScreen() {
               disabledReason={composerDisabledReason}
               quickActions={detail?.quick_actions ?? []}
               voice={voice}
-              topControls={(
-                <>
-                  {gmRoundControls}
-                  {canAskKp || tableTalkCount > 0 || tableTalkError ? (
-                    <View className="flex-row flex-wrap gap-2 px-3 pt-2">
-                      {canAskKp ? (
-                        <Button size="sm" variant="outline" onPress={() => setKpQuestionOpen(true)}>
-                          <Text>{t('kpQuestionAction')}</Text>
-                        </Button>
-                      ) : null}
-                      {tableTalkCount > 0 || tableTalkError ? (
-                        <Button size="sm" variant="ghost" onPress={() => setTableTalkOpen(true)}>
-                          <Text className={tableTalkError ? 'text-destructive' : ''}>
-                            {t('tableTalkTitle')}{tableTalkCount > 0 ? ` · ${tableTalkCount}` : ''}
-                          </Text>
-                        </Button>
-                      ) : null}
-                    </View>
-                  ) : null}
-                </>
-              )}
+              topControls={composerTopControls}
             />
           </View>
 

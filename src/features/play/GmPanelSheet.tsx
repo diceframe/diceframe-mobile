@@ -6,7 +6,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
 import { errorMessage, fetchAppConfig } from '@/api/client'
 import { exportGame, fetchBotBindToken } from '@/api/games'
-import type { GameDetail, HealthResponse, Player } from '@/api/types'
+import type { CommandResponse, GameDetail, HealthResponse, Player } from '@/api/types'
+import { toastNotice } from '@/components/patterns/toast'
 import { GmSheet } from '@/features/play/GmSheet'
 import { HealthPanel } from '@/features/play/HealthPanel'
 import { MultiplayerPanel } from '@/features/play/MultiplayerPanel'
@@ -77,9 +78,15 @@ export function GmPanelSheet({
 }: GmPanelSheetProps) {
   const t = useT()
 
-  async function runGm(action: () => Promise<void>) {
+  // 服务端对暂停局/空行动局等场景返回 200 + ok:false + narration，
+  // 统一透传成 toast，避免误以为点了没反应（与 GameScreen 同款）。
+  function gmActionNotice(result: CommandResponse | void) {
+    if (result?.ok === false && result.narration) toastNotice(result.narration)
+  }
+
+  async function runGm(action: () => Promise<CommandResponse | void>) {
     try {
-      await action()
+      gmActionNotice(await action())
     } catch (e) {
       useGameStore.setState({ error: errorMessage(e) })
     }

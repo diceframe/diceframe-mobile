@@ -77,7 +77,7 @@ describe('mobile information architecture', () => {
 
   it('separates play context from GM management', () => {
     expect(play).toContain('情境入口')
-    expect(play).toContain('gmRoundControls')
+    expect(play).toContain('composerTopControls')
     expect(play).toContain('GM 桌面管理抽屉')
     expect(gmPanel).toContain('GM 桌面管理抽屉')
     expect(gmPanel).toContain('value="players"')
