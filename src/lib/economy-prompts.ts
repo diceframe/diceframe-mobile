@@ -30,7 +30,6 @@ export function isNonBlockingPersonalPurchase(
     && proposal.approval_policy === 'payer'
     && Boolean(payer)
     && recipient === payer
-    && !(proposal.contributors?.length)
     && Boolean(proposal.rewards?.length)
     && !proposal.effect_group_id
     && !deferredFields.some((field) => Boolean(proposal[field]))
@@ -47,8 +46,9 @@ export interface EconomyProposalPermissions {
 }
 
 /**
- * 镜像服务端 resolve_proposal 权限。GM 可取消普通付款和多人分摊，但不能代付款人
- * 批准；旧 payer_or_gm_legacy 契约例外，GM 保留批准权。
+ * 镜像服务端 resolve_proposal 权限（payer/gm/system，外加旧存档契约
+ * payer_or_gm_legacy 例外）；transfer/fee/all_contributors 已随上游
+ * schema 8 退役，存量残留走未知策略的兜底分支。GM 不能代付款人批准。
  */
 export function economyProposalPermissions(
   proposal: PendingPayment,
@@ -62,14 +62,6 @@ export function economyProposalPermissions(
   const isGm = actorId === gmUid
   if (policy === 'system') return { canAccept: false, canReject: false }
   if (policy === 'gm') return { canAccept: isGm, canReject: isGm }
-  if (policy === 'all_contributors') {
-    const isContributor = Boolean(proposal.contributors?.some((item) => item.uid === actorId))
-    const alreadyApproved = Boolean(proposal.approvals?.[actorId])
-    return {
-      canAccept: isContributor && !alreadyApproved,
-      canReject: (isContributor && !alreadyApproved) || isGm,
-    }
-  }
   if (policy === 'payer_or_gm_legacy') {
     const allowed = actorId === payerUid || isGm
     return { canAccept: allowed, canReject: allowed }

@@ -61,21 +61,20 @@ describe('权威经济提案', () => {
     expect(isEconomyProposalActionable(reward, 'gm', 'gm')).toBe(true)
   })
 
-  it('分摊参与者确认后不再操作，GM 仍可取消阻塞提案', () => {
-    const split = pending({
-      approval_policy: 'all_contributors',
-      contributors: [
-        { uid: 'first', amount: 2 },
-        { uid: 'second', amount: 3 },
-      ],
-      approvals: { first: true },
-    })
+  it('all_contributors 已随上游 schema 8 退役，存量残留按未知策略走 payer 兜底', () => {
+    const split = pending({ approval_policy: 'all_contributors', payer_uid: 'payer' })
 
-    expect(isEconomyProposalActionable(split, 'first', 'gm')).toBe(false)
-    expect(isEconomyProposalActionable(split, 'second', 'gm')).toBe(true)
+    expect(economyProposalPermissions(split, 'payer', 'gm')).toEqual({
+      canAccept: true,
+      canReject: true,
+    })
     expect(economyProposalPermissions(split, 'gm', 'gm')).toEqual({
       canAccept: false,
       canReject: true,
+    })
+    expect(economyProposalPermissions(split, 'other', 'gm')).toEqual({
+      canAccept: false,
+      canReject: false,
     })
   })
 

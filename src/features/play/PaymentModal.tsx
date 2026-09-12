@@ -24,7 +24,7 @@ interface PaymentModalProps {
   onResolve: (paymentId: string, accepted: boolean) => Promise<PaymentResolveResponse>
 }
 
-/** 权威经济提案弹窗：兼容个人支付、GM 奖励和全队分摊。 */
+/** 权威经济提案弹窗：个人支付、购买与 GM 奖励；全队分摊已随上游 schema 8 退役。 */
 export function PaymentModal({
   payment,
   currency,
@@ -64,15 +64,10 @@ export function PaymentModal({
   if (!payment || !paymentId) return null
 
   const isReward = payment.kind === 'reward'
-  const isTeam = payment.approval_policy === 'all_contributors'
   const permission = economyProposalPermissions(payment, actorId, gmUid)
   const target = playerName(payment.payer_uid || payment.uid)
   const reason = payment.reason ? t('gmPaymentReason', { reason: payment.reason }) : ''
-  const title = isReward
-    ? t('economyRewardTitle')
-    : isTeam
-      ? t('economyTeamPaymentTitle')
-      : t('gmPaymentTitle')
+  const title = isReward ? t('economyRewardTitle') : t('gmPaymentTitle')
   const content = isReward
     ? t(solo ? 'economySoloRewardContent' : 'economyRewardContent', {
         target: playerName(payment.recipient_uid || payment.uid),
@@ -80,25 +75,17 @@ export function PaymentModal({
         currency,
         reason: payment.reason ?? '',
       })
-    : isTeam
-      ? t('economyTeamPaymentContent', {
-          amount: payment.amount ?? 0,
-          currency,
-          reason: payment.reason ?? '',
-        })
-      : t('gmPaymentContent', {
-          target,
-          amount: payment.amount ?? 0,
-          currency,
-          reason,
-        })
+    : t('gmPaymentContent', {
+        target,
+        amount: payment.amount ?? 0,
+        currency,
+        reason,
+      })
   const help = isReward
     ? t(solo ? 'economySoloRewardHelp' : 'economyRewardHelp')
-    : isTeam
-      ? t('economyTeamPaymentHelp')
-      : isNonBlockingPersonalPurchase(payment, runId)
-        ? t('economyPersonalPurchaseHelp')
-        : t('gmPaymentHelp')
+    : isNonBlockingPersonalPurchase(payment, runId)
+      ? t('economyPersonalPurchaseHelp')
+      : t('gmPaymentHelp')
   const dismissLabel = isNonBlockingPersonalPurchase(payment, runId)
     ? t('economyPostpone')
     : t('economyViewLater')
@@ -112,25 +99,6 @@ export function PaymentModal({
       <View className="gap-4 pb-2">
         <Text variant="h3">{title}</Text>
         <Text>{content}</Text>
-        {isTeam && payment.contributors?.length ? (
-          <View className="gap-2 rounded-xl bg-muted p-3">
-            {payment.contributors.map((contributor) => (
-              <View key={contributor.uid} className="flex-row items-center justify-between gap-3">
-                <Text className="min-w-0 flex-1" numberOfLines={1}>
-                  {playerName(contributor.uid)}
-                </Text>
-                <Text variant="small">
-                  {contributor.amount} {currency}
-                </Text>
-                <Text variant="small" className={payment.approvals?.[contributor.uid] ? 'text-primary' : ''}>
-                  {payment.approvals?.[contributor.uid]
-                    ? t('economyApproved')
-                    : t('economyAwaitingApproval')}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
         {rewardNames ? <Text>{t('gmPaymentRewards', { items: rewardNames })}</Text> : null}
         <Text variant="muted">{help}</Text>
         {resolveError ? <Text className="text-sm text-destructive">{resolveError}</Text> : null}
