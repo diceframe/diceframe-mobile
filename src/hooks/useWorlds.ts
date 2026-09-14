@@ -10,6 +10,7 @@ import {
 } from '@/api/library'
 import type { GmStyle, SceneImageRef, WorldSummary, WorldTemplateSummary } from '@/api/types'
 import { contentLanguage, getT, useT } from '@/i18n/t'
+import { worldGmStyleUpdate } from '@/lib/gm-style'
 import { worldContentLocale } from '@/lib/world-language'
 
 /** 图鉴卡片（对齐 Web WorldsView 的 GalleryCard） */
@@ -27,7 +28,7 @@ export interface WorldGalleryCard {
   adventureName: string
 }
 
-export const DEFAULT_GM_STYLE: GmStyle = { tone: '', verbosity: 'normal', custom_instructions: '' }
+export const DEFAULT_GM_STYLE: GmStyle = { tone: '', verbosity: 'normal', pace: 'normal', custom_instructions: '' }
 
 function templateIdOf(template: WorldTemplateSummary): string {
   return String(template.world_id || template.id || '')
@@ -150,11 +151,7 @@ export function useWorlds() {
   }
 
   async function saveGmStyle(card: WorldGalleryCard, gmStyle: GmStyle) {
-    const result = await updateWorldGmStyle(card.id, {
-      tone: gmStyle.tone ?? '',
-      verbosity: gmStyle.verbosity ?? 'normal',
-      custom_instructions: gmStyle.custom_instructions ?? '',
-    })
+    const result = await updateWorldGmStyle(card.id, worldGmStyleUpdate(card.gmStyle, gmStyle))
     if (result.ok === false || result.error) throw new Error(result.error || getT()('dfWorldsSaveStyleFailed'))
     await load()
   }
