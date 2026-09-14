@@ -123,7 +123,7 @@ export function buildPaymentProposalPayload(
   }
 }
 
-/** 规则可覆盖货币名；缺省复用上游三语 goldCurrency。 */
+/** 规则可覆盖货币名；缺省复用上游多语 goldCurrency。 */
 export function economyCurrencyLabel(ruleMeta?: RuleMeta | null): string {
   const label = ruleMeta?.ui_schema?.currency_label
   if (typeof label === 'string' && label.trim()) return label.trim()

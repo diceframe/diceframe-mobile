@@ -70,4 +70,5 @@ export const LANGUAGE_OPTIONS: { value: LocalePreference; label: string }[] = [
   { value: 'zh-CN', label: '简体中文' },
   { value: 'en', label: 'English' },
   { value: 'ja', label: '日本語' },
+  { value: 'de', label: 'Deutsch' },
 ]

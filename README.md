@@ -18,7 +18,7 @@ https://github.com/user-attachments/assets/a2fc3bb7-375c-4fcc-aac1-b0cf2a89b886
 | 框架 | Expo SDK 57（React Native 0.86 / React 19.2 / New Architecture） |
 | 路由 | expo-router（文件式；一级 Tab + 二级对局页） |
 | 主题 | 与 Web 端统一：令牌移植（暗=midnight / 亮=light，跟随系统），鎏金 + 青蓝 |
-| 多语言 | react-i18next + expo-localization（zh-CN / en / ja，默认跟随系统；文案资源同步自主仓库） |
+| 多语言 | react-i18next + expo-localization（zh-CN / en / ja / de，默认跟随系统；文案资源同步自主仓库） |
 | 性能 | React Compiler（`experiments.reactCompiler`；**全库不手写 `useMemo`/`useCallback`/`React.memo`**） |
 | UI | NativeWind v4（≥4.2.6）+ 手写 shadcn 风格组件（`src/components/ui`） |
 | 状态 | zustand（`settings` 持久化 + `game` 对局态） |

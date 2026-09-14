@@ -43,14 +43,17 @@ describe('asrLanguageFor', () => {
     expect(asrLanguageFor('en')).toBe('en-US')
     expect(asrLanguageFor('en-US')).toBe('en-US')
     expect(asrLanguageFor('ja')).toBe('ja-JP')
+    expect(asrLanguageFor('de')).toBe('de-DE')
+    expect(asrLanguageFor('de-AT')).toBe('de-DE')
   })
 
-  it('未知语言回落系统语言，系统语言也不支持时归一到中文', () => {
+  it('未知界面语言直接使用设备系统语言，缺失时交给服务端自动检测', () => {
     expect(asrLanguageFor('fr', 'ja-JP')).toBe('ja-JP')
-    expect(asrLanguageFor('ko', 'en-GB')).toBe('en-US')
-    expect(asrLanguageFor('', 'zh-TW')).toBe('zh-CN')
-    expect(asrLanguageFor('fr')).toBe('zh-CN')
-    expect(asrLanguageFor('fr', 'fr-FR')).toBe('zh-CN')
+    expect(asrLanguageFor('fr', 'de-CH')).toBe('de-CH')
+    expect(asrLanguageFor('ko', 'en-GB')).toBe('en-GB')
+    expect(asrLanguageFor('', 'zh-TW')).toBe('zh-TW')
+    expect(asrLanguageFor('fr', 'fr-FR')).toBe('fr-FR')
+    expect(asrLanguageFor('fr')).toBe('')
   })
 })
 

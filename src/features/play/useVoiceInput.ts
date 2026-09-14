@@ -26,9 +26,9 @@ import { getLocales } from 'expo-localization'
 const MAX_RECORDING_MS = 60_000
 const MIN_VALID_BYTES = 2000
 
-/** 设备系统语言标签，与 useLocaleSync 同源同默认（'system' 偏好和未知语言的回落基准）。 */
+/** 设备系统语言标签；读取不到时留空，让服务端自动检测语音语言。 */
 function deviceLanguageTag(): string {
-  return getLocales()[0]?.languageTag ?? 'zh-CN'
+  return getLocales()[0]?.languageTag ?? ''
 }
 
 /** Whisper 侧统一按 16k 单声道重采样，立体声高清预设只放大上传体积，这里按语音识别的最优参数录。 */

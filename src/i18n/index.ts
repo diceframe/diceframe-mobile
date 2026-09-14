@@ -1,6 +1,7 @@
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 
+import { de as webDe } from './messages/web/de'
 import { en as webEn } from './messages/web/en'
 import { ja as webJa } from './messages/web/ja'
 import { zhCN as webZhCN } from './messages/web/zh-CN'
@@ -18,6 +19,7 @@ const resources = {
   'zh-CN': { translation: { ...webZhCN, ...common.zh, ...settings.zh, ...auth.zh, ...overview.zh, ...create.zh, ...profile.zh, ...play.zh, ...characters.zh, ...lore.zh } },
   en: { translation: { ...webEn, ...common.en, ...settings.en, ...auth.en, ...overview.en, ...create.en, ...profile.en, ...play.en, ...characters.en, ...lore.en } },
   ja: { translation: { ...webJa, ...common.ja, ...settings.ja, ...auth.ja, ...overview.ja, ...create.ja, ...profile.ja, ...play.ja, ...characters.ja, ...lore.ja } },
+  de: { translation: { ...webDe, ...common.de, ...settings.de, ...auth.de, ...overview.de, ...create.de, ...profile.de, ...play.de, ...characters.de, ...lore.de } },
 }
 
 // i18next 惯用法：默认实例链式 use/init；规则把命名导出误判为更优写法
@@ -27,7 +29,8 @@ i18n.use(initReactI18next).init({
   // 实际语言由 useLocaleSync 依据 settings 偏好解析后 changeLanguage；
   // 这里只是 rehydrate 完成前的初值
   lng: 'zh-CN',
-  fallbackLng: 'zh-CN',
+  // 当前语言缺少 key 时统一回退英语，避免德语/日语界面混入中文。
+  fallbackLng: 'en',
   // 上游 key 是不含点号/冒号的扁平 camelCase，关闭分隔符避免 key 被意外切分
   keySeparator: false,
   nsSeparator: false,

@@ -51,7 +51,7 @@ describe('面向用户的错误提示', () => {
     expect(errorMessage(new UserFacingError('dfErrorsEmptyRecording'))).toBe(getT()('dfErrorsEmptyRecording'))
   })
 
-  it.each(['zh-CN', 'en', 'ja'])('展示时使用当前语言：%s', async (language) => {
+  it.each(['zh-CN', 'en', 'ja', 'de'])('展示时使用当前语言：%s', async (language) => {
     const error = new UserFacingError('dfLoginPasswordRequired')
     await i18n.changeLanguage(language)
     expect(errorMessage(error)).toBe(getT()('dfLoginPasswordRequired'))

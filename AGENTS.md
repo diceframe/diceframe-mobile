@@ -76,12 +76,12 @@ src/
    - 缺基础组件先用 `npm run ui:add -- <component>` 从 rnr 生成（配置异常用 `npm run ui:doctor` 检查）；
    - 保持上游 API 原样，不要在 `ui/` 文件里加 DiceFrame 变体或业务逻辑；
    - DiceFrame 的组合与定制放 `src/components/patterns` 或对应 feature 目录。
-6. **所有面向用户的文案走 i18n**（react-i18next，zh-CN / en / ja 三语，`src/i18n/`）：
+6. **所有面向用户的文案走 i18n**（react-i18next，zh-CN / en / ja / de 四语，`src/i18n/`）：
    - 上游镜像段 `src/i18n/messages/web/`：与主仓库 `frontend-v2/src/i18n/messages/` 同步，
      机械差异仅两处：插值 `{x}` 已转 i18next 的 `{{x}}`；上游嵌套对象 apiErrors 已拍平为
      `'apiErrors.xxx'` 扁平 key（移动端 `keySeparator: false` 取不到嵌套 key）；
-   - 移动端自有文案按功能簇放 `src/i18n/messages/mobile/*.ts`（zh/en/ja 三块并列）：
-     key 必须加 `df` 前缀、三语 key 集合必须一致、不得与上游 key 重名（`messages.test.ts` 兜底）；
+   - 移动端自有文案按功能簇放 `src/i18n/messages/mobile/*.ts`（zh/en/ja/de 四块并列）：
+     key 必须加 `df` 前缀、四语 key 集合必须一致、不得与上游 key 重名（`messages.test.ts` 兜底）；
    - 上游已有且语义一致的词直接复用上游 key（cancel/delete/roomPassword 等），不要重复建 df key；
    - 组件内 `useT()`、组件外 `getT()`（均在 `@/i18n/t`），插值 `t('key', { name })`；
      key 类型由 `src/i18n/keyset.ts` 全量校验，拼错/漏译 typecheck 直接报错；

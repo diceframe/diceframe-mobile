@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import i18n from './index'
 import { auth } from './messages/mobile/auth'
 import { characters } from './messages/mobile/characters'
 import { common } from './messages/mobile/common'
@@ -9,6 +10,7 @@ import { overview } from './messages/mobile/overview'
 import { play } from './messages/mobile/play'
 import { profile } from './messages/mobile/profile'
 import { settings } from './messages/mobile/settings'
+import { de as webDe } from './messages/web/de'
 import { en as webEn } from './messages/web/en'
 import { ja as webJa } from './messages/web/ja'
 import { zhCN as webZhCN } from './messages/web/zh-CN'
@@ -30,23 +32,34 @@ const keysOf = (obj: Record<string, unknown>): string[] => Object.keys(obj).sort
 const placeholderParams = (value: string): string[] =>
   [...value.matchAll(/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/g)].map((m) => m[1]).sort()
 
+describe('i18n 回退', () => {
+  it('当前语言缺少 key 时显示英文', async () => {
+    const key = '__test_english_fallback__'
+    i18n.addResource('en', 'translation', key, 'English fallback')
+    await i18n.changeLanguage('de')
+    expect(i18n.t(key)).toBe('English fallback')
+    await i18n.changeLanguage('zh-CN')
+  })
+})
+
 describe('上游镜像翻译（web 段）', () => {
-  it('三语 key 集合一致（同步被截断会在此暴露）', () => {
+  it('四语 key 集合一致（同步被截断会在此暴露）', () => {
     const zh = keysOf(webZhCN)
     expect(zh.length).toBeGreaterThan(1000)
     expect(keysOf(webEn)).toEqual(zh)
     expect(keysOf(webJa)).toEqual(zh)
+    expect(keysOf(webDe)).toEqual(zh)
   })
 
   it('值中不允许残留单花括号占位符（vue-i18n {x} 必须转为 {{x}}）', () => {
-    for (const [lang, dict] of Object.entries({ 'zh-CN': webZhCN, en: webEn, ja: webJa })) {
+    for (const [lang, dict] of Object.entries({ 'zh-CN': webZhCN, en: webEn, ja: webJa, de: webDe })) {
       for (const [key, value] of Object.entries(dict)) {
         expect(value, `${lang}/${key}`).not.toMatch(/(^|[^{])\{[a-zA-Z_][a-zA-Z0-9_]*\}($|[^}])/)
       }
     }
   })
 
-  it('本轮经济契约文案的三语插值参数一致', () => {
+  it('本轮经济契约文案的四语插值参数一致', () => {
     const keys = keysOf(webZhCN).filter((key) =>
       key.startsWith('economy')
       || key.startsWith('gmPayment')
@@ -56,17 +69,19 @@ describe('上游镜像翻译（web 段）', () => {
       const expected = placeholderParams((webZhCN as Record<string, string>)[key])
       expect(placeholderParams((webEn as Record<string, string>)[key]), `${key} en 插值参数`).toEqual(expected)
       expect(placeholderParams((webJa as Record<string, string>)[key]), `${key} ja 插值参数`).toEqual(expected)
+      expect(placeholderParams((webDe as Record<string, string>)[key]), `${key} de 插值参数`).toEqual(expected)
     }
   })
 })
 
 describe('移动端 df 簇（mobile 段）', () => {
-  it('每个簇三语 key 集合一致且非空', () => {
+  it('每个簇四语 key 集合一致且非空', () => {
     for (const [name, cluster] of Object.entries(MOBILE_CLUSTERS)) {
       const zh = keysOf(cluster.zh)
       expect(zh.length, `${name}.zh 不应为空（簇未迁移？）`).toBeGreaterThan(0)
       expect(keysOf(cluster.en), `${name}.en`).toEqual(zh)
       expect(keysOf(cluster.ja), `${name}.ja`).toEqual(zh)
+      expect(keysOf(cluster.de), `${name}.de`).toEqual(zh)
     }
   })
 
@@ -90,12 +105,13 @@ describe('移动端 df 簇（mobile 段）', () => {
     }
   })
 
-  it('同一 key 三语的插值参数一致', () => {
+  it('同一 key 四语的插值参数一致', () => {
     for (const [name, cluster] of Object.entries(MOBILE_CLUSTERS)) {
       for (const key of keysOf(cluster.zh)) {
         const expected = placeholderParams((cluster.zh as Record<string, string>)[key])
         expect(placeholderParams((cluster.en as Record<string, string>)[key]), `${name}/${key} en 插值参数`).toEqual(expected)
         expect(placeholderParams((cluster.ja as Record<string, string>)[key]), `${name}/${key} ja 插值参数`).toEqual(expected)
+        expect(placeholderParams((cluster.de as Record<string, string>)[key]), `${name}/${key} de 插值参数`).toEqual(expected)
       }
     }
   })

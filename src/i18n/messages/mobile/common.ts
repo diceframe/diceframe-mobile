@@ -3,7 +3,7 @@
  *
  * 规约：
  * - 按功能簇拆文件（common/settings/auth/overview/profile/play/characters/lore），
- *   每个簇内 zh / en / ja 三块并列，key 三语必须一一对应；
+ *   每个簇内 zh / en / ja / de 四块并列，key 四语必须一一对应；
  * - key 必须加 `df` 前缀，与 web 镜像段共用 i18next 单一扁平命名空间，
  *   不得与上游 key 重名（由 src/i18n/messages.test.ts 兜底校验）；
  * - 上游已有且语义完全一致的通用词（cancel/delete/back/roomPassword 等）直接复用上游 key，不建 df key；
@@ -122,6 +122,43 @@ export const common = {
     dfTabGames: '対局',
     dfTabLore: '設定',
     dfTabProfile: 'マイ',
+  },
+  de: {
+    dfErrorsUnexpected: 'Die Aktion konnte nicht abgeschlossen werden. Bitte erneut oder später noch einmal versuchen.',
+    dfErrorsUnauthorized: 'Die Anmeldedaten sind ungültig oder abgelaufen. Bitte erneut anmelden oder über einen Einladungslink beitreten.',
+    dfErrorsForbidden: 'Mit der aktuellen Identität ist diese Aktion nicht möglich. Bitte den Host bitten, die Berechtigungen zu prüfen.',
+    dfErrorsNotFound: 'Dieser Inhalt ist nicht verfügbar oder wurde entfernt. Bitte aktualisieren und erneut versuchen.',
+    dfErrorsTimeout: 'Zeitüberschreitung bei der Anfrage. Bitte die Netzwerkverbindung prüfen und erneut versuchen.',
+    dfErrorsServerUnavailable: 'Der Server kann die Anfrage derzeit nicht verarbeiten. Bitte später erneut versuchen.',
+    dfErrorsConflict: 'Der aktuelle Stand hat sich geändert. Bitte aktualisieren und erneut versuchen.',
+    dfErrorsFileTooLarge: 'Die Datei ist zu groß. Bitte eine kleinere Datei auswählen und erneut versuchen.',
+    dfErrorsInvalidInput: 'Einige Eingaben sind ungültig. Bitte prüfen und erneut versuchen.',
+    dfErrorsRateLimited: 'Zu viele Versuche. Bitte später erneut versuchen.',
+    dfErrorsRateLimitedWait: 'Zu viele Versuche. Bitte in {{seconds}} Sekunden erneut versuchen.',
+    dfCommonConfirm: 'Bestätigen',
+    dfCommonCancel: 'Abbrechen',
+    dfCommonRetry: 'Erneut versuchen',
+    dfCommonLoading: 'Wird geladen…',
+    dfCommonOperationFailed: 'Aktion fehlgeschlagen',
+    dfCommonNetworkError: 'Server nicht erreichbar. Bitte Adresse und Netzwerk prüfen.',
+    dfCommonCopy: 'Kopieren',
+    dfCommonLogout: 'Abmelden',
+    dfCommonSettings: 'Einstellungen',
+    dfCommonBack: 'Zurück',
+    dfCommonDelete: 'Löschen',
+    dfCommonSave: 'Speichern',
+    dfCommonSaving: 'Wird gespeichert',
+    dfHapticDice: 'Würfel',
+    dfHapticDamage: 'Verletzung',
+    dfHapticCombat: 'Angriff',
+    dfHapticReward: 'Beute',
+    dfHapticCheckPass: 'Probe bestanden',
+    dfHapticCheckFail: 'Probe fehlgeschlagen',
+    dfHapticCritical: 'Kritischer Erfolg',
+    dfHapticFumble: 'Kritischer Fehlschlag',
+    dfTabGames: 'Spielrunden',
+    dfTabLore: 'Welt',
+    dfTabProfile: 'Profil',
   },
 } as const
 
