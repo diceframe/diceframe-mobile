@@ -34,6 +34,7 @@ import type {
   WorldTemplatesResponse,
 } from './types'
 import { contentLanguage, getT } from '@/i18n/t'
+import { worldContentLocale } from '@/lib/world-language'
 import { api, apiBlob } from './client'
 
 function gamePath(gameKey: string, suffix = ''): string {
@@ -364,8 +365,8 @@ export async function switchGameWorld(gameKey: string, worldId: string): Promise
 /** 获取可切换的世界观候选列表（模板 + 已有 lorebook） */
 export async function fetchWorldCandidates(gameKey: string, language = contentLanguage()): Promise<WorldCandidate[]> {
   const [templateData, worldData] = await Promise.all([
-    fetchWorldTemplates(),
-    api<{ worlds?: { id?: string; world_id?: string; name?: string; world_name?: string; description?: string; entry_count?: number }[] }>('/worlds'),
+    fetchWorldTemplates(language),
+    api<{ worlds?: { id?: string; world_id?: string; name?: string; world_name?: string; description?: string; entry_count?: number; language?: string }[] }>('/worlds'),
   ])
   const candidates: WorldCandidate[] = []
   const seen = new Set<string>()
@@ -377,11 +378,12 @@ export async function fetchWorldCandidates(gameKey: string, language = contentLa
       id,
       name: template.name || template.world_name || id,
       description: template.description ?? '',
-      source: '模板',
+      source: getT()('templateSource'),
       default_rule: template.default_rule ?? '',
     })
   }
   for (const world of worldData.worlds ?? []) {
+    if (worldContentLocale(world.language) !== language) continue
     const id = String(world.id || world.world_id || '')
     if (!id || seen.has(id)) continue
     seen.add(id)
@@ -389,7 +391,7 @@ export async function fetchWorldCandidates(gameKey: string, language = contentLa
       id,
       name: world.name || world.world_name || id,
       description: world.description ?? '',
-      source: '世界书',
+      source: getT()('lorebookSourceShort'),
       default_rule: '',
       entry_count: world.entry_count,
     })

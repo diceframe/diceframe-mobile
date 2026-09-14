@@ -9,7 +9,8 @@ import {
   updateWorldGmStyle,
 } from '@/api/library'
 import type { GmStyle, SceneImageRef, WorldSummary, WorldTemplateSummary } from '@/api/types'
-import { getT } from '@/i18n/t'
+import { contentLanguage, getT, useT } from '@/i18n/t'
+import { worldContentLocale } from '@/lib/world-language'
 
 /** 图鉴卡片（对齐 Web WorldsView 的 GalleryCard） */
 export interface WorldGalleryCard {
@@ -27,22 +28,6 @@ export interface WorldGalleryCard {
 }
 
 export const DEFAULT_GM_STYLE: GmStyle = { tone: '', verbosity: 'normal', custom_instructions: '' }
-
-/** 内容语言归一化（对齐 Web normalizeLocale）：日语、英语归类，其余视为中文 */
-function contentLanguageOf(language?: string | null): 'zh-CN' | 'en' | 'ja' {
-  const value = String(language ?? '').trim().toLowerCase()
-  if (value.startsWith('ja') || value.includes('日本語')) return 'ja'
-  if (value.startsWith('en')) return 'en'
-  return 'zh-CN'
-}
-
-/** 语言展示标签（对齐 Web languageLabel）；各语言一律用自身名字显示，刻意不随界面语言翻译 */
-export function languageLabel(language?: string | null): string {
-  const normalized = contentLanguageOf(language)
-  if (normalized === 'ja') return '日本語'
-  if (normalized === 'en') return 'English'
-  return '中文'
-}
 
 function templateIdOf(template: WorldTemplateSummary): string {
   return String(template.world_id || template.id || '')
@@ -87,20 +72,24 @@ function worldToCard(world: WorldSummary, adventureName: string): WorldGalleryCa
 }
 
 /**
- * 世界图鉴数据：模板 + 用户世界合并去重，用户世界按内容语言过滤（移动端固定中文）。
+ * 世界图鉴数据：模板 + 用户世界合并去重，用户世界按当前界面/内容语言过滤。
  * 冒险包列表失败时降级为无徽章（对齐 Web 的容错）。
  */
 export function useWorlds() {
+  useT() // 订阅语言切换，切换后重新按当前内容语言拉取/筛选
+  const locale = contentLanguage()
   const [cards, setCards] = React.useState<WorldGalleryCard[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
+  const loadVersion = React.useRef(0)
 
-  // 不手写 useCallback（React Compiler 已开启）；load 只依赖模块级 api 函数，effect 跑一次即可
+  // 不手写 useCallback（React Compiler 已开启）；语言切换时重新拉取对应内容目录
   async function load() {
+    const version = ++loadVersion.current
     setLoading(true)
     try {
       const [templateData, worldData, adventureData] = await Promise.all([
-        fetchWorldTemplates(),
+        fetchWorldTemplates(locale),
         fetchWorlds(),
         fetchAdventures().catch(() => ({ adventures: [] as { name?: string; recommended_world_id?: string }[] })),
       ])
@@ -121,24 +110,32 @@ export function useWorlds() {
       }
       for (const world of worldData.worlds ?? []) {
         // 用户世界按内容语言过滤，避免中文界面混入 *_en 异语世界（对齐 Web）
-        if (contentLanguageOf(world.language) !== 'zh-CN') continue
+        if (worldContentLocale(world.language) !== locale) continue
         const card = worldToCard(world, adventureNames.get(worldIdOf(world)) ?? '')
         if (!card || seen.has(card.id)) continue
         seen.add(card.id)
         next.push(card)
       }
+      if (version !== loadVersion.current) return
       setCards(next)
       setError('')
     } catch (cause) {
-      setError(errorMessage(cause))
+      if (version === loadVersion.current) setError(errorMessage(cause))
     } finally {
-      setLoading(false)
+      if (version === loadVersion.current) setLoading(false)
     }
   }
 
   React.useEffect(() => {
-    queueMicrotask(() => void load())
-  }, [])
+    let active = true
+    queueMicrotask(() => {
+      if (active) void load()
+    })
+    return () => {
+      active = false
+      loadVersion.current += 1
+    }
+  }, [locale])
 
   async function clone(card: WorldGalleryCard) {
     const result = await cloneWorldFromTemplate(card.id)

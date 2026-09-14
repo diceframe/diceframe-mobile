@@ -9,6 +9,7 @@ import {
   fetchHealth,
   fetchLog,
   fetchRules,
+  fetchWorldCandidates,
   fetchWorldTemplates,
   regenerateSwipe,
   switchSwipe,
@@ -36,6 +37,21 @@ describe('games API query 契约', () => {
     expect(mockedApi).toHaveBeenLastCalledWith('/rules', { query: { language: 'zh-CN' } })
     await fetchWorldTemplates('ja')
     expect(mockedApi).toHaveBeenLastCalledWith('/world-templates', { query: { language: 'ja' } })
+  })
+
+  it('世界切换候选使用指定语言，并过滤异语用户世界', async () => {
+    mockedApi
+      .mockResolvedValueOnce({ templates: [{ id: 'template-de', language: 'de' }] })
+      .mockResolvedValueOnce({ worlds: [
+        { id: 'world-de', language: 'German' },
+        { id: 'world-zh', language: 'zh-CN' },
+      ] })
+
+    const candidates = await fetchWorldCandidates('game/a', 'de')
+
+    expect(mockedApi).toHaveBeenNthCalledWith(1, '/world-templates', { query: { language: 'de' } })
+    expect(mockedApi).toHaveBeenNthCalledWith(2, '/worlds')
+    expect(candidates.map((item) => item.id)).toEqual(['template-de', 'world-de'])
   })
 
   it('冒险包语言与过滤字段原样交给客户端编码，空过滤项省略', async () => {

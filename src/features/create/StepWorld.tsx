@@ -11,25 +11,16 @@ import { Field } from '@/features/create/field'
 import { activeRuleIdOf, type CreateFormState, type LoreChoice } from '@/features/create/payload'
 import { useT } from '@/i18n/t'
 import { cn } from '@/lib/utils'
+import { languageLabel, worldContentLocale } from '@/lib/world-language'
 
 const BUILTIN_LOREBOOK = '__builtin__'
 const BLANK_LOREBOOK = '__blank__'
 const COPY_PREFIX = 'copy:'
 
-/** 模板/世界显示名的语言标签（对齐 Web worldLanguageLabel） */
-function worldLanguageLabel(world: WorldTemplateSummary | WorldSummary, t: ReturnType<typeof useT>): string {
-  const language = String(world.active_locale || world.language || '').toLowerCase()
-  if (language.startsWith('ja')) return '日本語'
-  if (language.startsWith('en')) return t('english')
-  return t('chinese')
-}
-
 /** 世界书复制源按游戏语言过滤（对齐 Web filterByContentLanguage） */
 function filterByLanguage(worlds: WorldSummary[], language: string): WorldSummary[] {
   return worlds.filter((world) => {
-    const locale = String(world.active_locale || world.language || '').toLowerCase()
-    if (!locale) return true
-    return locale.startsWith(language.split('-')[0])
+    return worldContentLocale(String(world.active_locale || world.language || '')) === language
   })
 }
 
@@ -81,7 +72,7 @@ export function StepWorld({
 
   const worldOptions = worlds.map((w) => ({
     value: worldIdOf(w),
-    label: `${nameOf(w)} · ${worldLanguageLabel(w, t)}`,
+    label: `${nameOf(w)} · ${languageLabel(String(w.active_locale || w.language || ''))}`,
   }))
   const ruleOptions = rules.map((r) => ({ value: r.rule_id, label: r.rule_name || r.rule_id }))
   const recommended = recommendedRuleSummaries(currentWorld, rules)
@@ -91,7 +82,7 @@ export function StepWorld({
     { value: BLANK_LOREBOOK, label: t('blankLorebook') },
     ...filterByLanguage(loreWorlds, state.gameLanguage).map((w) => ({
       value: `${COPY_PREFIX}${worldIdOf(w)}`,
-      label: `${t('copyFrom')}${nameOf(w)} · ${worldLanguageLabel(w, t)}`,
+      label: `${t('copyFrom')}${nameOf(w)} · ${languageLabel(String(w.active_locale || w.language || ''))}`,
     })),
   ]
 
@@ -116,8 +107,10 @@ export function StepWorld({
       <Field label={t('gameLanguage')} hint={t('gameLanguageHint')}>
         <SheetSelect
           options={[
-            { value: 'zh-CN', label: t('chinese') },
-            { value: 'en', label: t('english') },
+            { value: 'zh-CN', label: '简体中文' },
+            { value: 'en', label: 'English' },
+            { value: 'ja', label: '日本語' },
+            { value: 'de', label: 'Deutsch' },
           ]}
           value={state.gameLanguage}
           onValueChange={(value) => patch({ gameLanguage: value as CreateFormState['gameLanguage'] })}

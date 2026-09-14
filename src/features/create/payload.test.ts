@@ -66,10 +66,11 @@ describe('buildCreateRequest /games/create', () => {
     expect(body.players).toHaveLength(1)
   })
 
-  it('显式名称优先于世界名；英文名称兜底按游戏语言取对', () => {
+  it('显式名称优先于世界名；四语名称兜底按游戏语言取对', () => {
     expect(buildCreateRequest(baseState({ name: ' 龙之远征 ' })).body.game_name).toBe('龙之远征')
-    const en = buildCreateRequest(baseState({ gameLanguage: 'en', worldName: '' }))
-    expect(en.body.game_name).toBe('New Adventure')
+    expect(buildCreateRequest(baseState({ gameLanguage: 'en', worldName: '' })).body.game_name).toBe('New Adventure')
+    expect(buildCreateRequest(baseState({ gameLanguage: 'ja', worldName: '' })).body.game_name).toBe('新しい冒険')
+    expect(buildCreateRequest(baseState({ gameLanguage: 'de', worldName: '' })).body.game_name).toBe('Neues Abenteuer')
   })
 
   it('多人留空密码 → room_password=null（服务端自动生成）；开放房 → 空串；自定义密码去空格', () => {
@@ -155,11 +156,13 @@ describe('sanitizeLoreChoice', () => {
   const worlds = [
     { worldId: 'my_fantasy', language: 'zh-CN' },
     { worldId: 'my_horror', language: 'en' },
+    { worldId: 'meine_welt', language: 'German' },
   ]
 
   it('复制源存在且语言匹配时保留', () => {
     expect(sanitizeLoreChoice('copy:my_fantasy', worlds, 'zh-CN')).toBe('copy:my_fantasy')
     expect(sanitizeLoreChoice('copy:my_horror', worlds, 'en')).toBe('copy:my_horror')
+    expect(sanitizeLoreChoice('copy:meine_welt', worlds, 'de')).toBe('copy:meine_welt')
   })
 
   it('复制源缺失或语言不匹配时回退模板自带', () => {

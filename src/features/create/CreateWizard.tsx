@@ -27,6 +27,7 @@ import { StepSettings } from '@/features/create/StepSettings'
 import { StepWorld } from '@/features/create/StepWorld'
 import {
   activeRuleIdOf,
+  ADVENTURER_FALLBACK,
   blankAdventurer,
   buildCreateRequest,
   sanitizeLoreChoice,
@@ -76,7 +77,7 @@ function initialState(): CreateFormState {
   const locale = contentLanguage()
   return {
     seed: '',
-    gameLanguage: locale.startsWith('zh') ? 'zh-CN' : 'en',
+    gameLanguage: locale,
     mode: 'template',
     worldId: '',
     worldName: '',
@@ -148,7 +149,23 @@ export function CreateWizard({ preselectedWorldId }: { preselectedWorldId?: stri
   const [state, setState] = React.useState<CreateFormState>(initialState)
   // patch 内联专业规则翻转处理：规则切换是事件回调，不进 effect
   function patch(partial: Partial<CreateFormState>) {
-    setState((prev) => applyCharacterAdjustments(prev, { ...prev, ...partial }, rules))
+    setState((prev) => {
+      let next = { ...prev, ...partial }
+      // 用户尚未编辑默认占位卡时，内容语言切换也应同步本地化角色名。
+      if (
+        partial.gameLanguage
+        && partial.gameLanguage !== prev.gameLanguage
+        && next.players.length === 1
+        && isBlankCharacter(next.players[0])
+        && next.players[0].character_name === ADVENTURER_FALLBACK[prev.gameLanguage]
+      ) {
+        next = {
+          ...next,
+          players: [{ ...next.players[0], character_name: ADVENTURER_FALLBACK[partial.gameLanguage] }],
+        }
+      }
+      return applyCharacterAdjustments(prev, next, rules)
+    })
   }
 
   const [step, setStep] = React.useState(1)
@@ -455,7 +472,7 @@ export function CreateWizard({ preselectedWorldId }: { preselectedWorldId?: stri
               setPlayers={(players) => patch({ players })}
               cards={cards}
               usesProfessionalBuilder={usesProfessionalBuilder}
-              fallbackName={state.gameLanguage === 'en' ? 'Adventurer' : '冒险者'}
+              fallbackName={ADVENTURER_FALLBACK[state.gameLanguage]}
             />
           )}
           {step === 4 && (

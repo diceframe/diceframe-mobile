@@ -7,8 +7,9 @@ import type {
   MapBackgroundSelection,
   SceneImageRef,
 } from '@/api/types'
+import { worldContentLocale } from '@/lib/world-language'
 
-export type GameLanguage = 'zh-CN' | 'en'
+export type GameLanguage = 'zh-CN' | 'en' | 'ja' | 'de'
 export type CreateMode = 'template' | 'custom' | 'ai'
 export type NarrativePerspective = 'immersive' | 'third_person'
 export type AdvancementMode = 'milestone' | 'xp'
@@ -60,13 +61,25 @@ export interface CreateFormState {
   players: CreateCharacter[]
 }
 
-/** 游戏语言只有 zh-CN / en 两档（对齐 Web 下拉），兜底词按语言取对 */
-export const ADVENTURER_FALLBACK: Record<GameLanguage, string> = { 'zh-CN': '冒险者', en: 'Adventurer' }
-const NEW_ADVENTURE_FALLBACK: Record<GameLanguage, string> = { 'zh-CN': '新冒险', en: 'New Adventure' }
-const MY_ADVENTURE_FALLBACK: Record<GameLanguage, string> = { 'zh-CN': '我的冒险', en: 'My Adventure' }
-const AI_WORLD_FALLBACK: Record<GameLanguage, string> = { 'zh-CN': 'AI 生成的世界', en: 'AI Generated World' }
-const BLANK_SUFFIX: Record<GameLanguage, string> = { 'zh-CN': '（空白世界书）', en: ' (Blank Lorebook)' }
-const COPY_SUFFIX: Record<GameLanguage, string> = { 'zh-CN': '（复制世界书）', en: ' (Copied Lorebook)' }
+/** 对局内容支持与界面一致的四种语言，兜底词按内容语言生成。 */
+export const ADVENTURER_FALLBACK: Record<GameLanguage, string> = {
+  'zh-CN': '冒险者', en: 'Adventurer', ja: '冒険者', de: 'Abenteurer',
+}
+const NEW_ADVENTURE_FALLBACK: Record<GameLanguage, string> = {
+  'zh-CN': '新冒险', en: 'New Adventure', ja: '新しい冒険', de: 'Neues Abenteuer',
+}
+const MY_ADVENTURE_FALLBACK: Record<GameLanguage, string> = {
+  'zh-CN': '我的冒险', en: 'My Adventure', ja: '私の冒険', de: 'Mein Abenteuer',
+}
+const AI_WORLD_FALLBACK: Record<GameLanguage, string> = {
+  'zh-CN': 'AI 生成的世界', en: 'AI Generated World', ja: 'AI が生成した世界', de: 'KI-generierte Welt',
+}
+const BLANK_SUFFIX: Record<GameLanguage, string> = {
+  'zh-CN': '（空白世界书）', en: ' (Blank Lorebook)', ja: '（空の世界設定）', de: ' (Leeres Weltenbuch)',
+}
+const COPY_SUFFIX: Record<GameLanguage, string> = {
+  'zh-CN': '（复制世界书）', en: ' (Copied Lorebook)', ja: '（世界設定のコピー）', de: ' (Kopiertes Weltenbuch)',
+}
 
 const COPY_PREFIX = 'copy:'
 
@@ -101,9 +114,8 @@ export function sanitizeLoreChoice(
 ): LoreChoice {
   if (!choice.startsWith('copy:')) return choice
   const selected = choice.slice('copy:'.length)
-  const prefix = gameLanguage.split('-')[0]
   const exists = loreWorlds.some(
-    (world) => world.worldId === selected && String(world.language || '').toLowerCase().startsWith(prefix),
+    (world) => world.worldId === selected && worldContentLocale(world.language) === gameLanguage,
   )
   return exists ? choice : '__builtin__'
 }
