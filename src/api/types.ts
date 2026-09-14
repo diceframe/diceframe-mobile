@@ -284,6 +284,7 @@ export interface GameDetail {
   run_id?: string
   pending_luck_decisions?: CheckResult[]
   round_check_results?: CheckResult[]
+  manual_rolls?: ManualRollTimelineEntry[]
   total_tokens?: number
   token_budget_bump?: TokenBudgetBump | null
   ruleset_runtime?: RulesetRuntimeMeta & {
@@ -291,6 +292,28 @@ export interface GameDetail {
     state_schema_version?: number
   }
   [key: string]: unknown
+}
+
+export interface ManualRollTimelineEntry {
+  id: string
+  round_number: number
+  label?: string
+  formula: string
+  purpose?: 'free' | 'check' | 'contest' | string
+  target?: number | null
+  comparison?: 'at_least' | 'at_most' | string
+  status?: 'pending' | 'resolved' | 'cancelled' | string
+  target_names: Record<string, string>
+  results: Record<string, {
+    total?: number
+    rolls?: number[]
+    modifier?: number
+    natural?: number | null
+    target?: number
+    comparison?: 'at_least' | 'at_most' | string
+    verdict?: string
+  }>
+  created_at?: string
 }
 
 export interface TokenBudgetBump {
@@ -461,6 +484,7 @@ export interface GameSummary {
   language?: string
   solo_mode?: boolean
   narrative_perspective?: 'auto' | 'immersive' | 'third_person' | string
+  gm_style_override?: GmStyle | null
   gm_uid?: string
   round_number?: number
   player_count?: number
@@ -1004,6 +1028,49 @@ export interface RulesetEncounterPreset extends JsonObject {
   enemies: JsonObject[]
 }
 
+export interface RulesetTemporaryEncounterAttack extends JsonObject {
+  id?: string
+  name?: string
+  attack_bonus?: number
+  damage?: string
+  range?: number
+  long_range?: number
+}
+
+export interface RulesetTemporaryEncounterEnemy extends JsonObject {
+  id?: string
+  name?: string
+  hp?: number
+  armor_class?: number
+  speed?: number
+  position?: number
+  initiative_modifier?: number
+  attacks?: RulesetTemporaryEncounterAttack[]
+}
+
+export interface RulesetTemporaryEncounter extends JsonObject {
+  title: string
+  description: string
+  enemies: RulesetTemporaryEncounterEnemy[]
+  balance?: {
+    difficulty?: string
+    max_enemies?: number
+    max_total_hp?: number
+    max_enemy_hp?: number
+    max_armor_class?: number
+    max_attack_bonus?: number
+    max_attack_average_damage?: number
+  }
+  planner?: JsonObject
+}
+
+export interface RulesetTemporaryEncounterResponse extends JsonObject {
+  ok?: boolean
+  code?: string
+  error?: string
+  encounter?: RulesetTemporaryEncounter
+}
+
 export interface RulesetSessionZeroAgreement extends JsonObject {
   tone: string
   difficulty: 'story' | 'standard' | 'challenging' | 'lethal' | string
@@ -1315,6 +1382,7 @@ export interface BotBindTokenResponse {
 export interface GmStyle {
   tone?: string
   verbosity?: 'brief' | 'normal' | 'detailed'
+  pace?: 'slow' | 'normal' | 'fast'
   custom_instructions?: string
 }
 
