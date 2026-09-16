@@ -2281,3 +2281,15 @@ export interface GeneratedImageItem {
   round?: number
   status?: string
 }
+
+/**
+ * POST /api/pairing/claim：一次性配对码换设备令牌。
+ * 返回的 device_token 与访问密码平级，直接作为 Bearer 使用；
+ * Web 端不需要这条契约（它是出示方），所以只存在于移动端扩展段。
+ */
+export interface PairingClaimResponse {
+  ok: boolean
+  device_token: string
+  device_id: string
+  label: string
+}

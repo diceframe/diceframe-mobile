@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { ActivityIndicator, Platform, Pressable, ScrollView, TextInput, View } from 'react-native'
-import { Dices, Eye, EyeOff } from 'lucide-react-native'
+import { Dices, Eye, EyeOff, ScanLine } from 'lucide-react-native'
+import * as Device from 'expo-device'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useT } from '@/i18n/t'
@@ -20,6 +21,9 @@ import {
   normalizeBaseUrl,
   validateAccessToken,
 } from '@/api/client'
+import { claimPairingCode } from '@/api/pairing'
+import { QrScannerSheet } from '@/features/scan/QrScannerSheet'
+import { parsePairLink } from '@/lib/pair-link'
 import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
 import { ServerCompatBlocked, checkServerCompatibility, serverCompatErrorText } from '@/lib/server-compat'
 import { useThemeToken } from '@/lib/theme'
@@ -42,7 +46,8 @@ export default function LoginScreen() {
   const mutedForeground = useThemeToken('mutedForeground')
   const [password, setPassword] = React.useState('')
   const [showPassword, setShowPassword] = React.useState(false)
-  const [busy, setBusy] = React.useState<'login' | null>(null)
+  const [busy, setBusy] = React.useState<'login' | 'pair' | null>(null)
+  const [scanning, setScanning] = React.useState(false)
   const [error, setError] = React.useState('')
   const mountedRef = React.useRef(true)
   const scrollRef = React.useRef<ScrollView>(null)
@@ -143,6 +148,62 @@ export default function LoginScreen() {
     }
   }
 
+  /**
+   * 扫码登录：把二维码里的一次性配对码兑换成本机的设备令牌。
+   *
+   * 走的是与 login() 同一套候选服务器探测——跨服务器请求绝不携带当前实例的
+   * Owner token 或玩家身份，失败时把 API 内存态恢复回已连接的实例。
+   */
+  async function pair(payload: string) {
+    setScanning(false)
+    const parsed = parsePairLink(payload)
+    if (!parsed) {
+      setError(t('dfScanInvalidPairCode'))
+      return
+    }
+    setBusy('pair')
+    setError('')
+    try {
+      prepareCandidateClient()
+      configureApiClient({
+        baseUrl: parsed.baseUrl,
+        token: null,
+        share: null,
+        sessionToken: generateSessionToken(),
+      })
+      // 双向版本兼容与手填登录同一道门槛：不兼容就别把凭据兑出来
+      const config = await fetchAppConfig()
+      const compat = checkServerCompatibility(config)
+      if (compat === 'app-too-old' || compat === 'server-too-old') {
+        throw new ServerCompatBlocked(compat, config)
+      }
+      // 设备名只用于 Web 设置页的设备清单展示，方便 GM 认出该吊销哪一台
+      const deviceToken = await claimPairingCode(
+        parsed.code,
+        Device.deviceName || Device.modelName || '',
+      )
+      if (!mountedRef.current) return
+      if (parsed.baseUrl !== settings.baseUrl) {
+        settings.setToken(null)
+        settings.clearShares()
+      }
+      settings.setBaseUrl(parsed.baseUrl)
+      settings.setToken(deviceToken)
+      // 设备令牌与访问密码在客户端同属 Bearer 凭据，密码本按台存同一份
+      settings.rememberServerPassword(parsed.baseUrl, deviceToken)
+      settings.clearShares()
+      pendingClientRestoreRef.current = null
+      router.replace('/overview')
+    } catch (e) {
+      restoreCurrentClient()
+      if (mountedRef.current) {
+        setError(e instanceof ServerCompatBlocked ? serverCompatErrorText(e.status, e.config) : errorMessage(e))
+      }
+    } finally {
+      if (mountedRef.current) setBusy(null)
+    }
+  }
+
   return (
     <Screen style={{ width: '100%', maxWidth: 600, alignSelf: 'center' }}>
       {switching ? (
@@ -234,6 +295,17 @@ export default function LoginScreen() {
               <Text>{t('dfLoginSubmit')}</Text>
             )}
           </Button>
+          {/* 扫码入口：地址与凭据都由二维码带来，省掉手输 IP 与密码 */}
+          <Button variant="outline" onPress={() => setScanning(true)} disabled={busy !== null}>
+            {busy === 'pair' ? (
+              <ActivityIndicator />
+            ) : (
+              <>
+                <ScanLine size={18} color={mutedForeground} />
+                <Text>{t('dfScanLoginAction')}</Text>
+              </>
+            )}
+          </Button>
         </View>
 
         {error ? <Text className="text-destructive">{error}</Text> : null}
@@ -247,6 +319,14 @@ export default function LoginScreen() {
         </Pressable>
         </ScrollView>
       </View>
+
+      <QrScannerSheet
+        visible={scanning}
+        title={t('dfScanLoginTitle')}
+        hint={t('dfScanLoginHint')}
+        onScanned={(value) => void pair(value)}
+        onClose={() => setScanning(false)}
+      />
     </Screen>
   )
 }

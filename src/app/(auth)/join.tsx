@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { ActivityIndicator, ScrollView, View } from 'react-native'
 import { useRouter } from 'expo-router'
+import { ScanLine } from 'lucide-react-native'
 
 import { PageHeader } from '@/components/page-header'
 import { Screen } from '@/components/screen'
@@ -22,6 +23,7 @@ import {
   buildJoinNewPayload,
   joinFormReady,
 } from '@/lib/join-form'
+import { QrScannerSheet } from '@/features/scan/QrScannerSheet'
 import { parseShareLink, type ParsedShareLink } from '@/lib/share-link'
 import { ServerCompatBlocked, fetchServerCompat, serverCompatErrorText } from '@/lib/server-compat'
 import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
@@ -53,6 +55,7 @@ export default function JoinScreen() {
   const [cardsLoading, setCardsLoading] = React.useState(false)
   const cardsRequestedRef = React.useRef(false)
   const [step, setStep] = React.useState<Step>('link')
+  const [scanning, setScanning] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
   const keyboardHeight = useKeyboardHeight()
@@ -79,9 +82,10 @@ export default function JoinScreen() {
       .finally(() => setCardsLoading(false))
   }, [step, parsed])
 
-  async function parse() {
+  async function parse(rawLink?: string) {
     setError('')
-    const result = parseShareLink(link)
+    // 扫码结果要立刻可用：setState 是异步的，这一轮还读不到新值，所以直接传入
+    const result = parseShareLink(rawLink ?? link)
     if (!result) {
       setError(t('dfJoinInvalidLink'))
       return
@@ -243,12 +247,17 @@ export default function JoinScreen() {
             multiline
             editable={!busy}
           />
-          <Button onPress={parse} disabled={busy}>
+          <Button onPress={() => void parse()} disabled={busy}>
             {busy ? (
               <ActivityIndicator className="text-primary-foreground" />
             ) : (
               <Text>{t('dfJoinParse')}</Text>
             )}
+          </Button>
+          {/* GM 在 Web 端「邀请链接」里出示的二维码，扫一下免去粘贴 */}
+          <Button variant="outline" onPress={() => setScanning(true)} disabled={busy}>
+            <ScanLine size={18} />
+            <Text>{t('dfScanJoinAction')}</Text>
           </Button>
         </View>
       )}
@@ -318,6 +327,18 @@ export default function JoinScreen() {
       {error ? <Text className="text-destructive">{error}</Text> : null}
         </ScrollView>
       </View>
+
+      <QrScannerSheet
+        visible={scanning}
+        title={t('dfScanJoinTitle')}
+        hint={t('dfScanJoinHint')}
+        onScanned={(value) => {
+          setScanning(false)
+          setLink(value)
+          void parse(value)
+        }}
+        onClose={() => setScanning(false)}
+      />
     </Screen>
   )
 }

@@ -11,7 +11,8 @@
       "supportsTablet": true,
       "icon": "./assets/images/icon.png",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "语音输入需要使用麦克风录制你的行动描述。"
+        "NSMicrophoneUsageDescription": "语音输入需要使用麦克风录制你的行动描述。",
+        "NSCameraUsageDescription": "扫描服务器二维码以连接，无需手动输入地址。"
       },
       "bundleIdentifier": "com.diceframe.mobile"
     },
@@ -24,9 +25,10 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.diceframe.mobile",
-      "versionCode": 12,
+      "versionCode": 13,
       "permissions": [
         "RECORD_AUDIO",
+        "CAMERA",
         "READ_MEDIA_IMAGES",
         "READ_EXTERNAL_STORAGE"
       ],
@@ -47,6 +49,13 @@
         }
       ],
       "expo-audio",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "扫描服务器二维码以连接，无需手动输入地址。",
+          "recordAudioAndroid": false
+        }
+      ],
       "expo-image",
       [
         "expo-image-picker",

@@ -11,7 +11,11 @@ https://docs.expo.dev/versions/v57.0.0/ （本项目锁 SDK 57，不要照抄教
 
 DiceFrame（AI 跑团引擎）的 React Native 客户端：连接 DiceFrame 服务端（REST + SSE），
 聚焦游玩侧——语音输入、流式叙事、行动提交、检定卡、角色面板。服务端与 Web 端在
-[diceframe/diceframe](https://github.com/diceframe/diceframe) 主仓库，**后端零改动**，本仓库只做客户端。
+[diceframe/diceframe](https://github.com/diceframe/diceframe) 主仓库，本仓库只做客户端。
+
+默认前提仍是**后端零改动**：绝大多数需求都应在现有服务端契约内解决。扫码登录是已获批准的例外
+（配对码 / 设备令牌 / 局域网地址三组接口在主仓库落地），它不构成「可以随手改后端」的先例——
+要动后端须先确认，并同步主仓库的架构文档与测试。
 
 技术栈：Expo SDK 57（RN 0.86 / React 19.2 / New Architecture）、expo-router、
 NativeWind v4 + React Native Reusables（rnr，基于 `@rn-primitives/*`）、zustand、
@@ -106,6 +110,9 @@ src/
 - 移动端调用的 `/adventures`、`/worlds/clone-from-template`、`/worlds/{id}/gm-style`
   是预设端点（服务端尚未实现），调用处已做优雅降级，服务端上线后自动生效。
 - Android 已开 `usesCleartextTraffic`（局域网明文 HTTP 是核心场景）；iOS ATS 例外留待出包处理。
+- 扫码用 `expo-camera`（含原生代码）：改 `app.json` 的权限与 config plugin，不改 `android/`；
+  新增原生依赖后必须 `npx expo prebuild -p android --clean --no-install` 重新生成再出包，
+  并递增 `android.versionCode`。
 - `.env.local` 是个人环境（隧道地址等），已被 gitignore，不要把里面的值写死进代码。
 - 后台/前台切换有专门生命周期处理（暂停 SSE、回前台刷新）；动 `stream/` 或 `stores/game.ts`
   时先读 `src/stream/gameStream.ts` 的现有机制，别重复造轮子。
@@ -123,3 +130,7 @@ src/
 照常维护即可。仍不做：AI 服务商设置（部署侧管理员功能，移动端没有使用场景）、
 P2P 直连（SSE 票据握手与会话注入都建立在中心服务端上，与「后端零改动」前提冲突）。
 涉及这两项的需求先确认，别自行扩界。
+
+扫码登录已落地：一次性配对码换到的是**设备令牌**（与访问密码平级的 Bearer 凭据，可在 Web 设置页
+逐台吊销），不是访问密码——服务端只有密码的 PBKDF2 哈希，换不出明文。客户端把它存进
+`settings.token` 与密码本，与手填密码走同一条注入路径。

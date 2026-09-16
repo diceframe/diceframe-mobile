@@ -32,6 +32,7 @@
     "expo": "~57.0.15",
     "expo-application": "~57.0.2",
     "expo-audio": "~57.0.4",
+    "expo-camera": "~57.0.5",
     "expo-constants": "~57.0.13",
     "expo-device": "~57.0.1",
     "expo-file-system": "~57.0.5",
