@@ -20,6 +20,11 @@ import {
   type CharacterItemGroup,
   type CharacterItemLabels,
 } from '@/lib/character-items'
+import {
+  classFeatureList,
+  classResourcePercent,
+  classResourceRows,
+} from '@/lib/character-class'
 import { characterStatusFlags, deathSaveCounts } from '@/lib/character-status'
 import {
   characterCurrencyAmount,
@@ -59,16 +64,24 @@ function ResourceRow({
   label,
   current,
   max,
+  percent: percentOverride,
+  tiered = true,
 }: {
   label: string
   current?: number
   max?: number
+  /** 百分比另有权威算法时传入（职业资源钳在 0–100） */
+  percent?: number
+  /** false = 单色进度条：职业资源用完不是"危险"，不该跟 HP 一样标红 */
+  tiered?: boolean
 }) {
   const value = Number(current ?? 0)
   const maxValue = Number(max ?? 0)
-  const percent = maxValue > 0 ? (value / maxValue) * 100 : 0
+  const percent = percentOverride ?? (maxValue > 0 ? (value / maxValue) * 100 : 0)
   // 三档变色（对齐 Web HP 档位）：>50% 常绿 / ≤50% 警示 / ≤25% 危险
-  const tier = percent <= 25 ? 'bg-destructive' : percent <= 50 ? 'bg-warning' : 'bg-success'
+  const tier = !tiered
+    ? 'bg-primary'
+    : percent <= 25 ? 'bg-destructive' : percent <= 50 ? 'bg-warning' : 'bg-success'
   return (
     <View className="gap-1">
       <View className="flex-row items-center justify-between">
@@ -83,10 +96,21 @@ function ResourceRow({
   )
 }
 
-function skillList(sheet: CharacterSheet | null): string[] {
+interface SkillRow {
+  label: string
+  /** 玩家自填的技能说明：只展示，不参与判定 */
+  effect: string
+}
+
+function skillList(sheet: CharacterSheet | null): SkillRow[] {
   if (!sheet?.skills) return []
   return sheet.skills.map((skill) =>
-    typeof skill === 'string' ? skill : `${skill.name}${skill.value != null ? ` ${skill.value}` : ''}`,
+    typeof skill === 'string'
+      ? { label: skill, effect: '' }
+      : {
+          label: `${skill.name}${skill.value != null ? ` ${skill.value}` : ''}`,
+          effect: String(skill.effect ?? '').trim(),
+        },
   )
 }
 
@@ -195,6 +219,8 @@ export function CharacterPanel({
   const specialStats = ruleMeta?.rule_special_stats ?? []
   const attributes = characterAttributeRows(sheet?.attributes, ruleAttrs)
   const skills = skillList(sheet)
+  const classFeatures = classFeatureList(sheet)
+  const classResources = classResourceRows(sheet)
   const groups = characterItemGroups(sheet)
   const status = characterStatusFlags(sheet)
   const deathSaves = deathSaveCounts(sheet)
@@ -324,14 +350,55 @@ export function CharacterPanel({
         </Section>
       )}
 
+      {/* 职业能力与职业资源：服务端按当前职业与等级投影，前端只渲染，不判定也不算数值 */}
+      {classFeatures.length > 0 && (
+        <Section title={t('dfCharacterSectionClassFeatures')}>
+          <Text variant="small" className="text-muted-foreground">
+            {t('dfCharacterClassFromServer')}
+          </Text>
+          <View className="gap-1.5">
+            {classFeatures.map((feature) => (
+              <View key={feature.id} className="rounded-md border border-border bg-muted px-3 py-2 gap-0.5">
+                <Text className="text-sm font-medium">{feature.name}</Text>
+                {feature.summary ? (
+                  <Text variant="small" className="text-muted-foreground">{feature.summary}</Text>
+                ) : null}
+              </View>
+            ))}
+          </View>
+        </Section>
+      )}
+
+      {classResources.length > 0 && (
+        <Section title={t('dfCharacterSectionClassResources')}>
+          <View className="gap-2">
+            {classResources.map((resource) => (
+              <ResourceRow
+                key={resource.id}
+                label={resource.name}
+                current={resource.current}
+                max={resource.maximum}
+                percent={classResourcePercent(resource)}
+                tiered={false}
+              />
+            ))}
+          </View>
+        </Section>
+      )}
+
       {skills.length > 0 && (
         <Section title={t('dfCharacterSectionSkills')}>
           <View className="flex-row flex-wrap gap-2">
             {skills.map((skill, index) => (
-              <PanelCard key={`${skill}-${index}`}>
+              <PanelCard key={`${skill.label}-${index}`}>
                 <Text className="text-sm" numberOfLines={2}>
-                  {skill}
+                  {skill.label}
                 </Text>
+                {skill.effect ? (
+                  <Text variant="small" className="text-muted-foreground" numberOfLines={3}>
+                    {t('skillEffectLine', { effect: skill.effect })}
+                  </Text>
+                ) : null}
               </PanelCard>
             ))}
           </View>

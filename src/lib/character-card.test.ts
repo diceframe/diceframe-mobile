@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildCardPatch, normalizeSkillList, skillPoolNames } from './character-card'
+import {
+  buildCardPatch,
+  normalizeSkillList,
+  skillPoolNames,
+  SKILL_EFFECT_MAX_CHARS,
+} from './character-card'
 
 describe('character card patch normalization', () => {
   it('upgrades legacy string skills with the default value', () => {
@@ -37,6 +42,37 @@ describe('character card patch normalization', () => {
       ],
       portrait: null,
     })
+  })
+
+  it('保留技能的可选效果说明：去空白、超长按服务端上限截断、空说明不写字段', () => {
+    const long = 'x'.repeat(SKILL_EFFECT_MAX_CHARS + 20)
+    expect(normalizeSkillList([
+      { name: '侦查', value: 60, effect: '  盯住细节  ' },
+      { name: '攀爬', value: 40, effect: '   ' },
+      { name: '话术', value: 30, effect: long },
+    ])).toEqual([
+      { name: '侦查', value: 60, effect: '盯住细节' },
+      { name: '攀爬', value: 40 },
+      { name: '话术', value: 30, effect: 'x'.repeat(SKILL_EFFECT_MAX_CHARS) },
+    ])
+  })
+
+  it('效果说明随补丁一起提交，清空即移除该字段', () => {
+    expect(buildCardPatch({
+      character_name: '莱拉',
+      race: '',
+      class: '',
+      background: '',
+      gold: 0,
+      skills: [
+        { name: '剑术', value: 55, effect: ' 双手持握时更稳 ' },
+        { name: '潜行', value: 40, effect: '' },
+      ],
+      portrait: null,
+    }).skills).toEqual([
+      { name: '剑术', value: 55, effect: '双手持握时更稳' },
+      { name: '潜行', value: 40 },
+    ])
   })
 
   it('falls back to the unnamed card title when the name is blank', () => {

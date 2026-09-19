@@ -1,17 +1,22 @@
 import * as React from 'react'
 import { Pressable, View } from 'react-native'
-import { Plus, X } from 'lucide-react-native'
+import { MessageSquareText, Plus, X } from 'lucide-react-native'
 
 import type { CharacterSkill, RuleMeta } from '@/api/types'
 import { Icon } from '@/components/ui/icon'
 import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
+import { Textarea } from '@/components/ui/textarea'
 import { useT } from '@/i18n/t'
-import { skillPoolNames } from '@/lib/character-card'
+import { SKILL_EFFECT_MAX_CHARS, skillPoolNames } from '@/lib/character-card'
+import { cn } from '@/lib/utils'
 
 /**
  * 技能行编辑器（对齐 Web SkillEditor）：名称+数值行、增删、规则技能池快捷添加，
  * 以及技能上限/技能点/单技能上限提示（超限标红）。
+ *
+ * 「效果说明」（effect）默认折叠：技能多时不该铺开一排多行输入框。它是玩家自填的
+ * 说明，只做展示与 AI 上下文，不参与任何判定。
  */
 export function SkillRowsEditor({
   skills,
@@ -37,6 +42,16 @@ export function SkillRowsEditor({
     || (maxValue && skills.some((skill) => (Number(skill.value) || 0) > maxValue)),
   )
   const poolNames = skillPoolNames(pool)
+  const [openEffects, setOpenEffects] = React.useState<ReadonlySet<number>>(new Set())
+
+  function toggleEffect(index: number) {
+    setOpenEffects((current) => {
+      const next = new Set(current)
+      if (next.has(index)) next.delete(index)
+      else next.add(index)
+      return next
+    })
+  }
 
   function update(index: number, patch: Partial<CharacterSkill>) {
     onChange(skills.map((skill, i) => (i === index ? { ...skill, ...patch } : skill)))
@@ -58,29 +73,57 @@ export function SkillRowsEditor({
           ].filter(Boolean).join(' · ')}
         </Text>
       ) : null}
-      {skills.map((skill, index) => (
-        <View key={index} className="flex-row items-center gap-2">
-          <Input
-            value={skill.name}
-            onChangeText={(name) => update(index, { name })}
-            placeholder={t('dfCharacterCardSkillName')}
-            className="flex-1"
-          />
-          <Input
-            value={String(skill.value ?? 0)}
-            onChangeText={(text) => update(index, { value: Number(text) || 0 })}
-            inputMode="numeric"
-            className="w-16 text-center"
-          />
-          <Pressable
-            onPress={() => onChange(skills.filter((_, i) => i !== index))}
-            className="rounded-md p-1.5"
-            accessibilityLabel={t('dfCommonDelete')}
-          >
-            <Icon as={X} size={16} className="text-muted-foreground" />
-          </Pressable>
-        </View>
-      ))}
+      {skills.map((skill, index) => {
+        const hasEffect = Boolean(skill.effect?.trim())
+        const effectOpen = openEffects.has(index) || hasEffect
+        return (
+          <View key={index} className="gap-1.5">
+            <View className="flex-row items-center gap-2">
+              <Input
+                value={skill.name}
+                onChangeText={(name) => update(index, { name })}
+                placeholder={t('dfCharacterCardSkillName')}
+                className="flex-1"
+              />
+              <Input
+                value={String(skill.value ?? 0)}
+                onChangeText={(text) => update(index, { value: Number(text) || 0 })}
+                inputMode="numeric"
+                className="w-16 text-center"
+              />
+              <Pressable
+                onPress={() => toggleEffect(index)}
+                className="rounded-md p-1.5"
+                accessibilityLabel={t('skillEffect')}
+                accessibilityState={{ expanded: effectOpen }}
+              >
+                <Icon
+                  as={MessageSquareText}
+                  size={16}
+                  className={cn(hasEffect ? 'text-primary' : 'text-muted-foreground')}
+                />
+              </Pressable>
+              <Pressable
+                onPress={() => onChange(skills.filter((_, i) => i !== index))}
+                className="rounded-md p-1.5"
+                accessibilityLabel={t('dfCommonDelete')}
+              >
+                <Icon as={X} size={16} className="text-muted-foreground" />
+              </Pressable>
+            </View>
+            {effectOpen ? (
+              <Textarea
+                value={skill.effect ?? ''}
+                onChangeText={(effect) => update(index, { effect })}
+                placeholder={t('skillEffectPlaceholder')}
+                maxLength={SKILL_EFFECT_MAX_CHARS}
+                accessibilityLabel={t('skillEffect')}
+                className="min-h-16"
+              />
+            ) : null}
+          </View>
+        )
+      })}
       <Pressable
         onPress={() => addSkill()}
         className="self-start rounded-full border border-dashed border-border px-3 py-1.5"
