@@ -2,18 +2,20 @@ import * as React from 'react'
 import { View } from 'react-native'
 
 import { errorMessage } from '@/api/client'
-import type { Player } from '@/api/types'
+import type { CurrencySystem, Player } from '@/api/types'
 import { Sheet } from '@/components/patterns/sheet'
 import { SheetSelect } from '@/components/patterns/sheet-select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import { useT } from '@/i18n/t'
+import { currencyEditableUnitLabel, parseCurrencyInput } from '@/lib/currency'
 import { buildPaymentProposalPayload } from '@/lib/economy-prompts'
 
 interface PaymentComposerSheetProps {
   open: boolean
   players: Player[]
+  currencySystem?: CurrencySystem | null
   busy: boolean
   onClose: () => void
   onSubmit: (payload: ReturnType<typeof buildPaymentProposalPayload>) => Promise<void>
@@ -23,6 +25,7 @@ interface PaymentComposerSheetProps {
 export function PaymentComposerSheet({
   open,
   players,
+  currencySystem = null,
   busy,
   onClose,
   onSubmit,
@@ -38,15 +41,19 @@ export function PaymentComposerSheet({
 
   const payer = payerUid || firstUid
   const recipient = recipientUid || payer
-  const amount = Number(amountText)
-  const amountValid = Number.isInteger(amount) && amount >= 1 && amount <= 100000
+  // 按可编辑单位输入（$2.50 输 "2.5"），提交前统一换算成 canonical 整数；
+  // 上限 100000 是服务端对 canonical 金额的约束，不随显示单位变。
+  const amount = parseCurrencyInput(amountText, currencySystem)
+  const amountValid = amount !== null && amount <= 100000
+  // 解析单位可能不是规则顶层货币名（rate=3 会回退基础单位），必须让 GM 看见。
+  const amountUnit = currencyEditableUnitLabel(currencySystem)
   const options = players.map((player) => ({
     label: player.character_name || player.user_id,
     value: player.user_id,
   }))
 
   async function submit() {
-    if (!payer || !amountValid || busy) return
+    if (!payer || amount === null || !amountValid || busy) return
     setFormError('')
     try {
       await onSubmit(buildPaymentProposalPayload(payer, recipient, amount, reason, items))
@@ -77,11 +84,13 @@ export function PaymentComposerSheet({
           <SheetSelect options={options} value={recipient} onValueChange={setRecipientUid} />
         </View>
         <View className="gap-1.5">
-          <Text variant="small" className="font-semibold">{t('paymentAmount')}</Text>
+          <Text variant="small" className="font-semibold">
+            {amountUnit ? `${t('paymentAmount')}（${amountUnit}）` : t('paymentAmount')}
+          </Text>
           <Input
             value={amountText}
             onChangeText={setAmountText}
-            keyboardType="number-pad"
+            keyboardType="decimal-pad"
             editable={!busy}
           />
         </View>

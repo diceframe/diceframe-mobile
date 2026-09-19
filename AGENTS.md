@@ -98,6 +98,11 @@ src/
 8. 单测只测纯逻辑，文件命名 `*.test.ts`（vitest 只收 `src/**/*.test.ts`，不含 tsx）。
    解析器、状态推导、契约解析类改动必须带测试。
 9. 注释与文案用中文，与现有代码保持一致。注释写"为什么"和契约约束，不写"这行在干嘛"。
+10. **金额一律走 `src/lib/currency.ts`**。服务端 economy 只认 canonical 基础单位整数
+    （25 美分存 25），页面禁止自己 `/100`、`*100` 或直接渲染 `gold`：展示用
+    `formatCurrencyAmount`，输入框初值用 `currencyAmountToInputText`，回写用
+    `parseCurrencyInput`（换不出整数基础单位要报错，不许静默改额）。规则的
+    `currency_system` 来自 `RuleMeta`，缺省（老规则）按 rate=1 处理。
 
 ## 平台与构建注意
 

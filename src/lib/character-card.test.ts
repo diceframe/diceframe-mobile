@@ -11,13 +11,13 @@ describe('character card patch normalization', () => {
     expect(normalizeSkillList(undefined)).toEqual([])
   })
 
-  it('keeps only named skills and parses numeric fields like the web save path', () => {
+  it('keeps only named skills and normalizes numeric fields like the web save path', () => {
     const patch = buildCardPatch({
       character_name: '  莱拉  ',
       race: '  ',
       class: '',
       background: '  流浪剑客  ',
-      gold: '42.9',
+      gold: 42.4,
       skills: [
         { name: '  剑术 ', value: 55 },
         { name: '   ', value: 90 },
@@ -45,7 +45,7 @@ describe('character card patch normalization', () => {
       race: '',
       class: '',
       background: '',
-      gold: '',
+      gold: 0,
       skills: [],
       portrait: null,
     }).character_name).toBe('未命名')

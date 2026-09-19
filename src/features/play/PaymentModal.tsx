@@ -2,11 +2,12 @@ import * as React from 'react'
 import { View } from 'react-native'
 
 import { errorMessage } from '@/api/client'
-import type { PaymentResolveResponse, PendingPayment } from '@/api/types'
+import type { CurrencySystem, PaymentResolveResponse, PendingPayment } from '@/api/types'
 import { Sheet } from '@/components/patterns/sheet'
 import { Button } from '@/components/ui/button'
 import { Text } from '@/components/ui/text'
 import { useT } from '@/i18n/t'
+import { formatCurrencyAmount } from '@/lib/currency'
 import {
   economyProposalPermissions,
   isNonBlockingPersonalPurchase,
@@ -14,7 +15,9 @@ import {
 
 interface PaymentModalProps {
   payment: PendingPayment | null
+  /** 规则货币名：没有 currency_system 的老规则用它兜底 */
   currency: string
+  currencySystem?: CurrencySystem | null
   playerName: (uid?: string) => string
   actorId: string
   gmUid: string
@@ -28,6 +31,7 @@ interface PaymentModalProps {
 export function PaymentModal({
   payment,
   currency,
+  currencySystem = null,
   playerName,
   actorId,
   gmUid,
@@ -64,6 +68,9 @@ export function PaymentModal({
   if (!payment || !paymentId) return null
 
   const isReward = payment.kind === 'reward'
+  // 提案金额是 canonical 整数（25 美分 = 25），组件内不自行 ÷100；
+  // 文案的 {{amount}} 已含单位或符号，上游同步退掉了独立的 {{currency}} 插值。
+  const amountText = formatCurrencyAmount(payment.amount ?? 0, currencySystem, currency)
   const permission = economyProposalPermissions(payment, actorId, gmUid)
   const target = playerName(payment.payer_uid || payment.uid)
   const reason = payment.reason ? t('gmPaymentReason', { reason: payment.reason }) : ''
@@ -71,14 +78,12 @@ export function PaymentModal({
   const content = isReward
     ? t(solo ? 'economySoloRewardContent' : 'economyRewardContent', {
         target: playerName(payment.recipient_uid || payment.uid),
-        amount: payment.amount ?? 0,
-        currency,
+        amount: amountText,
         reason: payment.reason ?? '',
       })
     : t('gmPaymentContent', {
         target,
-        amount: payment.amount ?? 0,
-        currency,
+        amount: amountText,
         reason,
       })
   const help = isReward

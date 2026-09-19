@@ -835,6 +835,7 @@ export default function GameScreen() {
       <PaymentComposerSheet
         open={paymentComposerOpen}
         players={players}
+        currencySystem={ruleMeta?.currency_system ?? null}
         busy={gmBusy}
         onClose={() => setPaymentComposerOpen(false)}
         onSubmit={handleCreatePayment}
@@ -845,6 +846,7 @@ export default function GameScreen() {
         key={String(currentPayment?.id || '')}
         payment={currentPayment}
         currency={economyCurrency}
+        currencySystem={ruleMeta?.currency_system ?? null}
         playerName={(uid) =>
           players.find((player) => player.user_id === uid)?.character_name || uid || '—'
         }

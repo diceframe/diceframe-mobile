@@ -21,6 +21,12 @@ import {
   type CharacterItemLabels,
 } from '@/lib/character-items'
 import { characterStatusFlags, deathSaveCounts } from '@/lib/character-status'
+import {
+  characterCurrencyAmount,
+  formatCurrencyAmount,
+  hasCurrencyAmount,
+} from '@/lib/currency'
+import { economyCurrencyLabel } from '@/lib/economy-prompts'
 import { levelUpPoints } from '@/lib/level-up'
 
 import { AttributeAllocation } from './AttributeAllocation'
@@ -332,12 +338,15 @@ export function CharacterPanel({
         </Section>
       )}
 
-      {typeof sheet?.gold === 'number' && (
+      {/* 余额是 canonical base-unit 整数（25 美分存 25），必须经 formatter 换算后展示 */}
+      {hasCurrencyAmount(sheet) && (
         <Section title={t('dfCharacterSectionAssets')}>
           <View className="flex-row flex-wrap gap-2">
             <PanelCard>
-              <Text variant="small">{t('goldCurrency')}</Text>
-              <Text className="font-mono text-xl font-semibold">{sheet.gold}</Text>
+              <Text variant="small">{economyCurrencyLabel(ruleMeta)}</Text>
+              <Text className="font-mono text-xl font-semibold">
+                {formatCurrencyAmount(characterCurrencyAmount(sheet), ruleMeta?.currency_system)}
+              </Text>
             </PanelCard>
           </View>
         </Section>

@@ -11,6 +11,11 @@ import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
 import { buildCardPatch, normalizeSkillList, type CharacterCardPatch } from '@/lib/character-card'
+import {
+  currencyAmountToInputText,
+  currencyEditableUnitLabel,
+  parseCurrencyInput,
+} from '@/lib/currency'
 import { useT } from '@/i18n/t'
 import { errorMessage } from '@/api/client'
 import { PortraitPickerSection } from './PortraitPickerSection'
@@ -43,7 +48,9 @@ export function CharacterCardEditor({
   const [race, setRace] = React.useState(card?.race ?? '')
   const [klass, setKlass] = React.useState(card?.class ?? '')
   const [background, setBackground] = React.useState(card?.background ?? '')
-  const [gold, setGold] = React.useState(card?.gold === undefined ? '' : String(card.gold))
+  // 金额按可编辑单位输入（$0.25 输 "0.25"），canonical 整数与文本的换算统一走 lib/currency。
+  // null = 用户还没动过输入框：规则 schema 是异步到的，此时初值跟着 currency_system 重算。
+  const [goldInput, setGoldInput] = React.useState<string | null>(null)
   const [skills, setSkills] = React.useState<CharacterSkill[]>(() => normalizeSkillList(card?.skills))
   const [portrait, setPortrait] = React.useState<CharacterPortrait | null>(card?.portrait ?? null)
 
@@ -99,8 +106,19 @@ export function CharacterCardEditor({
   }, [ruleId])
 
   const activeSchema = schema?.ruleId === ruleId ? schema : null
+  const currencySystem = activeSchema?.meta?.currency_system ?? null
+  const goldText = goldInput
+    ?? (card?.gold === undefined ? '' : currencyAmountToInputText(Number(card.gold), currencySystem))
+  // 输入框的解析单位可能不是规则的顶层货币名（rate=3 会回退基础单位），标签必须跟着走。
+  const goldUnit = currencyEditableUnitLabel(currencySystem)
 
   async function save() {
+    // 空输入沿用旧行为记 0；其余交给 parser，换不出整数基础单位就报错，不静默改额。
+    const gold = goldText.trim() ? parseCurrencyInput(goldText, currencySystem, { allowZero: true }) : 0
+    if (gold === null) {
+      setError(t('invalidAmount'))
+      return
+    }
     setSaving(true)
     setError('')
     try {
@@ -195,8 +213,15 @@ export function CharacterCardEditor({
       </View>
 
       <View className="gap-1.5">
-        <Text variant="small" className="font-semibold">{t('dfCharacterCardGold')}</Text>
-        <Input value={gold} onChangeText={setGold} inputMode="numeric" placeholder="30" />
+        <Text variant="small" className="font-semibold">
+          {goldUnit ? `${t('dfCharacterCardGold')}（${goldUnit}）` : t('dfCharacterCardGold')}
+        </Text>
+        <Input
+          value={goldText}
+          onChangeText={setGoldInput}
+          inputMode="decimal"
+          placeholder={currencyAmountToInputText(30, currencySystem)}
+        />
       </View>
 
       {error ? <Text variant="small" className="text-destructive">{error}</Text> : null}

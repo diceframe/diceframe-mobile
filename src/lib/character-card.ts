@@ -23,7 +23,8 @@ export interface CharacterCardForm {
   race: string
   class: string
   background: string
-  gold: string
+  /** canonical base-unit 整数：输入框文本由 `parseCurrencyInput` 解析后才进表单 */
+  gold: number
   skills: CharacterSkill[]
   portrait: CharacterPortrait | null
 }
@@ -47,7 +48,7 @@ export function buildCardPatch(form: CharacterCardForm): CharacterCardPatch {
       .filter((skill) => skill.name?.trim())
       .map((skill) => ({ name: skill.name.trim(), value: Number(skill.value) || 0 })),
     background: form.background.trim(),
-    gold: parseInt(form.gold, 10) || 0,
+    gold: Math.round(Number(form.gold)) || 0,
     portrait: form.portrait ? { ...form.portrait } : null,
   }
 }
