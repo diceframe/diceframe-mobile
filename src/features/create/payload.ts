@@ -7,6 +7,7 @@ import type {
   MapBackgroundSelection,
   SceneImageRef,
 } from '@/api/types'
+import { withCardControls } from '@/lib/card-control'
 import { worldContentLocale } from '@/lib/world-language'
 
 export type GameLanguage = 'zh-CN' | 'en' | 'ja' | 'de'
@@ -121,13 +122,16 @@ export function sanitizeLoreChoice(
 }
 
 export function buildCreateRequest(state: CreateFormState, now = Date.now()): CreateRequest {
+  // 每张角色都带上控制方式（服务端写成 players[uid].control.mode）；
+  // 没选过的按位置补默认，免得「导入的角色没有控制方式」。
+  const players = withCardControls(state.players)
   const seed = state.seed.trim()
   if (seed) {
     // 种子恢复：世界/规则等全部由种子码决定，只带对局级设置
     const body: Record<string, unknown> = {
       seed_code: seed,
       solo: state.solo,
-      players: state.players,
+      players,
       language: state.gameLanguage,
       narrative_perspective: state.narrativePerspective,
     }
@@ -144,7 +148,7 @@ export function buildCreateRequest(state: CreateFormState, now = Date.now()): Cr
     description: state.description,
     // 三态：开放房空串；留空 null 由服务端对多人自动生成；非空为自定义密码
     room_password: state.openRoom ? '' : state.roomPassword.trim() || null,
-    players: state.players,
+    players,
     language: lang,
     narrative_perspective: state.narrativePerspective,
     advancement_mode: state.supportsAdvancementPolicy ? state.advancementMode : 'milestone',

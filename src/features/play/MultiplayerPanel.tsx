@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { ScrollView, View } from 'react-native'
-import { Link, LogOut, UserMinus } from 'lucide-react-native'
+import { Bot, Link, LogOut, UserMinus, UserRound } from 'lucide-react-native'
 
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
@@ -8,6 +8,13 @@ import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import type { GameDetail, Player } from '@/api/types'
 import { useT, type T } from '@/i18n/t'
+import {
+  controlToggleFor,
+  isTemporaryHost,
+  playerControlMode,
+  type PlayerControlMode,
+} from '@/lib/player-control'
+import { cn } from '@/lib/utils'
 
 interface MultiplayerPanelProps {
   players: Player[]
@@ -16,7 +23,10 @@ interface MultiplayerPanelProps {
   currentUserId?: string
   onKick: (uid: string) => void
   onSetAway: (uid: string, away: boolean) => void
+  onSetControl: (uid: string, mode: 'ai' | 'human') => void
   onCopyLink: (uid: string) => void
+  /** 服务器正在为这个席位接管：控制权切换请求还没回来 */
+  hostingUid?: string
 }
 
 const ACTED_TONE = '#22c55e'
@@ -29,6 +39,20 @@ function statusTone(player: Player, detail: GameDetail): string {
   const actedSet = new Set((detail.multiplayer?.submitted_actions ?? []).map((a) => a.user_id))
   if (actedSet.has(player.user_id)) return ACTED_TONE
   return WAITING_TONE
+}
+
+/** 控制方式徽标：AI 临时托管（暂离触发）与 AI 托管（GM 决定）要分得开。 */
+function controlBadge(player: Player, t: T): string {
+  const mode = playerControlMode(player)
+  if (mode === 'ai') return isTemporaryHost(player) ? t('controlAiTemporary') : t('controlAi')
+  if (mode === 'unclaimed') return t('controlUnclaimed')
+  return t('controlHuman')
+}
+
+const CONTROL_BADGE_CLASS: Record<PlayerControlMode, string> = {
+  human: 'border-border text-muted-foreground',
+  ai: 'border-primary text-primary',
+  unclaimed: 'border-dashed border-border text-muted-foreground',
 }
 
 function statusLabel(player: Player, detail: GameDetail, t: T): string {
@@ -51,7 +75,9 @@ export function MultiplayerPanel({
   currentUserId,
   onKick,
   onSetAway,
+  onSetControl,
   onCopyLink,
+  hostingUid,
 }: MultiplayerPanelProps) {
   const awaySet = new Set((detail.multiplayer?.away_players ?? []).map((p) => p.user_id))
   const canKick = isGm && players.length > 1
@@ -75,8 +101,11 @@ export function MultiplayerPanel({
         const isAway = awaySet.has(player.user_id)
         const isSelf = player.user_id === currentUserId
         const isGmPlayer = player.user_id === detail.gm_uid
-        const tone = statusTone(player, detail)
-        const label = statusLabel(player, detail, t)
+        const hosting = Boolean(hostingUid) && player.user_id === hostingUid
+        const controlMode = playerControlMode(player)
+        const controlToggle = controlToggleFor(player)
+        const tone = hosting ? WAITING_TONE : statusTone(player, detail)
+        const label = hosting ? t('controlAiTakingOver') : statusLabel(player, detail, t)
 
         return (
           <View key={player.user_id} className="rounded-xl border border-border bg-card p-3 gap-2">
@@ -95,6 +124,12 @@ export function MultiplayerPanel({
                   GM
                 </Text>
               )}
+              <Text
+                variant="small"
+                className={cn('rounded-sm border px-1.5 py-0.5', CONTROL_BADGE_CLASS[controlMode])}
+              >
+                {controlBadge(player, t)}
+              </Text>
             </View>
 
             <Text variant="small" className="text-muted-foreground">
@@ -117,6 +152,19 @@ export function MultiplayerPanel({
                     >
                       <Icon as={LogOut} size={12} />
                       <Text variant="small">{isAway ? t('dfPlayBackToGame') : t('away')}</Text>
+                    </Button>
+                  )}
+                  {controlToggle && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={hosting}
+                      onPress={() => onSetControl(player.user_id, controlToggle)}
+                    >
+                      <Icon as={controlToggle === 'ai' ? Bot : UserRound} size={12} />
+                      <Text variant="small">
+                        {controlToggle === 'ai' ? t('controlSetAi') : t('controlStopAi')}
+                      </Text>
                     </Button>
                   )}
                   {canKick && !isSelf && !isGmPlayer && (

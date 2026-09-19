@@ -40,6 +40,7 @@ import {
   sendPrivateMessage,
   setPlayerAccess,
   setPlayerAway,
+  setPlayerControl,
   setSoloMode,
   submitAction,
   switchGameWorld,
@@ -138,6 +139,8 @@ interface GameStore {
   toggleMode: () => Promise<void>
   toggleAccess: () => Promise<void>
   setAway: (uid: string, away: boolean) => Promise<void>
+  /** GM 托管控件：把席位交给服务端 AI 或交回玩家 */
+  setControl: (uid: string, mode: 'ai' | 'human') => Promise<void>
   kick: (uid: string) => Promise<void>
   privateMessage: (uid: string, text: string) => Promise<void>
   switchWorld: (worldId: string) => Promise<void>
@@ -690,6 +693,22 @@ export const useGameStore = create<GameStore>((set, get) => {
       set({ gmBusy: true })
       try {
         await setPlayerAway(gameKey, uid, away)
+        if (get().gameKey === gameKey) await get().refresh()
+      } catch (error) {
+        if (get().gameKey === gameKey) set({ error: errorMessage(error) })
+        throw error
+      } finally {
+        if (get().gameKey === gameKey) set({ gmBusy: false })
+      }
+    },
+
+    async setControl(uid, mode) {
+      const { gameKey } = get()
+      if (!gameKey) return
+      set({ gmBusy: true })
+      try {
+        await setPlayerControl(gameKey, uid, mode)
+        // 交给 AI 后服务端会立刻唤醒推进边界，刷新才能拿到补上的行动与新花名册。
         if (get().gameKey === gameKey) await get().refresh()
       } catch (error) {
         if (get().gameKey === gameKey) set({ error: errorMessage(error) })

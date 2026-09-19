@@ -2,7 +2,7 @@ import * as React from 'react'
 import { View } from 'react-native'
 
 import { errorMessage } from '@/api/client'
-import { setLuckTimeout, setNarrativePerspective } from '@/api/game-settings'
+import { setAwayControlPolicy, setLuckTimeout, setNarrativePerspective } from '@/api/game-settings'
 import { Sheet } from '@/components/patterns/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,21 +14,25 @@ import {
   parseLuckTimeoutInput,
   type NarrativePerspective,
 } from '@/lib/game-settings'
+import { AWAY_CONTROL_POLICIES, normalizeAwayPolicy, type AwayControlPolicy } from '@/lib/player-control'
 
 export type GameSettingsChange =
   | { narrativePerspective: NarrativePerspective }
   | { luckTimeoutSeconds: number }
+  | { awayPolicy: AwayControlPolicy }
 
 export interface GameSettingsSheetProps {
   open: boolean
   onClose: () => void
   gameKey: string
   narrativePerspective?: string | null
+  /** 房间暂离语义；服务端默认 pause */
+  awayPolicy?: string | null
   /** 同步接收已保存字段；宿主更新 store 前仍须核对 gameKey。 */
   onSaved: (gameKey: string, change: GameSettingsChange) => void
 }
 
-type Setting = 'perspective' | 'timeout'
+type Setting = 'perspective' | 'timeout' | 'awayPolicy'
 type SaveResult = { ok: true; seconds?: number } | { ok: false; message: string }
 
 const perspectiveLabels = {
@@ -37,17 +41,24 @@ const perspectiveLabels = {
   third_person: 'narrativeThirdPerson',
 } as const
 
+const awayPolicyLabels = {
+  pause: 'awayPolicyPause',
+  ai_takeover: 'awayPolicyAiTakeover',
+} as const
+
 /** 每次打开、切局均创建独立表单，旧请求不会写入新表单的错误与草稿。 */
 export function GameSettingsSheet(props: GameSettingsSheetProps) {
   if (!props.open) return null
   return <GameSettingsForm key={props.gameKey} {...props} />
 }
 
-function GameSettingsForm({ onClose, gameKey, narrativePerspective, onSaved }: GameSettingsSheetProps) {
+function GameSettingsForm({ onClose, gameKey, narrativePerspective, awayPolicy: awayPolicyProp, onSaved }: GameSettingsSheetProps) {
   const t = useT()
   const [draftPerspective, setDraftPerspective] = React.useState<NarrativePerspective | null>(null)
   const [savedPerspective, setSavedPerspective] = React.useState<NarrativePerspective | null>(null)
   const [timeoutInput, setTimeoutInput] = React.useState('')
+  const [draftAwayPolicy, setDraftAwayPolicy] = React.useState<AwayControlPolicy | null>(null)
+  const [savedAwayPolicy, setSavedAwayPolicy] = React.useState<AwayControlPolicy | null>(null)
   const [pending, setPending] = React.useState<Setting | null>(null)
   const [results, setResults] = React.useState<Partial<Record<Setting, SaveResult>>>({})
   const request = React.useRef<AbortController | null>(null)
@@ -65,6 +76,8 @@ function GameSettingsForm({ onClose, gameKey, narrativePerspective, onSaved }: G
   const currentPerspective = savedPerspective ?? currentNarrativePerspective(narrativePerspective)
   const perspective = draftPerspective ?? currentPerspective
   const parsedTimeout = parseLuckTimeoutInput(timeoutInput)
+  const currentAwayPolicy = savedAwayPolicy ?? normalizeAwayPolicy(awayPolicyProp)
+  const policy = draftAwayPolicy ?? currentAwayPolicy
   const busy = pending !== null
   const timeoutError = parsedTimeout.kind !== 'invalid'
     ? ''
@@ -84,6 +97,7 @@ function GameSettingsForm({ onClose, gameKey, narrativePerspective, onSaved }: G
     if (request.current || !gameKey.trim()) return
     if (setting === 'perspective' && (!perspective || perspective === currentPerspective)) return
     if (setting === 'timeout' && parsedTimeout.kind !== 'valid') return
+    if (setting === 'awayPolicy' && policy === currentAwayPolicy) return
     const controller = new AbortController()
     request.current = controller
     setPending(setting)
@@ -103,6 +117,13 @@ function GameSettingsForm({ onClose, gameKey, narrativePerspective, onSaved }: G
         setTimeoutInput('')
         setResults((previous) => ({ ...previous, timeout: { ok: true, seconds: saved } }))
         change = { luckTimeoutSeconds: saved }
+      } else if (setting === 'awayPolicy') {
+        const saved = await setAwayControlPolicy(gameKey, policy, controller.signal)
+        if (!mounted.current || controller.signal.aborted) return
+        setSavedAwayPolicy(saved)
+        setDraftAwayPolicy(saved)
+        setResults((previous) => ({ ...previous, awayPolicy: { ok: true } }))
+        change = { awayPolicy: saved }
       }
     } catch (error) {
       if (mounted.current && !controller.signal.aborted) {
@@ -125,7 +146,9 @@ function GameSettingsForm({ onClose, gameKey, narrativePerspective, onSaved }: G
         className={result.ok ? 'text-sm text-primary' : 'text-sm text-destructive'}
       >
         {result.ok
-          ? setting === 'timeout' ? t('luckTimeoutSaved', { seconds: result.seconds ?? 0 }) : t('settingsSaved')
+          ? setting === 'timeout'
+            ? t('luckTimeoutSaved', { seconds: result.seconds ?? 0 })
+            : setting === 'awayPolicy' ? t('awayPolicySaved') : t('settingsSaved')
           : result.message}
       </Text>
     )
@@ -191,6 +214,38 @@ function GameSettingsForm({ onClose, gameKey, narrativePerspective, onSaved }: G
             onPress={() => void save('timeout')}
           >
             <Text>{pending === 'timeout' ? t('saving') : t('saveAction')}</Text>
+          </Button>
+        </View>
+        <View className="gap-3 border-t border-border pt-5">
+          <View className="gap-1">
+            <Text className="font-semibold">{t('awayPolicy')}</Text>
+            <Text variant="muted">{t('awayPolicyHelp')}</Text>
+          </View>
+          <View className="gap-2" accessibilityRole="radiogroup" accessibilityLabel={t('awayPolicy')}>
+            {AWAY_CONTROL_POLICIES.map((value) => (
+              <Button
+                key={value}
+                variant={policy === value ? 'secondary' : 'outline'}
+                className="h-auto min-h-11 items-start px-3 py-3"
+                accessibilityRole="radio"
+                accessibilityState={{ checked: policy === value, disabled: busy }}
+                disabled={busy}
+                onPress={() => {
+                  setDraftAwayPolicy(value)
+                  setResults((previous) => ({ ...previous, awayPolicy: undefined }))
+                }}
+              >
+                <Text className="shrink text-left">{t(awayPolicyLabels[value])}</Text>
+              </Button>
+            ))}
+          </View>
+          {feedback('awayPolicy')}
+          <Button
+            disabled={busy || !gameKey.trim() || policy === currentAwayPolicy}
+            accessibilityLabel={`${t('saveAction')} · ${t('awayPolicy')}`}
+            onPress={() => void save('awayPolicy')}
+          >
+            <Text>{pending === 'awayPolicy' ? t('saving') : t('saveAction')}</Text>
           </Button>
         </View>
         <Button variant="ghost" disabled={busy} onPress={close}>

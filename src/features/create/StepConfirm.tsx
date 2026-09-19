@@ -8,6 +8,7 @@ import type { RuleSummary, SceneImageRef, WorldTemplateSummary } from '@/api/typ
 import { worldCoverSource } from '@/api/assets'
 import { activeRuleIdOf, type CreateFormState } from '@/features/create/payload'
 import { useT } from '@/i18n/t'
+import { CARD_CONTROL_LABEL_KEYS, cardControlAt } from '@/lib/card-control'
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
@@ -103,7 +104,10 @@ export function StepConfirm({
       <View className="flex-row flex-wrap gap-1.5">
         {state.players.map((player, index) => (
           <Badge key={`${player.character_name}-${index}`} variant="outline" className="max-w-full px-2 py-1">
-            <Text className="shrink text-xs" numberOfLines={1}>{player.character_name}</Text>
+            {/* 控制方式与角色步骤取同一个答案，确认页不会显示成另一个值 */}
+            <Text className="shrink text-xs" numberOfLines={1}>
+              {player.character_name} · {t(CARD_CONTROL_LABEL_KEYS[cardControlAt(state.players, index)])}
+            </Text>
           </Badge>
         ))}
       </View>

@@ -775,11 +775,15 @@ export default function GameScreen() {
           open={gameSettingsOpen}
           onClose={() => setGameSettingsOpen(false)}
           narrativePerspective={detail?.narrative_perspective}
+          awayPolicy={detail?.away_control_policy}
           onSaved={(savedGameKey, change) => {
             const current = useGameStore.getState()
             if (current.gameKey !== savedGameKey || current.tableTalkRevision !== identityRevision) return
             if ('narrativePerspective' in change && current.detail) {
               useGameStore.setState({ detail: { ...current.detail, narrative_perspective: change.narrativePerspective } })
+            }
+            if ('awayPolicy' in change && current.detail) {
+              useGameStore.setState({ detail: { ...current.detail, away_control_policy: change.awayPolicy } })
             }
             void current.refresh()
           }}

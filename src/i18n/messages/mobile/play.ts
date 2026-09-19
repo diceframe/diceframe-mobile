@@ -193,6 +193,9 @@ export const play = {
     dfPlayTtsFailed: '语音合成失败',
     // GM 支付决议（其余文案复用上游 key：gmPayment*/later/reject/confirmPurchase）
     dfPlayPaymentResolving: '处理中…',
+    // 托管切换的业务错误码上游未收录进 apiErrors，只能由移动端自己给文案。
+    dfPlayControlBusy: '正在推进剧情，等本轮结束后再切换托管。',
+    dfPlayControlRejected: '该角色无法切换托管状态。',
   },
   en: {
     // Header & connection status
@@ -379,6 +382,8 @@ export const play = {
     dfPlayTtsFailed: 'Speech synthesis failed',
     // GM payment modal (other strings reuse upstream keys: gmPayment*/later/reject/confirmPurchase)
     dfPlayPaymentResolving: 'Working…',
+    dfPlayControlBusy: 'The round is resolving; switch hosting after it finishes.',
+    dfPlayControlRejected: 'This character cannot switch hosting.',
   },
   ja: {
     // ヘッダーと接続状態
@@ -565,6 +570,8 @@ export const play = {
     dfPlayTtsFailed: '音声合成に失敗しました',
     // GM支払いダイアログ（その他の文言は上流キーを流用：gmPayment*/later/reject/confirmPurchase）
     dfPlayPaymentResolving: '処理中…',
+    dfPlayControlBusy: 'ラウンド処理中です。終了後に委任を切り替えてください。',
+    dfPlayControlRejected: 'このキャラクターは委任状態を切り替えられません。',
   },
   de: {
     // 顶栏与连接状态
@@ -751,5 +758,7 @@ export const play = {
     dfPlayTtsFailed: 'Sprachausgabe fehlgeschlagen',
     // GM 支付决议（其余文案复用上游 key：gmPayment*/later/reject/confirmPurchase）
     dfPlayPaymentResolving: 'Wird verarbeitet…',
+    dfPlayControlBusy: 'Die Runde wird ausgewertet; wechsle die KI-Übernahme danach.',
+    dfPlayControlRejected: 'Für diese Figur lässt sich die KI-Übernahme nicht umschalten.',
   },
 } as const

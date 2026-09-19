@@ -11,7 +11,9 @@ import { PortalHost } from '@rn-primitives/portal'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
 import { ErrorBoundary } from '@/components/error-boundary'
+import { toastNotice } from '@/components/patterns/toast'
 import { configureApiClient } from '@/api/client'
+import { getT } from '@/i18n/t'
 import { Toaster } from 'sonner-native'
 import { useLocaleSync } from '@/hooks/useLocaleSync'
 import { useServerCompatCheck } from '@/hooks/useServerCompatCheck'
@@ -51,7 +53,12 @@ export default function RootLayout() {
   // 每台服务器的原生会话由 settings rehydrate 时同步到 API client。
   React.useEffect(() => {
     configureApiClient({
-      onUnauthorized: () => router.replace('/login'),
+      onUnauthorized: () => {
+        // 服务端第一次设置访问密码会吊销免密期签发的设备令牌，扫码登录过的设备
+        // 会突然 401。静默跳登录页看起来像 App 自己退出了，给一句解释。
+        toastNotice(getT()('dfAuthSessionExpired'))
+        router.replace('/login')
+      },
     })
   }, [])
 

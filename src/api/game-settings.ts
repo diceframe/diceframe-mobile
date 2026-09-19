@@ -1,6 +1,7 @@
 import { api, ApiError, errorCodeOf } from './client'
 import { getT } from '@/i18n/t'
 import { isLuckTimeoutSeconds, isNarrativePerspective, type NarrativePerspective } from '@/lib/game-settings'
+import { AWAY_CONTROL_POLICIES, type AwayControlPolicy } from '@/lib/player-control'
 import { UserFacingError } from '@/lib/user-facing-error'
 
 interface SettingsResponse {
@@ -9,6 +10,7 @@ interface SettingsResponse {
   error_code?: string
   narrative_perspective?: unknown
   luck_timeout_seconds?: unknown
+  away_control_policy?: unknown
 }
 
 function assertSaved(result: SettingsResponse): void {
@@ -47,4 +49,28 @@ export async function setLuckTimeout(
   })
   assertSaved(result)
   return isLuckTimeoutSeconds(result.luck_timeout_seconds) ? result.luck_timeout_seconds : seconds
+}
+
+/**
+ * 房间暂离语义：pause（角色留在原地）/ ai_takeover（交给 AI 临时托管）。
+ * 与视角、幸运超时一样只提交自己这一个字段——房间密码有独立端点，
+ * 绝不能被"顺手一起保存"清空（上游 Web 的同一个弹窗就踩过这个坑）。
+ */
+export async function setAwayControlPolicy(
+  gameKey: string,
+  policy: AwayControlPolicy,
+  signal?: AbortSignal,
+): Promise<AwayControlPolicy> {
+  if (!gameKey.trim() || !(AWAY_CONTROL_POLICIES as readonly string[]).includes(policy)) {
+    throw new UserFacingError('validationFailed')
+  }
+  const result = await api<SettingsResponse>(`/games/${encodeURIComponent(gameKey)}/settings/away-control-policy`, {
+    method: 'POST',
+    body: JSON.stringify({ away_control_policy: policy }),
+    signal,
+  })
+  assertSaved(result)
+  return result.away_control_policy === 'ai_takeover' || result.away_control_policy === 'pause'
+    ? result.away_control_policy
+    : policy
 }

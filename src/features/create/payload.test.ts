@@ -66,6 +66,19 @@ describe('buildCreateRequest /games/create', () => {
     expect(body.players).toHaveLength(1)
   })
 
+  it('每张角色都带控制方式：第一张玩家、其余等待认领，已选的保持不变', () => {
+    const players = [
+      { character_name: 'A', background: '', identity: {}, attributes: {}, skills: [] },
+      { character_name: 'B', background: '', identity: {}, attributes: {}, skills: [] },
+      { character_name: 'C', control: 'ai', background: '', identity: {}, attributes: {}, skills: [] },
+    ]
+    const { body } = buildCreateRequest(baseState({ players }), NOW)
+    expect((body.players as { control: string }[]).map((player) => player.control))
+      .toEqual(['human', 'unclaimed', 'ai'])
+    // 组装是纯函数：不能就地改写向导 state 里的角色对象
+    expect('control' in players[0]).toBe(false)
+  })
+
   it('显式名称优先于世界名；四语名称兜底按游戏语言取对', () => {
     expect(buildCreateRequest(baseState({ name: ' 龙之远征 ' })).body.game_name).toBe('龙之远征')
     expect(buildCreateRequest(baseState({ gameLanguage: 'en', worldName: '' })).body.game_name).toBe('New Adventure')

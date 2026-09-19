@@ -27,6 +27,7 @@ import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import type { GameDetail, Multiplayer } from '@/api/types'
 import { useT } from '@/i18n/t'
+import { readyProgress } from '@/lib/player-control'
 
 interface GmSheetProps {
   detail: GameDetail
@@ -183,10 +184,7 @@ export function GmSheet({
       {showPlayerRoster && multiplayer?.player_count ? (
         <View className="gap-1.5">
           <Text variant="small" className="font-semibold text-muted-foreground">
-            {t('dfPlayPlayerListReady', {
-              ready: multiplayer.ready_count ?? 0,
-              total: multiplayer.player_count,
-            })}
+            {t('dfPlayPlayerListReady', readyProgress(multiplayer))}
           </Text>
           {allPlayers.map((player) => {
             const isAway = multiplayer.away_players?.some((p) => p.user_id === player.user_id)

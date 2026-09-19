@@ -13,6 +13,7 @@ import { Text } from '@/components/ui/text'
 import { CharacterCardEditor } from '@/features/characters/CharacterCardEditor'
 import type { CreateCharacter } from '@/features/create/payload'
 import { useT } from '@/i18n/t'
+import { CARD_CONTROL_LABEL_KEYS, cardControlAt, cycleCardControl } from '@/lib/card-control'
 import type { CharacterCardPatch } from '@/lib/character-card'
 import { cn } from '@/lib/utils'
 
@@ -154,7 +155,17 @@ export function StepCharacters({
                 </Text>
               </View>
             </View>
-            <View className="flex-row gap-1">
+            <View className="flex-row items-center gap-1">
+              {/* 三态循环按钮：控制方式写在角色对象的 control 上，就是创建 payload 里那一个字段 */}
+              <Button
+                size="sm"
+                variant="outline"
+                className="px-2"
+                onPress={() => setPlayers(cycleCardControl(players, index))}
+                accessibilityLabel={t('controlSwitchHint', { mode: t(CARD_CONTROL_LABEL_KEYS[cardControlAt(players, index)]) })}
+              >
+                <Text variant="small">{t(CARD_CONTROL_LABEL_KEYS[cardControlAt(players, index)])}</Text>
+              </Button>
               <Button size="sm" variant="ghost" onPress={() => openEditor(index)} accessibilityLabel={t('edit')}>
                 <Icon as={Pencil} size={15} />
               </Button>

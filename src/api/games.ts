@@ -25,6 +25,7 @@ import type {
   PaymentProposalCreatePayload,
   PaymentProposalCreateResponse,
   PaymentResolveResponse,
+  PlayerControl,
   PlayerCreateResponse,
   PlayerContextResponse,
   PrivateLogResponse,
@@ -34,8 +35,9 @@ import type {
   WorldTemplatesResponse,
 } from './types'
 import { contentLanguage, getT } from '@/i18n/t'
+import { UserFacingError } from '@/lib/user-facing-error'
 import { worldContentLocale } from '@/lib/world-language'
-import { api, apiBlob } from './client'
+import { api, apiBlob, ApiError, errorCodeOf } from './client'
 
 function gamePath(gameKey: string, suffix = ''): string {
   return `/games/${encodeURIComponent(gameKey)}${suffix}`
@@ -332,6 +334,38 @@ export async function setPlayerAway(gameKey: string, userId: string, away: boole
   )
   if (result.ok === false || result.error) throw new Error(result.error ?? '切换暂离状态失败')
   return result.character_name ?? userId
+}
+
+/**
+ * GM 托管控件：把席位交给服务端 AI，或停止托管交回玩家。
+ * 只改控制契约——服务端不复制角色、不动身份绑定、不重置 ready/HP/战斗 actor。
+ * 推进中切换会被拒（409 CONTROL_CHANGE_BUSY），这两个业务码上游未收录进
+ * apiErrors，因此在这里换成移动端自己的文案，而不是退成通用冲突提示。
+ */
+export async function setPlayerControl(
+  gameKey: string,
+  userId: string,
+  mode: 'ai' | 'human',
+): Promise<PlayerControl | undefined> {
+  try {
+    const result = await api<{ ok?: boolean; error?: string; error_code?: string; control?: PlayerControl }>(
+      gamePath(gameKey, `/players/${encodeURIComponent(userId)}/control`),
+      { method: 'POST', body: JSON.stringify({ mode }) },
+    )
+    if (result.ok === false || result.error) {
+      throw new ApiError(result.error || 'control change failed', 200, errorCodeOf(result))
+    }
+    return result.control
+  } catch (error) {
+    throw controlError(error)
+  }
+}
+
+function controlError(error: unknown): unknown {
+  if (!(error instanceof ApiError)) return error
+  if (error.code === 'CONTROL_CHANGE_BUSY') return new UserFacingError('dfPlayControlBusy')
+  if (error.code === 'CONTROL_REJECTED') return new UserFacingError('dfPlayControlRejected')
+  return error
 }
 
 export async function kickPlayer(gameKey: string, userId: string): Promise<void> {

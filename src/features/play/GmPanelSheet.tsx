@@ -1,3 +1,4 @@
+import * as React from 'react'
 import { Share } from 'react-native'
 import Clipboard from '@react-native-clipboard/clipboard'
 
@@ -13,6 +14,7 @@ import { HealthPanel } from '@/features/play/HealthPanel'
 import { MultiplayerPanel } from '@/features/play/MultiplayerPanel'
 import { useT } from '@/i18n/t'
 import { confirmDestructive } from '@/lib/confirm'
+import { awayControlPolicy } from '@/lib/player-control'
 import { buildShareLink } from '@/lib/share-link'
 import { shareExportBlob } from '@/lib/share-export'
 import { useGameStore } from '@/stores/game'
@@ -77,6 +79,8 @@ export function GmPanelSheet({
   onOpenPaymentComposer,
 }: GmPanelSheetProps) {
   const t = useT()
+  // 控制权切换请求在途的席位：只用于列表上的「AI 正在接管…」提示。
+  const [hostingUid, setHostingUid] = React.useState('')
 
   // 服务端对暂停局/空行动局等场景返回 200 + ok:false + narration，
   // 统一透传成 toast，避免误以为点了没反应（与 GameScreen 同款）。
@@ -191,10 +195,27 @@ export function GmPanelSheet({
   }
 
   async function handleSetAway(uid: string, away: boolean) {
+    // 房间策略是「交给 AI 临时托管」时，点暂离会立刻转成 AI 接管，
+    // 列表先给出接管中的提示，省得这段等待看起来像没反应。
+    const handsOverToAi = away && awayControlPolicy(detail) === 'ai_takeover'
+    if (handsOverToAi) setHostingUid(uid)
     try {
       await useGameStore.getState().setAway(uid, away)
     } catch {
       // 错误由 store 处理
+    } finally {
+      setHostingUid('')
+    }
+  }
+
+  async function handleSetControl(uid: string, mode: 'ai' | 'human') {
+    if (mode === 'ai') setHostingUid(uid)
+    try {
+      await useGameStore.getState().setControl(uid, mode)
+    } catch {
+      // 错误由 store 处理
+    } finally {
+      setHostingUid('')
     }
   }
 
@@ -304,7 +325,9 @@ export function GmPanelSheet({
             currentUserId={currentUserId}
             onKick={(uid) => void handleKick(uid)}
             onSetAway={(uid, away) => void handleSetAway(uid, away)}
+            onSetControl={(uid, mode) => void handleSetControl(uid, mode)}
             onCopyLink={(uid) => void handleCopyLink(uid)}
+            hostingUid={hostingUid}
           />
         </TabsContent>
         <TabsContent value="health" className="min-h-0 flex-1 pt-2">
