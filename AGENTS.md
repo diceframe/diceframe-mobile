@@ -82,8 +82,11 @@ src/
    - DiceFrame 的组合与定制放 `src/components/patterns` 或对应 feature 目录。
 6. **所有面向用户的文案走 i18n**（react-i18next，zh-CN / en / ja / de 四语，`src/i18n/`）：
    - 上游镜像段 `src/i18n/messages/web/`：与主仓库 `frontend-v2/src/i18n/messages/` 同步，
-     机械差异仅两处：插值 `{x}` 已转 i18next 的 `{{x}}`；上游嵌套对象 apiErrors 已拍平为
-     `'apiErrors.xxx'` 扁平 key（移动端 `keySeparator: false` 取不到嵌套 key）；
+     同步跑 `node scripts/sync-upstream-i18n.mjs`（读 `../diceframe/frontend-v2`，别手改镜像文件），
+     机械差异仅三处：插值 `{x}` 已转 i18next 的 `{{x}}`；上游嵌套对象 apiErrors 已拍平为
+     `'apiErrors.xxx'` 扁平 key（移动端 `keySeparator: false` 取不到嵌套 key）；上游某语言
+     漏译的 key 在文末以英文值补齐（`messages.test.ts` 的四语 key 集合一致是同步截断探针，
+     不能为上游漏译放宽；i18next 运行时本就回退英文，上游补上翻译后重拷即自然消失）；
    - 移动端自有文案按功能簇放 `src/i18n/messages/mobile/*.ts`（zh/en/ja/de 四块并列）：
      key 必须加 `df` 前缀、四语 key 集合必须一致、不得与上游 key 重名（`messages.test.ts` 兜底）；
    - 上游已有且语义一致的词直接复用上游 key（cancel/delete/roomPassword 等），不要重复建 df key；
