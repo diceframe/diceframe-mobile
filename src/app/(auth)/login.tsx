@@ -114,11 +114,10 @@ export default function LoginScreen() {
       // 一次提交完成“探测 + 校验”：先拿服务器配置判断是否设了访问密码，
       // 设了才校验密码；没设密码的服务器填不填都能直接进
       const config = await fetchAppConfig()
-      // 双向版本兼容：App 过旧或服务器过旧都在门口拦下（旧服务器无版本字段则放行）
+      // 双向版本兼容：App 过旧或服务器过旧都在门口拦下（拿不到版本号按服务器过旧处理）
       const compat = checkServerCompatibility(config)
-      if (compat === 'app-too-old' || compat === 'server-too-old') {
-        throw new ServerCompatBlocked(compat, config)
-      }
+      // 非 ok 一律拦下：判定结论以后再加一种也默认是阻断，不会悄悄放行
+      if (compat !== 'ok') throw new ServerCompatBlocked(compat, config)
       const needsPassword = !!config.access_password?.configured
       if (needsPassword) {
         if (!password) throw new UserFacingError('dfLoginPasswordRequired')
@@ -174,9 +173,8 @@ export default function LoginScreen() {
       // 双向版本兼容与手填登录同一道门槛：不兼容就别把凭据兑出来
       const config = await fetchAppConfig()
       const compat = checkServerCompatibility(config)
-      if (compat === 'app-too-old' || compat === 'server-too-old') {
-        throw new ServerCompatBlocked(compat, config)
-      }
+      // 非 ok 一律拦下：判定结论以后再加一种也默认是阻断，不会悄悄放行
+      if (compat !== 'ok') throw new ServerCompatBlocked(compat, config)
       // 设备名只用于 Web 设置页的设备清单展示，方便 GM 认出该吊销哪一台
       const deviceToken = await claimPairingCode(
         parsed.code,

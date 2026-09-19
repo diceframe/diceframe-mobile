@@ -113,11 +113,10 @@ export default function JoinScreen() {
         },
       })
       // 双向版本兼容：先于对局详情探测，不兼容直接拦在链接解析这一步
-      // （旧服务器无版本字段则放行；探测失败按 joinGame 的既有错误路径走）
+      // （拿不到版本号按服务器过旧拦下；探测失败按 joinGame 的既有错误路径走）
       const probe = await fetchServerCompat()
-      if (probe.status === 'app-too-old' || probe.status === 'server-too-old') {
-        throw new ServerCompatBlocked(probe.status, probe.config)
-      }
+      // 非 ok 一律拦下：判定结论以后再加一种也默认是阻断，不会悄悄放行
+      if (probe.status !== 'ok') throw new ServerCompatBlocked(probe.status, probe.config)
       const gameDetail = await fetchGameDetail(result.game)
       if (!mountedRef.current) return
       setParsed(result)

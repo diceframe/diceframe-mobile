@@ -3,8 +3,8 @@
  *
  * 覆盖「连接建立之后服务器才升级」的场景——登录/切换/加入三个入口都有
  * 阻断检查，但用户下次打开 App 时往往直接进大厅/对局，不经过任何入口。
- * 探测失败（离线/网络抖动/旧服务器无版本字段）一律静默：这是补充提醒，
- * 不能变成正常启动的阻碍。
+ * 探测失败（离线/网络抖动）一律静默：这是补充提醒，不能变成正常启动的阻碍；
+ * 探测成功但版本不匹配则提示，其中"拿不到版本号"按服务器过旧处理。
  */
 import * as React from 'react'
 import { Alert } from 'react-native'
@@ -27,7 +27,7 @@ export function useServerCompatCheck(): void {
     fetchServerCompat()
       .then((probe) => {
         if (!active) return
-        if (probe.status !== 'app-too-old' && probe.status !== 'server-too-old') return
+        if (probe.status === 'ok') return
         const t = getT()
         Alert.alert(t('dfServerCompatTitle'), serverCompatErrorText(probe.status, probe.config), [
           { text: t('dfServerCompatConfirm') },

@@ -55,11 +55,10 @@ export default function ServerSettingsScreen() {
       }
       configureApiClient({ baseUrl: url, token: null, share: null, sessionToken: generateSessionToken() })
       const config = await fetchAppConfig()
-      // 双向版本兼容：App 过旧或服务器过旧都不得切换过去（旧服务器无版本字段则放行）
+      // 双向版本兼容：App 过旧或服务器过旧都不得切换过去（拿不到版本号按服务器过旧处理）
       const compat = checkServerCompatibility(config)
-      if (compat === 'app-too-old' || compat === 'server-too-old') {
-        throw new ServerCompatBlocked(compat, config)
-      }
+      // 非 ok 一律拦下：判定结论以后再加一种也默认是阻断，不会悄悄放行
+      if (compat !== 'ok') throw new ServerCompatBlocked(compat, config)
       const needsPassword = !!config.access_password?.configured
       const saved = snapshot.serverPasswords[url] ?? ''
       if (needsPassword && !saved) {

@@ -30,7 +30,7 @@ export function checkServerCompatibility(config: AppConfig): ServerCompatStatus 
  */
 export class ServerCompatBlocked extends Error {
   constructor(
-    public readonly status: Exclude<ServerCompatStatus, 'ok' | 'unknown'>,
+    public readonly status: Exclude<ServerCompatStatus, 'ok'>,
     public readonly config: AppConfig,
   ) {
     super(`server incompatible: ${status}`)
@@ -52,7 +52,7 @@ export async function fetchServerCompat(): Promise<ServerCompatProbe> {
 
 /** 不兼容提示正文（带双方版本号插值）；只在 app-too-old / server-too-old 时调用 */
 export function serverCompatErrorText(
-  status: Exclude<ServerCompatStatus, 'ok' | 'unknown'>,
+  status: Exclude<ServerCompatStatus, 'ok'>,
   config: AppConfig,
 ): string {
   const t = getT()

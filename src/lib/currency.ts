@@ -13,7 +13,9 @@
  * display.rate 能有限十进制表示时用 display 单位，否则回退 base unit，
  * 免得输入框里出现解析不回去的小数。
  *
- * 上游未提供 currency_system 的老规则（cs 为空）按 rate=1 处理，等于旧行为。
+ * 支持的服务器一定下发 `rule_meta.currency_system`（legacy 规则由服务端归一成
+ * rate=1 的 spec），所以 cs 为空只会出现在规则尚未加载完的一瞬间；此时按 rate=1
+ * 处理只是过渡显示，不是对旧服务器的降级。
  */
 import type { CharacterSheet, CurrencySystem, CurrencyUnit } from '@/api/types'
 

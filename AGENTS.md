@@ -102,7 +102,8 @@ src/
     （25 美分存 25），页面禁止自己 `/100`、`*100` 或直接渲染 `gold`：展示用
     `formatCurrencyAmount`，输入框初值用 `currencyAmountToInputText`，回写用
     `parseCurrencyInput`（换不出整数基础单位要报错，不许静默改额）。规则的
-    `currency_system` 来自 `RuleMeta`，缺省（老规则）按 rate=1 处理。
+    `currency_system` 来自 `RuleMeta`，服务端对 legacy 规则也会归一成 rate=1 的 spec，
+    所以客户端拿到空值只意味着规则还没加载完，不是"老规则没有货币结构"。
 
 ## 平台与构建注意
 
@@ -127,6 +128,10 @@ src/
 
 ## 配置版本边界
 
+- **最低服务器版本写死在 `src/lib/version-compat.ts` 的 `APP_MIN_SERVER_VERSION`（当前 2.6.1）。**
+  不为旧服务器写降级分支：缺字段时界面会给出错误的事实（余额按基础单位整数显示、
+  AI 托管席位被当成真人等待），这比少一个功能糟糕得多。需要新契约就抬高这个常量，
+  并同步 README；判定不是 `ok` 的一律在连接入口阻断，不存在"版本未知就放行"这条路。
 - 跟随上游仅支持共享服务商目录 `ai_providers` 与能力级 `*_provider_ref`，不读取旧能力级直填地址或密钥，不恢复旧配置兜底。
 - ASR、OpenAI-compatible / GPT-SoVITS TTS 的可用性须确认引用在目录中存在且服务商地址非空；本地服务商允许空密钥。Edge TTS 与设备系统朗读无需服务商引用。
 - 本地身份统一使用 `shares` + `activeShareGame`，不恢复单份 `share` 持久化或旧迁移函数；API client 的当前请求身份仍按现有会话契约注入。

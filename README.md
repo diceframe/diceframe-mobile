@@ -92,6 +92,9 @@ Expo Web 页面与后端不同源，浏览器会按 CORS 拦截 API/SSE 请求�
 
 - 服务端与 Web 端位于 [diceframe/diceframe](https://github.com/diceframe/diceframe)
 - 后端零改动，移动端通过 REST + SSE 契约连接 DiceFrame 服务端
+- **最低服务器版本 2.6.1**（`src/lib/version-compat.ts` 的 `APP_MIN_SERVER_VERSION`）：
+  席位控制、货币 V2、扫码登录的配对端点都只在 2.6.1+ 存在。移动端不做跨版本降级——
+  低于它、或压根不下发 `server_version` 的服务器，在登录/切换/加入时直接提示升级服务器
 - **类型契约**：`src/api/types.ts` 是主仓库 `frontend-v2/src/api/types.ts` 的 v1 子集副本，
   后端字段变更时两处同步
 - v1 不含：创建向导、AI 服务商设置、世界书/记忆/规则编辑、角色卡库、P2P 直连、
