@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Modal, Pressable, View } from 'react-native'
+import { Modal, Platform, Pressable, View } from 'react-native'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { X } from 'lucide-react-native'
 
@@ -16,6 +16,12 @@ import { useThemeToken } from '@/lib/theme'
  *
  * 扫到即回调并自锁（scannedRef）：CameraView 在同一张码上会持续回调，不自锁会
  * 把同一个一次性配对码兑换多次——第二次必然 401，反而把成功的那次盖成错误。
+ *
+ * Android 不播退场动画：RN 的 Modal 在 `visible` 变 false 的那一帧就 `render()`
+ * 返回 null（`_shouldShowModal` 只有 iOS 会等 dismiss 回调），children 立刻被卸掉，
+ * 而原生对话框还在播退场动画。于是相机的 SurfaceView 先消失、露出底下的登录页，
+ * 取景框这些普通 View 才慢半拍滑下去——一个撕开的动画比没有动画更糟。iOS 会保留
+ * children 到 dismiss，slide 是完整的，照播。
  */
 export function QrScannerSheet({
   visible,
@@ -57,7 +63,12 @@ export function QrScannerSheet({
   const granted = permission?.granted === true
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+    <Modal
+      visible={visible}
+      animationType={Platform.OS === 'android' ? 'none' : 'slide'}
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
       <View className="flex-1 bg-black">
         {granted ? (
           <CameraView
