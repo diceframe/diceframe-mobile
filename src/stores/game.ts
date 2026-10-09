@@ -9,14 +9,26 @@
  */
 import { create } from 'zustand'
 
-import { ApiError, buildUrl, currentSessionToken, currentShare, currentToken, errorMessage, fetchAppConfig } from '@/api/client'
+import {
+  ApiError,
+  buildUrl,
+  currentSessionToken,
+  currentShare,
+  currentToken,
+  errorMessage,
+  fetchAppConfig,
+  hasSeatToken,
+  retryOnRateLimit,
+} from '@/api/client'
 import { askKpQuestion, canAskKpQuestion, fetchTableTalk, isTableTalkUnsupported, type KpQuestionVisibility } from '@/api/table-talk'
 import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
 import { asrAvailable, serverTtsAvailable } from '@/lib/speech-config'
 import {
+  adoptCharacterCard,
   advanceGame,
   allocateCharacterPoints,
   claimGm,
+  claimSeatToken,
   createPaymentProposal,
   fetchCharacters,
   fetchCharacterCards,
@@ -36,7 +48,6 @@ import {
   resetGame,
   restartGame,
   rollbackGame,
-  selectCharacterCard,
   sendPrivateMessage,
   setPlayerAccess,
   setPlayerAway,
@@ -76,6 +87,8 @@ import {
   type StreamStatus,
 } from '@/stream/gameStream'
 import { hasNewRound } from '@/lib/game-state'
+import { isStoredPlayerMember } from '@/lib/player-identity'
+import { isFinalClaimFailure } from '@/lib/seat-credentials'
 import { buildLevelUpAttributes } from '@/lib/level-up'
 import { UserFacingError } from '@/lib/user-facing-error'
 import { mergePendingLuck } from '@/lib/check-details'
@@ -122,6 +135,11 @@ interface GameStore {
   /** 翻页加载更早回合的加载态（时间线页脚转圈用） */
   loadingOlderLog: boolean
   health: HealthResponse | null
+  /**
+   * 玩家模式下本设备没有、也领不到本席位的凭证（claim 被明确拒绝）：
+   * 只能靠 GM 的接管链接回来，对局页据此清身份并回加入页说明原因。
+   */
+  seatCredentialLost: boolean
 
   enter: (gameKey: string) => void
   leave: () => void
@@ -195,6 +213,7 @@ const initial = {
   actionBusy: false,
   gmBusy: false,
   health: { events: [] },
+  seatCredentialLost: false,
 } satisfies Partial<GameStore>
 
 export const useGameStore = create<GameStore>((set, get) => {
@@ -362,6 +381,26 @@ export const useGameStore = create<GameStore>((set, get) => {
       } catch {
         // 404=存档没有可恢复的 GM 身份（纯玩家分享局）；其余失败不阻断入局
       }
+    } else if (!currentToken() && !hasSeatToken(gameKey)) {
+      // 分享玩家靠席位凭证行动。席位凭证上线前加入的玩家，本机会话仍绑着席位：
+      // 一次性领取该席位的第一枚凭证（对齐 Web ensureSeatToken）。Owner 预览不走这里。
+      const controller = new AbortController()
+      claimController = controller
+      claimTimer = setTimeout(() => controller.abort(), 15000)
+      try {
+        const token = await retryOnRateLimit(() => claimSeatToken(gameKey, controller.signal))
+        if (!isCurrent(gameKey, version) || suspended) return
+        const settings = useSettingsStore.getState()
+        settings.storeSeatToken(settings.baseUrl, gameKey, token)
+      } catch (error) {
+        if (!isCurrent(gameKey, version) || suspended) return
+        if (error instanceof ApiError && isFinalClaimFailure(error)) {
+          // 席位已有别处的凭证 / 会话没绑席位：只有 GM 的接管链接能把本设备带回来
+          set({ seatCredentialLost: true, streamStatus: 'idle' })
+          return
+        }
+        // 断网、限流、旧服务端没有该端点：不下结论，继续按 ?user= 回退
+      }
     }
 
     if (!isCurrent(gameKey, version) || suspended) return
@@ -439,8 +478,11 @@ export const useGameStore = create<GameStore>((set, get) => {
         // 第一页满员后长度不再增长，须按最新条目的 round 判断。
         const clearNarration = hasNewRound(previousLog, newLog)
         const runChanged = !!previousDetail?.run_id && previousDetail.run_id !== detail.run_id
-        const playerRemoved = !isGm && !!get().userId
-          && !(characters.players ?? []).some((player) => player.user_id === get().userId)
+        // 成员资格以 detail.viewer 为准（访客只拿到大厅视图与规则投影，玩家名单为空）；
+        // 没有 viewer 的旧服务端才回退到角色名单
+        const playerRemoved = !isGm && !!get().userId && (detail.viewer
+          ? !isStoredPlayerMember(detail, get().userId)
+          : !(characters.players ?? []).some((player) => player.user_id === get().userId))
         if (runChanged || playerRemoved) clearTableTalk()
         if (playerRemoved) set({ tableTalkError: errorMessage(new ApiError('Player required', 403, 'PLAYER_NOT_IN_GAME')) })
         set({
@@ -825,7 +867,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       if (!gameKey || !userId) return
       set({ gmBusy: true })
       try {
-        await selectCharacterCard(gameKey, userId, card)
+        await adoptCharacterCard(gameKey, userId, card)
         if (get().gameKey === gameKey) await get().refresh()
       } catch (error) {
         if (get().gameKey === gameKey) set({ error: errorMessage(error) })

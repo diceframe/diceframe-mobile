@@ -1,23 +1,36 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildShareLink, parseShareLink } from './share-link'
+import { buildShareLink, parseShareLink, redactShareLink } from './share-link'
 
 describe('parseShareLink', () => {
-  it('解析 hash 路由分享链接', () => {
+  it('解析 hash 路由分享链接；只带公开 uid 的旧接管链接标为 legacyUser', () => {
     const result = parseShareLink('http://192.168.1.5:18000/#/play?game=abc&user=u1&share=1&name=骑士')
     expect(result).toEqual({
       baseUrl: 'http://192.168.1.5:18000',
       game: 'abc',
-      user: 'u1',
+      legacyUser: 'u1',
       name: '骑士',
       delegate: undefined,
     })
   })
 
-  it('解析 join 链接（无 user，需新建角色）', () => {
+  it('解析 join 链接（无凭证，需新建角色）', () => {
     const result = parseShareLink('http://h:9876/#/join?game=xyz&share=1')
     expect(result?.game).toBe('xyz')
-    expect(result?.user).toBeUndefined()
+    expect(result?.seat).toBeUndefined()
+    expect(result?.legacyUser).toBeUndefined()
+  })
+
+  it('解析 GM 接管链接的席位凭证（hash 路由 seat=），有凭证时不算旧链接', () => {
+    const result = parseShareLink('http://h:18000/#/join?game=abc&share=1&seat=T0k3n%2B%2F&user=u1')
+    expect(result?.seat).toBe('T0k3n+/')
+    expect(result?.legacyUser).toBeUndefined()
+    expect(parseShareLink('http://h:18000/#/join?game=abc&seat=%20%20')?.seat).toBeUndefined()
+  })
+
+  it('接管链接指向独立前端时，凭证归属 server 参数指定的后端', () => {
+    const result = parseShareLink('https://evil.example/#/join?game=abc&seat=S&server=nas.local:18000')
+    expect(result).toMatchObject({ baseUrl: 'http://nas.local:18000', seat: 'S' })
   })
 
   it('无协议时补 http', () => {
@@ -27,7 +40,7 @@ describe('parseShareLink', () => {
   })
 
   it('search 参数形式也可解析', () => {
-    expect(parseShareLink('http://h:18000/?game=abc&user=u1')?.user).toBe('u1')
+    expect(parseShareLink('http://h:18000/?game=abc&user=u1')?.legacyUser).toBe('u1')
   })
 
   it('保留同源反向代理路径作为 API 基址', () => {
@@ -56,9 +69,10 @@ describe('buildShareLink', () => {
     expect(link).toBe('http://server.com/#/join?game=game123&share=1')
   })
 
-  it('构建带用户 ID 的分享链接', () => {
-    const link = buildShareLink('game123', 'http://server.com', 'user456')
-    expect(link).toBe('http://server.com/#/join?game=game123&share=1&user=user456')
+  it('构建带席位凭证的接管链接（不再带公开 uid），可被解析回来', () => {
+    const link = buildShareLink('game123', 'http://server.com', 'tok+/=')
+    expect(link).toBe('http://server.com/#/join?game=game123&share=1&seat=tok%2B%2F%3D')
+    expect(parseShareLink(link)?.seat).toBe('tok+/=')
   })
 
   it('在独立前端场景携带规范化后的后端地址', () => {
@@ -71,5 +85,20 @@ describe('buildShareLink', () => {
   it('无 baseUrl 时也不生成相对链接', () => {
     const link = buildShareLink('game123')
     expect(link).toBe('http://localhost/#/join?game=game123&share=1')
+  })
+})
+
+describe('redactShareLink', () => {
+  it('从可见链接里剥掉 seat 参数，其余参数与顺序不变', () => {
+    expect(redactShareLink('http://h/#/join?game=a&seat=SECRET&share=1')).toBe('http://h/#/join?game=a&share=1')
+    expect(redactShareLink('http://h/#/join?seat=SECRET&game=a')).toBe('http://h/#/join?game=a')
+    expect(redactShareLink('http://h/#/join?game=a&share=1&seat=SECRET')).toBe('http://h/#/join?game=a&share=1')
+    expect(redactShareLink('http://h/?SEAT=x&game=a#/join?game=a&seat=y')).toBe('http://h/?game=a#/join?game=a')
+  })
+
+  it('没有凭证的链接原样返回', () => {
+    const link = 'http://h/#/join?game=a&share=1&server=http%3A%2F%2Fnas'
+    expect(redactShareLink(link)).toBe(link)
+    expect(redactShareLink('http://h/#/join?game=a&seats=1')).toBe('http://h/#/join?game=a&seats=1')
   })
 })

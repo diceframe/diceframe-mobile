@@ -10,14 +10,31 @@
  * 契约要点（与服务端 web_server.py / src/webui 对齐）：
  * - 非 GET 请求必须带 `X-TRPG-Confirm: true`（_require_confirmed_request）。
  * - 429 响应携带 retry_after（abuse-guard 限流）。
- * - 玩家分享链接鉴权：query 参数 game/user/name/share/delegate/room_token。
+ * - 玩家分享链接鉴权：query 参数 game/name/share/delegate 声明分享模式；席位身份走
+ *   `X-Seat-Token` 请求头，房间密码令牌走 `X-Room-Token` 请求头（见 lib/seat-credentials）。
+ *   `?user=` 只在 Owner 预览或尚未持有席位凭证时下发（无访问密码 / 旧服务端的回退）。
  */
+
+import { getRandomValues } from 'expo-crypto'
 
 import { getT } from '@/i18n/t'
 import type { TKey } from '@/i18n/keyset'
+import {
+  ROOM_TOKEN_HEADER,
+  SEAT_TOKEN_HEADER,
+  gameKeyOfApiPath,
+  isDelegateFlag,
+  readCredential,
+  withoutRoomToken,
+  withoutSeatToken,
+  type CredentialSlots,
+} from '@/lib/seat-credentials'
 import { UserFacingError } from '@/lib/user-facing-error'
 
 export class ApiError extends Error {
+  /** 403 且服务端声明 needs_room_password：房间令牌缺失/过期/改密吊销，需要重新输入房间密码 */
+  needsRoomPassword = false
+
   constructor(
     message: string,
     public status: number,
@@ -41,13 +58,23 @@ export function errorCodeOf(data: unknown): string | undefined {
   return undefined
 }
 
-/** 玩家分享链接身份（JoinView 解析自 Web 分享链接） */
+/**
+ * 玩家分享链接身份（JoinView 解析自 Web 分享链接）。
+ * user 是席位的公开 uid（展示与 game store 用），不是凭证；席位凭证与房间令牌
+ * 只放在 ApiContext.credentials 里，按后端地址 + gameKey 分槽。
+ */
 export interface ShareIdentity {
   game: string
   user: string
   name?: string
   delegate?: string
-  roomToken?: string
+}
+
+/** 服务端拒绝了本机保存的分享凭证：调用方据此清身份/回加入页（client 已先从内存移除） */
+export interface ShareCredentialRejection {
+  kind: 'seat' | 'room'
+  baseUrl: string
+  game: string
 }
 
 interface ApiContext {
@@ -63,10 +90,13 @@ interface ApiContext {
    * Set-Cookie + 浏览器 cookie jar 自动管理（与 frontend-v2 一致）。
    */
   sessionToken: string | null
+  /** 分享凭证槽位（席位凭证 / 房间令牌），键 = credentialKey(baseUrl, gameKey) */
+  credentials: CredentialSlots
   onUnauthorized?: () => void
+  onShareCredentialRejected?: (rejection: ShareCredentialRejection) => void
 }
 
-const context: ApiContext = { baseUrl: '', token: null, share: null, sessionToken: null }
+const context: ApiContext = { baseUrl: '', token: null, share: null, sessionToken: null, credentials: {} }
 
 export function configureApiClient(patch: Partial<ApiContext>): void {
   Object.assign(context, patch)
@@ -84,13 +114,39 @@ export function currentSessionToken(): string | null {
   return context.sessionToken
 }
 
-/** 生成 32 位 hex 会话 token（与服务端 uuid4().hex 同格式） */
-export function generateSessionToken(): string {
-  let token = ''
-  for (let i = 0; i < 32; i++) {
-    token += Math.floor(Math.random() * 16).toString(16)
+/** 当前后端上是否持有该局的席位凭证（不暴露明文；claim 流程据此判断是否需要换取） */
+export function hasSeatToken(gameKey: string): boolean {
+  return !!readCredential(context.credentials, context.baseUrl, gameKey).seat
+}
+
+/** 当前后端上是否持有该局的房间令牌（加入页据此决定是否先要房间密码） */
+export function hasRoomToken(gameKey: string): boolean {
+  return !!readCredential(context.credentials, context.baseUrl, gameKey).room
+}
+
+/**
+ * 「进入对局」类幂等写请求遇到短时限流（429 + Retry-After）时等待后重试一次
+ * （对齐 Web retryOnRateLimit）：同桌玩家常共用一个公网 IP，短暂的写配额不该把人卡在
+ * 加入页。只用于重复执行无副作用的请求（找回席位、领取首枚凭证）。
+ */
+export async function retryOnRateLimit<T>(request: () => Promise<T>, maxWaitSeconds = 10): Promise<T> {
+  try {
+    return await request()
+  } catch (error) {
+    const wait = error instanceof ApiError && error.status === 429 ? Number(error.retryAfter || 0) : 0
+    if (!wait || wait > maxWaitSeconds) throw error
+    await new Promise((resolve) => setTimeout(resolve, wait * 1000))
+    return await request()
   }
-  return token
+}
+
+/**
+ * 生成 32 位 hex 会话 token（与服务端 uuid4().hex 同格式）。
+ * 会话 token 绑定席位/GM 身份，必须用密码学安全随机源（expo-crypto；Math.random 可预测）。
+ */
+export function generateSessionToken(): string {
+  const bytes = getRandomValues(new Uint8Array(16))
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
 function ensureSessionToken(): string {
@@ -116,28 +172,46 @@ export function normalizeBaseUrl(input: string): string {
   }
 }
 
+/**
+ * 分享模式下是否下发公开 uid（对齐 Web shareQuery 的 sendUser）：
+ * Owner 预览/代操作要指名席位；持有席位凭证的玩家只凭请求头证明身份，
+ * 不再把 uid 放进 URL。没有凭证时保留 `?user=`——无访问密码的服务端与
+ * 席位凭证上线前的旧服务端仍按它识别玩家。
+ */
+function sendsShareUser(share: ShareIdentity): boolean {
+  return !!context.token || !hasSeatToken(share.game)
+}
+
+/** 分享模式下由身份统一接管的 query 字段：业务 query 与 path 里的同名值一律丢弃 */
+const SHARE_QUERY_KEYS = ['game', 'user', 'name', 'share', 'delegate', 'room_token'] as const
+
 /** 玩家模式下需要拼到 /games/... 请求上的 query 参数（对齐 Web shareQuery） */
 export function shareQuery(): URLSearchParams | null {
   const share = context.share
   if (!share) return null
   const q = new URLSearchParams()
   q.set('game', share.game)
-  q.set('user', share.user)
+  if (share.user && sendsShareUser(share)) q.set('user', share.user)
   if (share.name) q.set('name', share.name)
   q.set('share', '1')
   if (share.delegate) q.set('delegate', share.delegate)
-  if (share.roomToken) q.set('room_token', share.roomToken)
   return q
 }
 
-export function buildUrl(path: string, extra?: URLSearchParams): string {
+/**
+ * 拼完整 API 地址。extra 覆盖 path 里的同名 query；drop 里的字段先从 path 自带的
+ * query 中删除（分享身份接管的字段，防止 path 里旧的 user/room_token 漏出去）。
+ */
+export function buildUrl(path: string, extra?: URLSearchParams, drop: readonly string[] = []): string {
   const normalized = path.startsWith('/') ? path : `/${path}`
-  if (!extra?.size) return `${context.baseUrl}/api${normalized}`
+  if (!extra?.size && !drop.length) return `${context.baseUrl}/api${normalized}`
   const queryIndex = normalized.indexOf('?')
   const pathname = queryIndex < 0 ? normalized : normalized.slice(0, queryIndex)
   const q = new URLSearchParams(queryIndex < 0 ? '' : normalized.slice(queryIndex + 1))
-  extra.forEach((value, key) => q.set(key, value))
-  return `${context.baseUrl}/api${pathname}?${q.toString()}`
+  for (const key of drop) q.delete(key)
+  extra?.forEach((value, key) => q.set(key, value))
+  const query = q.toString()
+  return `${context.baseUrl}/api${pathname}${query ? `?${query}` : ''}`
 }
 
 export function buildStaticAssetUrl(path: string): string {
@@ -164,24 +238,57 @@ function isRawBody(body: unknown): body is RawBody {
   )
 }
 
-function buildHeaders(init: RequestInit, anonymous = false): Headers {
+/**
+ * 席位凭证：只给玩家模式（有分享身份、非 Owner、非 delegate 代操作）下、
+ * 当前后端上该请求所属对局的凭证。Owner/GM 自己的请求一律不隐式带——
+ * 它们以 GM 身份执行，预览席位靠 `?user=` 指名。
+ */
+function applySeatTokenHeader(headers: Headers, path: string): void {
+  if (headers.has(SEAT_TOKEN_HEADER) || context.token) return
+  const share = context.share
+  if (!share || isDelegateFlag(share.delegate)) return
+  const token = readCredential(context.credentials, context.baseUrl, gameKeyOfApiPath(path)).seat
+  if (token) headers.set(SEAT_TOKEN_HEADER, token)
+}
+
+/** 房间令牌只走请求头（不进 URL/访问日志），且只发给签发它的那台后端上的那一局 */
+function applyRoomTokenHeader(headers: Headers, path: string): void {
+  if (headers.has(ROOM_TOKEN_HEADER)) return
+  const token = readCredential(context.credentials, context.baseUrl, gameKeyOfApiPath(path)).room
+  if (token) headers.set(ROOM_TOKEN_HEADER, token)
+}
+
+function buildHeaders(init: RequestInit, anonymous: boolean, path: string): Headers {
   const headers = new Headers(init.headers)
   const rawBody = isRawBody(init.body)
   if (!rawBody && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
-  if (!anonymous && context.token) headers.set('Authorization', `Bearer ${context.token}`)
-  // Web 浏览器会静默丢弃 JS 设置的 Cookie 头，交给服务端 Set-Cookie +
-  // cookie jar 自动管理；不引入 react-native 依赖以保证 node 测试环境可用
-  if (!anonymous && typeof document === 'undefined' && !headers.has('Cookie')) {
-    headers.set('Cookie', `trpg_session=${ensureSessionToken()}`)
+  if (anonymous) {
+    // 匿名探测（公开配置等）不得带出任何实例凭据，包括调用方显式塞进来的分享凭证
+    headers.delete(SEAT_TOKEN_HEADER)
+    headers.delete(ROOM_TOKEN_HEADER)
+  } else {
+    if (context.token) headers.set('Authorization', `Bearer ${context.token}`)
+    // Web 浏览器会静默丢弃 JS 设置的 Cookie 头，交给服务端 Set-Cookie +
+    // cookie jar 自动管理；不引入 react-native 依赖以保证 node 测试环境可用
+    if (typeof document === 'undefined' && !headers.has('Cookie')) {
+      headers.set('Cookie', `trpg_session=${ensureSessionToken()}`)
+    }
+    applySeatTokenHeader(headers, path)
+    applyRoomTokenHeader(headers, path)
   }
   if (init.method && init.method !== 'GET') headers.set('X-TRPG-Confirm', 'true')
   return headers
 }
 
-function retryAfterOf(data: unknown): number | undefined {
+function retryAfterOf(data: unknown, response?: Response): number | undefined {
   const payload = data && typeof data === 'object' ? (data as Record<string, unknown>) : {}
-  const seconds = Number(payload.retry_after)
-  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : undefined
+  // 正文 retry_after 优先；限流中间件同时下发标准 Retry-After 头（秒），作兜底
+  for (const raw of [payload.retry_after, response?.headers.get('Retry-After')]) {
+    if (raw === null || raw === undefined || raw === '') continue
+    const seconds = Number(raw)
+    if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds)
+  }
+  return undefined
 }
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
@@ -193,10 +300,35 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
   }
 }
 
-function errorFrom(data: Record<string, unknown>, status: number): ApiError {
+function errorFrom(data: Record<string, unknown>, status: number, response?: Response): ApiError {
   const message =
     typeof data.error === 'string' && data.error ? data.error : `HTTP ${status}`
-  return new ApiError(message, status, errorCodeOf(data), retryAfterOf(data))
+  const error = new ApiError(message, status, errorCodeOf(data), retryAfterOf(data, response))
+  error.needsRoomPassword = status === 403 && data.needs_room_password === true
+  return error
+}
+
+/**
+ * 服务端拒绝了本机保存的分享凭证（对齐 Web handleRejectedSeatToken / RoomToken）：
+ * - 401 SEAT_TOKEN_INVALID：席位凭证被 GM 重新签发或席位已移除；
+ * - 403 needs_room_password：房间令牌过期或 GM 改了房间密码。
+ * 先从内存槽位移除，避免后续请求继续带着失效凭证，再交给路由层清持久化/回加入页。
+ * Owner 请求不走这里：它从不隐式携带席位凭证，也不受房间密码约束。
+ */
+function noteRejectedCredential(path: string, error: ApiError): void {
+  if (context.token) return
+  const game = gameKeyOfApiPath(path)
+  if (!game) return
+  const baseUrl = context.baseUrl
+  let kind: ShareCredentialRejection['kind'] | null = null
+  if (error.status === 401 && error.code === 'SEAT_TOKEN_INVALID') {
+    kind = 'seat'
+    context.credentials = withoutSeatToken(context.credentials, baseUrl, game)
+  } else if (error.needsRoomPassword && context.share) {
+    kind = 'room'
+    context.credentials = withoutRoomToken(context.credentials, baseUrl, game)
+  }
+  if (kind) context.onShareCredentialRejected?.({ kind, baseUrl, game })
 }
 
 function handleUnauthorized(response: Response, isPlayerShare: boolean): void {
@@ -213,14 +345,31 @@ export interface ApiRequestInit extends RequestInit {
   query?: ApiQuery
 }
 
-function requestQuery(query: ApiQuery | undefined, anonymous = false): URLSearchParams {
+function requestQuery(query: ApiQuery | undefined, anonymous = false): { params: URLSearchParams; drop: string[] } {
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== null && value !== undefined) params.set(key, String(value))
   }
-  // 当前分享身份优先于业务参数及 path 中的同名字段，避免重复参数产生鉴权歧义。
-  if (!anonymous) shareQuery()?.forEach((value, key) => params.set(key, value))
-  return params
+  const share = anonymous ? null : shareQuery()
+  if (!share) return { params, drop: [] }
+  // 当前分享身份优先于业务参数及 path 中的同名字段，避免重复参数产生鉴权歧义；
+  // 身份不下发的字段（持凭证时的 user、已废弃的 room_token）也不许从别处漏出去。
+  for (const key of SHARE_QUERY_KEYS) params.delete(key)
+  share.forEach((value, key) => params.set(key, value))
+  return { params, drop: [...SHARE_QUERY_KEYS] }
+}
+
+async function send(path: string, init: ApiRequestInit, anonymous: boolean): Promise<Response> {
+  const { query, ...requestInit } = init
+  const { params, drop } = requestQuery(query, anonymous)
+  const url = buildUrl(path, params, drop)
+  return fetch(url, { ...requestInit, headers: buildHeaders(requestInit, anonymous, path) })
+}
+
+function failure(path: string, response: Response, data: Record<string, unknown>, anonymous: boolean): ApiError {
+  const error = errorFrom(data, response.status, response)
+  if (!anonymous) noteRejectedCredential(path, error)
+  return error
 }
 
 export async function api<T = unknown>(
@@ -229,12 +378,10 @@ export async function api<T = unknown>(
   options: { anonymous?: boolean } = {},
 ): Promise<T> {
   const anonymous = options.anonymous === true
-  const { query, ...requestInit } = init
-  const url = buildUrl(path, requestQuery(query, anonymous))
-  const response = await fetch(url, { ...requestInit, headers: buildHeaders(requestInit, anonymous) })
+  const response = await send(path, init, anonymous)
   const data = (await readJson(response)) as T & Record<string, unknown>
   handleUnauthorized(response, anonymous ? false : !!context.share)
-  if (!response.ok) throw errorFrom(data, response.status)
+  if (!response.ok) throw failure(path, response, data, anonymous)
   return data
 }
 
@@ -244,13 +391,9 @@ export async function apiBlob(
   options: { anonymous?: boolean } = {},
 ): Promise<Response> {
   const anonymous = options.anonymous === true
-  const { query, ...requestInit } = init
-  const url = buildUrl(path, requestQuery(query, anonymous))
-  const response = await fetch(url, { ...requestInit, headers: buildHeaders(requestInit, anonymous) })
+  const response = await send(path, init, anonymous)
   handleUnauthorized(response, anonymous ? false : !!context.share)
-  if (!response.ok) {
-    throw errorFrom(await readJson(response), response.status)
-  }
+  if (!response.ok) throw failure(path, response, await readJson(response), anonymous)
   return response
 }
 
@@ -261,10 +404,10 @@ export async function validateAccessToken(value: string): Promise<void> {
   const response = await fetch(buildUrl('/login'), { method: 'POST', headers })
   const data = await readJson(response)
   if (response.status === 429) {
-    throw new ApiError('请求过于频繁，请稍后再试', 429, errorCodeOf(data), retryAfterOf(data))
+    throw new ApiError('请求过于频繁，请稍后再试', 429, errorCodeOf(data), retryAfterOf(data, response))
   }
   if (response.status === 401 || response.status === 403) throw new UserFacingError('dfLoginWrongPassword')
-  if (!response.ok) throw errorFrom(data, response.status)
+  if (!response.ok) throw errorFrom(data, response.status, response)
 }
 
 export type OwnerAccessStatus = 'allowed' | 'login-required' | 'unavailable'
@@ -294,9 +437,11 @@ export function errorMessage(error: unknown, fallback: TKey = 'dfErrorsUnexpecte
   if (error instanceof ApiError) {
     if (error.code) {
       // 只展示已收录的业务提示；未知错误码和服务端异常原文留在异常对象中供排查。
-      const key = `apiErrors.${error.code.toLowerCase()}`
-      const translated = t(key as TKey)
-      if (translated !== key) return translated
+      // 上游 apiErrors 既有原样大写码（FIELD_REQUIRES_GM / SEAT_TOKEN_*）也有小写码：先精确后小写。
+      for (const key of new Set([`apiErrors.${error.code}`, `apiErrors.${error.code.toLowerCase()}`])) {
+        const translated = t(key as TKey)
+        if (translated !== key) return translated
+      }
     }
     if (error.status === 429) {
       const seconds = error.retryAfter

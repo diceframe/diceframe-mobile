@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from './client'
 import {
+  adoptCharacterCard,
   allocateCharacterPoints,
+  claimSeatToken,
+  issueSeatToken,
+  joinGame,
+  verifyRoomPassword,
   createPaymentProposal,
   fetchAdventures,
   fetchGeneratedImages,
@@ -177,5 +182,64 @@ describe('games API portrait contracts', () => {
       method: 'PATCH',
       body: JSON.stringify({ portrait: null }),
     })
+  })
+})
+
+describe('席位凭证相关端点契约', () => {
+  beforeEach(() => {
+    mockedApi.mockReset()
+  })
+
+  it('找回已有席位：join_as_new=false，显式带上 X-Seat-Token；新建不带', async () => {
+    mockedApi.mockResolvedValue({ ok: true, user_id: 'u1' })
+    await joinGame('game/a', { join_as_new: false }, { seatToken: 'S' })
+    expect(mockedApi).toHaveBeenLastCalledWith('/games/game%2Fa/players', {
+      method: 'POST',
+      headers: { 'X-Seat-Token': 'S' },
+      body: JSON.stringify({ join_as_new: false }),
+    })
+    await joinGame('game/a', { join_as_new: true, character_name: 'A' })
+    expect(mockedApi.mock.lastCall?.[1]).toMatchObject({ method: 'POST', headers: undefined })
+  })
+
+  it('claim 走 POST（client 统一补 confirm 头），只返回凭证本身', async () => {
+    mockedApi.mockResolvedValue({ ok: true, user_id: 'u1', seat_token: 'first' })
+    await expect(claimSeatToken('game/a')).resolves.toBe('first')
+    expect(mockedApi).toHaveBeenLastCalledWith('/games/game%2Fa/seat-token/claim', {
+      method: 'POST', body: '{}', signal: undefined,
+    })
+    mockedApi.mockResolvedValue({ ok: true })
+    await expect(claimSeatToken('game/a')).rejects.toThrow()
+  })
+
+  it('GM 签发接管凭证：默认不轮换，check 复核旧链接', async () => {
+    mockedApi.mockResolvedValue({ ok: true, seat_token: 'T' })
+    await expect(issueSeatToken('g', 'p/1', { rotate: false, check: 'old' })).resolves.toBe('T')
+    expect(mockedApi).toHaveBeenLastCalledWith('/games/g/players/p%2F1/seat-token', {
+      method: 'POST', body: JSON.stringify({ rotate: false, check: 'old' }),
+    })
+    await issueSeatToken('g', 'p', { rotate: true })
+    expect(mockedApi.mock.lastCall?.[1]).toMatchObject({ body: JSON.stringify({ rotate: true }) })
+  })
+
+  it('房间密码换令牌：令牌由调用方保存，不拼进任何 URL', async () => {
+    mockedApi.mockResolvedValue({ ok: true, room_token: 'R', expires_at: 1 })
+    await expect(verifyRoomPassword('g', 'pw')).resolves.toBe('R')
+    expect(mockedApi).toHaveBeenLastCalledWith('/games/g/verify-room-password', {
+      method: 'POST', body: JSON.stringify({ password: 'pw' }),
+    })
+  })
+
+  it('采用卡库角色卡只传 card_id，走 adopt-card 而不是整卡 PUT', async () => {
+    mockedApi.mockResolvedValue({ ok: true })
+    await adoptCharacterCard('g', 'u/1', { card_id: 'c1', id: 'ignored', character_name: 'A', hp: 99, gold: 999 })
+    expect(mockedApi).toHaveBeenLastCalledWith('/games/g/character/u%2F1/adopt-card', {
+      method: 'POST', body: JSON.stringify({ card_id: 'c1' }),
+    })
+    await adoptCharacterCard('g', 'u', { id: 'lib-2', character_name: 'B' })
+    expect(mockedApi.mock.lastCall?.[1]).toMatchObject({ body: JSON.stringify({ card_id: 'lib-2' }) })
+    const calls = mockedApi.mock.calls.length
+    await expect(adoptCharacterCard('g', 'u', { character_name: 'C' })).rejects.toThrow()
+    expect(mockedApi.mock.calls.length).toBe(calls)
   })
 })

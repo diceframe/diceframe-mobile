@@ -64,6 +64,8 @@ import {
 } from '@/lib/economy-prompts'
 import { appLayoutForWidth } from '@/lib/layout'
 import { levelUpAttributes, levelUpPoints } from '@/lib/level-up'
+import { isStoredPlayerMember } from '@/lib/player-identity'
+import { buildShareLink } from '@/lib/share-link'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import {
   selectCanAskKp,
@@ -118,6 +120,7 @@ export default function GameScreen() {
   const tableTalkCount = useGameStore((s) => s.tableTalk.length)
   const tableTalkError = useGameStore((s) => s.tableTalkError)
   const identityRevision = useGameStore((s) => s.tableTalkRevision)
+  const seatCredentialLost = useGameStore((s) => s.seatCredentialLost)
 
   const [draft, setDraft] = React.useState('')
   const [characterOpen, setCharacterOpen] = React.useState(false)
@@ -228,20 +231,24 @@ export default function GameScreen() {
     }
   }, [gameKey])
 
-  // 玩家身份失效（被踢/存档重置）时只清该局的身份槽位、回加入页重新加入；
-  // 多局身份各自独立，不能连坐其他局的保存身份
+  // 玩家身份失效（被踢/存档重置/本设备没有席位凭证）时只清该局的身份槽位、带着本局
+  // 邀请链接回加入页；多局身份各自独立，不能连坐其他局的保存身份。
+  // 成员资格以 detail.viewer 为准（isStoredPlayerMember），旧服务端回退到名单。
   React.useEffect(() => {
-    if (isGm || !userId || !detail?.multiplayer) return
-    const members = [
-      ...(detail.multiplayer.ready_players ?? []),
-      ...(detail.multiplayer.waiting_players ?? []),
-      ...(detail.multiplayer.away_players ?? []),
-    ]
-    if (!members.some((player) => player.user_id === userId)) {
-      useSettingsStore.getState().removeShare(gameKey)
-      router.replace({ pathname: '/join' })
-    }
-  }, [isGm, userId, detail, router])
+    if (isGm || !userId || !gameKey) return
+    const removed = !!detail && (!!detail.viewer || !!detail.multiplayer) && !isStoredPlayerMember(detail, userId)
+    if (!seatCredentialLost && !removed) return
+    const settings = useSettingsStore.getState()
+    const baseUrl = settings.baseUrl
+    settings.removeShare(gameKey)
+    router.replace({
+      pathname: '/join',
+      params: {
+        link: buildShareLink(gameKey, baseUrl, undefined, baseUrl),
+        ...(seatCredentialLost ? { notice: 'seat' } : {}),
+      },
+    })
+  }, [isGm, userId, detail, seatCredentialLost, gameKey, router])
 
   async function sendVoice(text: string) {
     // 录音/编辑期间对局可能已经变化，发送时重新检查当前状态。

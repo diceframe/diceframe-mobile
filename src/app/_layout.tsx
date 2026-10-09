@@ -1,7 +1,7 @@
 import '@/global.css'
 
 import * as React from 'react'
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, router } from 'expo-router'
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, router, usePathname } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useColorScheme } from 'react-native'
 import { Image } from 'expo-image'
@@ -17,6 +17,7 @@ import { getT } from '@/i18n/t'
 import { Toaster } from 'sonner-native'
 import { useLocaleSync } from '@/hooks/useLocaleSync'
 import { useServerCompatCheck } from '@/hooks/useServerCompatCheck'
+import { buildShareLink } from '@/lib/share-link'
 import { useResolvedTheme, useThemeToken } from '@/lib/theme'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -33,6 +34,12 @@ export default function RootLayout() {
   const theme = useResolvedTheme()
   const background = useThemeToken('background')
   const { setColorScheme } = useNativeWindColorScheme()
+  const pathname = usePathname()
+  // 凭证被拒的回调在请求链路里触发，读的是当时所在页面；加入页自己就地处理
+  const pathnameRef = React.useRef(pathname)
+  React.useEffect(() => {
+    pathnameRef.current = pathname
+  }, [pathname])
 
   // 语言偏好 → i18n 单例；切换语言时全树经 useTranslation 重渲染
   useLocaleSync()
@@ -58,6 +65,23 @@ export default function RootLayout() {
         // 会突然 401。静默跳登录页看起来像 App 自己退出了，给一句解释。
         toastNotice(getT()('dfAuthSessionExpired'))
         router.replace('/login')
+      },
+      // 分享凭证被服务端拒绝（对齐 Web handleRejectedSeatToken / RoomToken）：
+      // 席位凭证失效 = 该局身份作废，回加入页说明需要 GM 的新链接；房间令牌失效 =
+      // 身份保留，回加入页重输房间密码。只动出事的那台后端上的那一局。
+      onShareCredentialRejected: ({ kind, baseUrl, game }) => {
+        const settings = useSettingsStore.getState()
+        if (kind === 'seat') settings.rejectSeatToken(baseUrl, game)
+        else settings.rejectRoomToken(baseUrl, game)
+        // 加入页从抛出的 ApiError 就地处理；别的后端（加入页探测中）的拒绝也不该把人带走
+        if (pathnameRef.current === '/join' || baseUrl !== settings.baseUrl) return
+        router.replace({
+          pathname: '/join',
+          params: {
+            link: buildShareLink(game, baseUrl, undefined, baseUrl),
+            notice: kind === 'seat' ? 'seat-invalid' : 'room',
+          },
+        })
       },
     })
   }, [])

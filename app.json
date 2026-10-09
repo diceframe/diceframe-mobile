@@ -25,7 +25,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.diceframe.mobile",
-      "versionCode": 14,
+      "versionCode": 15,
       "permissions": [
         "RECORD_AUDIO",
         "CAMERA",
