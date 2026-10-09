@@ -304,8 +304,15 @@ export interface PendingPayment {
   [key: string]: unknown
 }
 
+/** Who a game detail was projected for; visitors only ever get the lobby view. */
+export interface DetailViewer {
+  kind: 'gm' | 'seat' | 'outsider'
+  uid?: string
+}
+
 export interface GameDetail {
   game_key: string
+  viewer?: DetailViewer
   world_name?: string
   world_id?: string
   rule_id?: string
@@ -339,6 +346,13 @@ export interface GameDetail {
   pending_luck_decisions?: CheckResult[]
   round_check_results?: CheckResult[]
   manual_rolls?: ManualRollTimelineEntry[]
+  adventure_binding?: {
+    adventure_id?: string
+    version?: string
+    format?: string
+    content_digest?: string
+    [key: string]: unknown
+  }
   total_tokens?: number
   token_budget_bump?: TokenBudgetBump | null
   ruleset_runtime?: RulesetRuntimeMeta & {
@@ -535,6 +549,27 @@ export interface LorePreviewResponse {
   summary?: LorePreviewSummary
 }
 
+export interface LoreActivationTraceRow {
+  entry_id: string
+  book_id?: string
+  candidate_sources?: string[]
+  matched_keys?: string[]
+  secondary_matches?: string[]
+  semantic_score?: number | null
+  visibility?: string
+  budget?: string
+  final_state?: string
+  reason_code?: string
+  [key: string]: unknown
+}
+
+export interface LoreActivationPreviewResponse {
+  ok?: boolean
+  error?: string
+  entries?: Array<Record<string, unknown>>
+  trace?: LoreActivationTraceRow[]
+}
+
 export interface GameSummary {
   game_key: string
   world_name?: string
@@ -617,6 +652,18 @@ export interface PlayerCreateResponse {
   ok?: boolean
   error?: string
   user_id: string
+  /** Plaintext seat credential, returned once when a new seat is created. */
+  seat_token?: string
+  [key: string]: unknown
+}
+
+export interface CharacterImportLorebook {
+  book_id: string
+  name: string
+  entries: number
+  role?: string
+  label?: string
+  binding?: { scope_kind: string; scope_id: string; role?: string } | null
   [key: string]: unknown
 }
 
@@ -628,6 +675,8 @@ export interface CharacterImportResponse {
   npc_name?: string
   world_id?: string
   lorebook_entries?: number
+  lorebook_book_id?: string
+  lorebook?: CharacterImportLorebook
   nsfw_warning?: boolean
 }
 
@@ -734,11 +783,18 @@ export interface WorldCreateResponse {
   id?: string
   [key: string]: unknown
 }
+export interface CheckRevealRecord {
+  by: string
+  at: string
+}
+
 export interface GameLogResponse {
   log?: LogEntry[]
   total?: number
   total_pages?: number
   page?: number
+  check_reveals?: Record<string, CheckRevealRecord>
+  dice_reveal_mode?: string
 }
 
 export interface PrivateLogResponse {
@@ -1108,6 +1164,13 @@ export interface RulesetEncounterPreset extends JsonObject {
   enemies: JsonObject[]
 }
 
+export interface RulesetEncounterPreview extends JsonObject {
+  id: string
+  name?: string
+  description?: string
+  difficulty?: string
+}
+
 export interface RulesetTemporaryEncounterAttack extends JsonObject {
   id?: string
   name?: string
@@ -1314,7 +1377,10 @@ export interface RulesetGameplayView {
       encounter_instance_id: string
     } | null
   }
-  encounter_presets: RulesetEncounterPreset[]
+  /** GM-only：完整预设目录（含怪物数据块）。非 GM 视图中服务端不下发该字段。 */
+  encounter_presets?: RulesetEncounterPreset[]
+  /** 当前剧情指向的遭遇摘要（仅名称/描述/难度，无数值），所有入座视角可见。 */
+  encounter_preview?: RulesetEncounterPreview | null
   /** 服务端权威遭遇访问状态，前端据此区分剧情绑定 / 尚未准备 / 自由遭遇。 */
   encounter_access?: {
     mode: 'blocked' | 'story' | 'sandbox' | string
