@@ -90,7 +90,8 @@ export function newLorebookDocument(name: string, description = ''): LorebookDoc
 }
 
 /**
- * 给没有 id 的条目补上稳定 id（拉取的旧数据、外部导入的书）；已有 id 一律不动。
+ * 给没有 id 的条目补上稳定 id（拉取的旧数据、外部导入的书）；已有 id 不变（只有数字 id
+ * 或 uid 的写成同值的字符串 id）。
  * 同一本书里出现重复 id 时，后出现的那条换新 id——镜像按 id 对齐，重复会互相覆盖。
  *
  * **只在导入/拉取写入本机库时调用一次，并把结果存回本机文档**。绝不能在每次推送前
@@ -103,7 +104,11 @@ export function ensureEntryIds(book: LorebookBook, uuid: () => string): Lorebook
     const id = entryIdOf(entry)
     if (id && !seen.has(id)) {
       seen.add(id)
-      return entry
+      // 只有 uid、或 id 是数字的旧数据：写成字符串 id（服务端按 str(id or uid) 认条目，
+      // 身份不变），本机文档因此满足服务端 schema（条目 id 必须是非空字符串）
+      if (entry.id === id) return entry
+      changed = true
+      return { ...entry, id }
     }
     changed = true
     const fresh = newEntryId(uuid, seen)

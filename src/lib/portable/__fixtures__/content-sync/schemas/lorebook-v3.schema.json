@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://diceframe.dev/schemas/content-sync/lorebook-v3.json",
+  "title": "Portable lorebook (lorebook_v3)",
+  "description": "The shape clients push and receive. Entries are mirrored by id, so every entry needs a stable id. Limits: at most 2000 entries per book and 32 KB per entry.",
+  "type": "object",
+  "required": ["spec", "data"],
+  "properties": {
+    "spec": {"type": "string", "const": "lorebook_v3"},
+    "data": {
+      "type": "object",
+      "required": ["lorebook"],
+      "properties": {
+        "lorebook": {
+          "type": "object",
+          "required": ["name", "entries"],
+          "properties": {
+            "name": {"type": "string"},
+            "description": {"type": "string"},
+            "scan_depth": {"type": "integer"},
+            "token_budget": {"type": "integer"},
+            "recursive_scanning": {"type": "boolean"},
+            "entries": {"type": "array", "maxItems": 2000, "items": {"$ref": "#/$defs/entry"}}
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": ["id", "content", "keys"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "description": "Stable per-book entry id; the mirror key."},
+        "name": {"type": "string"},
+        "content": {"type": "string"},
+        "keys": {"type": "array", "items": {"type": "string"}},
+        "secondary_keys": {"type": "array", "items": {"type": "string"}},
+        "enabled": {"type": "boolean"},
+        "constant": {"type": "boolean"},
+        "insertion_order": {"type": "integer"},
+        "priority": {"type": "integer"},
+        "extensions": {"type": "object"}
+      }
+    }
+  }
+}

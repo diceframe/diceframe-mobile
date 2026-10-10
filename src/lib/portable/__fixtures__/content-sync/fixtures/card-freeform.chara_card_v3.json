@@ -1,0 +1,73 @@
+{
+  "spec": "chara_card_v3",
+  "spec_version": "3.0",
+  "data": {
+    "name": "Mira Thornwood",
+    "description": "Raised in the border woods; guides caravans through the old forest.",
+    "personality": "",
+    "scenario": "",
+    "first_mes": "",
+    "mes_example": "",
+    "creator_notes": "",
+    "system_prompt": "",
+    "post_history_instructions": "",
+    "alternate_greetings": [],
+    "group_only_greetings": [],
+    "tags": [],
+    "creator": "",
+    "character_version": "",
+    "extensions": {
+      "diceframe": {
+        "schema_version": 2,
+        "character_name": "Mira Thornwood",
+        "race": "Elf",
+        "class": "Ranger",
+        "background": "Raised in the border woods; guides caravans through the old forest.",
+        "identity": {
+          "age": "112",
+          "pronouns": "she/her"
+        },
+        "attributes": {
+          "str": 12,
+          "dex": 16,
+          "con": 13,
+          "int": 11,
+          "wis": 15,
+          "cha": 10
+        },
+        "skills": [
+          {
+            "name": "Tracking",
+            "value": 40,
+            "effect": "Follow tracks up to a day old."
+          },
+          {
+            "name": "Archery",
+            "value": 55
+          }
+        ],
+        "equipment": [
+          "Longbow",
+          "Hunting knife"
+        ],
+        "inventory": [
+          "Rope (15 m)",
+          "Trail rations x5"
+        ],
+        "key_items": [
+          "Silver leaf brooch"
+        ],
+        "gold": 30,
+        "currency": {},
+        "portrait": {
+          "kind": "builtin",
+          "id": "elf_ranger_f"
+        },
+        "rule_id": "freeform_fantasy",
+        "rule_name": "Freeform Fantasy",
+        "language": "en",
+        "source": "device"
+      }
+    }
+  }
+}

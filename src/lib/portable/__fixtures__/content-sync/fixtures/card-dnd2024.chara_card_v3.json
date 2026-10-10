@@ -1,0 +1,50 @@
+{
+  "spec": "chara_card_v3",
+  "spec_version": "3.0",
+  "data": {
+    "name": "Thorn Ironfoot",
+    "description": "Soldier",
+    "personality": "",
+    "scenario": "",
+    "first_mes": "",
+    "mes_example": "",
+    "creator_notes": "",
+    "system_prompt": "",
+    "post_history_instructions": "",
+    "alternate_greetings": [],
+    "group_only_greetings": [],
+    "tags": [],
+    "creator": "",
+    "character_version": "",
+    "extensions": {
+      "diceframe": {
+        "schema_version": 2,
+        "character_name": "Thorn Ironfoot",
+        "race": "Dwarf",
+        "class": "Fighter",
+        "background": "Soldier",
+        "attributes": {},
+        "skills": [],
+        "equipment": [],
+        "gold": 10,
+        "rule_id": "dnd2024",
+        "language": "en",
+        "rule_binding": {
+          "runtime_id": "dnd2024",
+          "runtime_version": 1
+        },
+        "ruleset_character": {
+          "rule_binding": {
+            "runtime_id": "dnd2024",
+            "runtime_version": 1
+          },
+          "choices": {
+            "class": "fighter",
+            "species": "dwarf",
+            "background": "soldier"
+          }
+        }
+      }
+    }
+  }
+}
