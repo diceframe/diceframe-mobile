@@ -20,6 +20,7 @@ import { useCharacters } from '@/hooks/useCharacters'
 import { cachedCharacterSchema, cachedRuleLibrary, useLocalCards, type LocalCardView } from '@/hooks/useLocalCards'
 import { useT } from '@/i18n/t'
 import type { CharacterCardPatch } from '@/lib/character-card'
+import type { EditorSnapshot } from '@/lib/local-library/card-edit'
 import { confirmDestructive } from '@/lib/confirm'
 
 type LibraryTab = 'local' | 'server'
@@ -110,13 +111,13 @@ export default function CharactersScreen() {
   const activeTab: LibraryTab = localAvailable ? tab : 'server'
   const [editor, setEditor] = React.useState<EditorTarget | null>(null)
 
-  async function submitCard(payload: CharacterCardPatch) {
+  async function submitCard(payload: CharacterCardPatch, snapshot: EditorSnapshot) {
     if (!editor) return
     if (editor.tab === 'server') {
       if (editor.card) await server.updateCard(cardId(editor.card), payload)
       else await server.addCard(payload)
     } else if (editor.card) {
-      await local.updateCard(editor.card.localId, payload)
+      await local.updateCard(editor.card.localId, payload, snapshot)
     } else {
       await local.addCard(payload)
     }

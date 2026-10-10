@@ -9,7 +9,8 @@ import * as React from 'react'
 import { currentBaseUrl, errorMessage } from '@/api/client'
 import { fetchCharacterSchema, fetchRuleLibrary } from '@/api/library'
 import type { CharacterCard, CharacterSchemaResponse, RulesResponse } from '@/api/types'
-import { localCardEdit, newLocalCardBody } from '@/lib/local-library/card-edit'
+import { localCardEdit, newLocalCardBody, type EditorSnapshot } from '@/lib/local-library/card-edit'
+import { createLatestGuard, createYielder } from '@/lib/local-library/yielder'
 import type { LocalItemSummary } from '@/lib/local-library/repository'
 import { withRuleCache } from '@/lib/local-library/rule-cache'
 import type { CharacterCardPatch } from '@/lib/character-card'
@@ -28,14 +29,19 @@ export interface LocalCardView extends LocalItemSummary {
   body: CharacterCard
 }
 
-/** 让出 JS 线程（逐项读写之间），避免大批量操作长时间占用界面线程 */
-export function yieldToUi(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0))
+/**
+ * 规则缓存的服务器分槽键：当前连接地址；Web 同源部署时地址为空串，用固定的同源槽位
+ * （Web 端本来也没有本机库，这里只是让键有意义）。
+ */
+function ruleCacheKey(): string {
+  return currentBaseUrl() || 'same-origin'
 }
 
 async function readLocalCards(): Promise<LocalCardView[] | null> {
   const library = await localLibrary()
   if (!library) return null
+  // 逐项读文档，按时间预算让出 JS 线程（同步 SQLite 读大文档会占线程）
+  const maybeYield = createYielder()
   const views: LocalCardView[] = []
   for (const summary of library.listItems({ kind: 'character_template' })) {
     const item = library.getItem(summary.localId)
@@ -46,7 +52,7 @@ async function readLocalCards(): Promise<LocalCardView[] | null> {
       // 文档坏了也列出来（只读展示），不让一项拖垮整个列表
       views.push({ ...summary, readOnly: true, body: { character_name: summary.name } as CharacterCard })
     }
-    await yieldToUi()
+    await maybeYield()
   }
   return views
 }
@@ -72,7 +78,7 @@ export async function loadLocalJoinCards(): Promise<CharacterCard[]> {
 /** 规则库与角色模板：在线取最新并写入本机缓存，离线用缓存（按服务器地址分槽） */
 export async function cachedRuleLibrary(): Promise<RulesResponse> {
   const library = await localLibrary().catch(() => null)
-  const serverKey = currentBaseUrl() || 'web'
+  const serverKey = ruleCacheKey()
   const { value } = await withRuleCache<RulesResponse>({
     fetch: fetchRuleLibrary,
     read: () => library?.getRuleCache<RulesResponse>(serverKey, '')?.payload ?? null,
@@ -83,7 +89,7 @@ export async function cachedRuleLibrary(): Promise<RulesResponse> {
 
 export async function cachedCharacterSchema(ruleId: string): Promise<CharacterSchemaResponse> {
   const library = await localLibrary().catch(() => null)
-  const serverKey = currentBaseUrl() || 'web'
+  const serverKey = ruleCacheKey()
   const { value } = await withRuleCache<CharacterSchemaResponse>({
     fetch: () => fetchCharacterSchema(ruleId),
     read: () => library?.getRuleCache<CharacterSchemaResponse>(serverKey, ruleId)?.payload ?? null,
@@ -97,16 +103,20 @@ export function useLocalCards() {
   const [cards, setCards] = React.useState<LocalCardView[] | null>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState('')
+  const [guard] = React.useState(createLatestGuard)
 
   async function load() {
+    const isLatest = guard.begin()
     setLoading(true)
     try {
-      setCards(await readLocalCards())
+      const next = await readLocalCards()
+      if (!isLatest()) return
+      setCards(next)
       setError('')
     } catch (cause) {
-      setError(errorMessage(cause))
+      if (isLatest()) setError(errorMessage(cause))
     } finally {
-      setLoading(false)
+      if (isLatest()) setLoading(false)
     }
   }
 
@@ -125,11 +135,11 @@ export function useLocalCards() {
     await load()
   }
 
-  async function updateCard(localId: string, editor: CharacterCardPatch) {
+  async function updateCard(localId: string, editor: CharacterCardPatch, snapshot: EditorSnapshot) {
     const library = await requireLibrary()
     const item = library.getItem(localId)
     if (!item) throw new Error(`local card ${localId} not found`)
-    const { patch, remove } = localCardEdit(readCardV3(item.document).body, editor)
+    const { patch, remove } = localCardEdit(readCardV3(item.document).body, editor, snapshot)
     const document = patchCardDocument(item.document, patch, { remove })
     const { name, ruleId } = cardSummary(document)
     library.updateDocument(localId, { document, name, ruleId })

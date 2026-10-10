@@ -5,12 +5,15 @@ import { Sheet } from '@/components/patterns/sheet'
 import { Text } from '@/components/ui/text'
 import type { CharacterCard } from '@/api/types'
 import { useT } from '@/i18n/t'
+import { orderLocalCardsForGame } from './orderLocalCards'
 
 interface JoinCardPickerSheetProps {
   open: boolean
   cards: CharacterCard[]
   /** 本机角色库里可用于加入的卡（离线内容库；Web 端为空） */
   localCards: CharacterCard[]
+  /** 本局规则；本机卡绑定的规则与之不同（或没绑规则）时标出来，并排在匹配的卡后面 */
+  gameRuleId?: string
   loading: boolean
   onClose: () => void
   onSelect: (card: CharacterCard) => void
@@ -24,12 +27,14 @@ export function JoinCardPickerSheet({
   open,
   cards,
   localCards,
+  gameRuleId,
   loading,
   onClose,
   onSelect,
 }: JoinCardPickerSheetProps) {
   const t = useT()
-  const renderCard = (card: CharacterCard, key: string) => (
+  const orderedLocal = orderLocalCardsForGame(localCards, gameRuleId)
+  const renderCard = (card: CharacterCard, key: string, mismatch = false) => (
     <Button
       key={key}
       variant="outline"
@@ -46,6 +51,11 @@ export function JoinCardPickerSheet({
         {card.background ? (
           <Text variant="small" numberOfLines={2} className="text-muted-foreground">
             {String(card.background).slice(0, 100)}
+          </Text>
+        ) : null}
+        {mismatch ? (
+          <Text variant="small" className="text-destructive">
+            {t('dfJoinLocalCardRuleMismatch', { rule: String(card.rule_name || card.rule_id || t('dfCharacterNoRule')) })}
           </Text>
         ) : null}
       </View>
@@ -69,7 +79,7 @@ export function JoinCardPickerSheet({
             {localCards.length > 0 ? (
               <Text variant="small" className="font-semibold">{t('dfJoinLocalCards')}</Text>
             ) : null}
-            {localCards.map((card, index) => renderCard(card, `local-${index}`))}
+            {orderedLocal.map(({ card, matches }, index) => renderCard(card, `local-${index}`, !matches))}
             {localCards.length > 0 && cards.length > 0 ? (
               <Text variant="small" className="font-semibold">{t('dfJoinSharedCards')}</Text>
             ) : null}

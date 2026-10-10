@@ -5,6 +5,7 @@
  */
 export const characters = {
   zh: {
+    dfJoinLocalCardRuleMismatch: '规则不同（{{rule}}），带入后请检查数值',
     // 本机角色库（离线内容库）
     dfLocalLibraryTab: '本机',
     dfServerLibraryTab: '服务器卡库',
@@ -77,6 +78,7 @@ export const characters = {
     // useCharacters 错误兜底复用 profile 簇的 dfCharacterSaveFailed/dfCharacterUpdateFailed/dfCharacterDeleteFailed
   },
   en: {
+    dfJoinLocalCardRuleMismatch: 'Different rules ({{rule}}); check the numbers after using it',
     // 本机角色库（离线内容库）
     dfLocalLibraryTab: 'On this device',
     dfServerLibraryTab: 'Server library',
@@ -149,6 +151,7 @@ export const characters = {
     // useCharacters error fallbacks reuse the profile cluster's dfCharacterSaveFailed/dfCharacterUpdateFailed/dfCharacterDeleteFailed
   },
   ja: {
+    dfJoinLocalCardRuleMismatch: 'ルールが異なります（{{rule}}）。取り込み後に数値を確認してください',
     // 本机角色库（离线内容库）
     dfLocalLibraryTab: 'この端末',
     dfServerLibraryTab: 'サーバーのライブラリ',
@@ -221,6 +224,7 @@ export const characters = {
     // useCharacters のエラーは profile 簇の dfCharacterSaveFailed/dfCharacterUpdateFailed/dfCharacterDeleteFailed を再利用
   },
   de: {
+    dfJoinLocalCardRuleMismatch: 'Andere Regeln ({{rule}}); prüfe die Werte nach dem Übernehmen',
     // 本机角色库（离线内容库）
     dfLocalLibraryTab: 'Auf diesem Gerät',
     dfServerLibraryTab: 'Server-Bibliothek',

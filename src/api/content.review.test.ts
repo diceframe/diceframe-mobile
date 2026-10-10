@@ -181,3 +181,13 @@ describe('错误码映射覆盖服务端 CONTRACT.md（diceframe/diceframe@6cf8e
     expect(contentErrorKey(code)).toBeTruthy()
   })
 })
+
+describe('地址锁按规范化后的地址比较', () => {
+  it('同一台服务器的不同写法（大小写、尾斜杠、默认端口）不算换了服务器', () => {
+    const locked = server({ baseUrl: 'http://h:18000' })
+    configureApiClient({ baseUrl: 'HTTP://H:18000/' })
+    expect(() => assertContentServer(locked)).not.toThrow()
+    configureApiClient({ baseUrl: 'http://h:18001' })
+    expect(() => assertContentServer(locked)).toThrow(expect.objectContaining({ code: SERVER_MISMATCH }))
+  })
+})

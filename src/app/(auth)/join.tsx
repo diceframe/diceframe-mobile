@@ -467,6 +467,7 @@ export default function JoinScreen() {
                 selectedCard={joinCard}
                 cards={cards}
                 localCards={localCards}
+                gameRuleId={detail?.rule_id ? String(detail.rule_id) : undefined}
                 cardsLoading={cardsLoading}
                 onChangeCharacterName={setCharacterName}
                 onChangeBackground={setBackground}

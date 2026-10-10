@@ -29,7 +29,7 @@ import type {
   ContentStatusResponse,
   ContentSyncSource,
 } from './types'
-import { ApiError, api, currentBaseUrl, currentToken, errorMessage } from './client'
+import { ApiError, api, currentBaseUrl, currentToken, errorMessage, normalizeBaseUrl } from './client'
 import type { TKey } from '@/i18n/keyset'
 import { getT } from '@/i18n/t'
 import { isCanonicalId } from '@/lib/local-library/ids'
@@ -95,7 +95,7 @@ function mismatch(detail: string): ContentSyncError {
 
 /** 连接仍是锁定时那台服务器（M5/M6 写映射前也要调用） */
 export function assertContentServer(server: ContentServer): void {
-  if (currentBaseUrl() !== server.baseUrl) {
+  if (normalizeBaseUrl(currentBaseUrl()) !== normalizeBaseUrl(server.baseUrl)) {
     throw mismatch(`connection moved from ${server.baseUrl} to ${currentBaseUrl()}`)
   }
 }

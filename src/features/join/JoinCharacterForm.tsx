@@ -25,6 +25,8 @@ interface JoinCharacterFormProps {
   cards: CharacterCard[]
   /** 本机角色库里可用于加入的卡 */
   localCards: CharacterCard[]
+  /** 本局规则（标出规则不同的本机卡） */
+  gameRuleId?: string
   cardsLoading: boolean
   onChangeCharacterName: (name: string) => void
   onChangeBackground: (background: string) => void
@@ -46,6 +48,7 @@ export function JoinCharacterForm({
   selectedCard,
   cards,
   localCards,
+  gameRuleId,
   cardsLoading,
   onChangeCharacterName,
   onChangeBackground,
@@ -146,6 +149,7 @@ export function JoinCharacterForm({
         open={pickerOpen}
         cards={cards}
         localCards={localCards}
+        gameRuleId={gameRuleId}
         loading={cardsLoading}
         onClose={() => setPickerOpen(false)}
         onSelect={(card) => {
