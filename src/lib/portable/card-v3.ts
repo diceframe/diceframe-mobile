@@ -118,12 +118,27 @@ export function newCardDocument(body: Partial<CardBody> & { character_name: stri
   return writeCardV3({ schema_version: CARD_BODY_SCHEMA_VERSION, ...cloneJson(body) } as CardBody)
 }
 
+/** 卡体内的字段路径：对象键或数组下标（字符串形式），如 ['attributes', 'custom_luck']、['skills', '2'] */
+export type CardFieldPath = readonly string[]
+
+export interface CardPatchOptions {
+  /**
+   * 显式删除的字段路径（合并之后执行）。合并语义下「补丁里不写」只表示「不改」，
+   * 编辑器要删掉自定义属性、技能或嵌套键时必须在这里列出。路径不存在时忽略。
+   */
+  remove?: readonly CardFieldPath[]
+}
+
 /**
  * 本机编辑卡体：只合并 patch 给出的字段（值为 undefined 的键忽略），信封与卡体里
  * 其余字段原样保留；name / description 跟随 character_name / background 同步。
  * 规则托管卡只读，拒绝编辑。
+ *
+ * 数组字段（skills、equipment、inventory…）在补丁里是整体替换，所以编辑器**必须从
+ * 存着的数组出发**改出新数组（保留每一项里不认识的字段），绝不能从表单重建——否则每项的
+ * 未知字段会丢，推送 update 时服务端也随之删掉。删除整项用 options.remove 或从数组里移除。
  */
-export function patchCardDocument(document: unknown, patch: Partial<CardBody>): CardV3Document {
+export function patchCardDocument(document: unknown, patch: Partial<CardBody>, options: CardPatchOptions = {}): CardV3Document {
   const { body } = readCardV3(document)
   if (isRulesAwareCard(body)) throw new PortableFormatError(CARD_READ_ONLY, 'rules-aware cards are read-only on this device')
   const next = cloneJson(document) as CardV3Document
@@ -136,10 +151,29 @@ export function patchCardDocument(document: unknown, patch: Partial<CardBody>): 
       ? mergeObjects(current, value)
       : cloneJson(value)
   }
+  for (const path of options.remove ?? []) removePath(merged, path)
   next.data.extensions[DICEFRAME_EXTENSION] = merged
   if (patch.character_name !== undefined) next.data.name = pyStr(merged.character_name)
   if (patch.background !== undefined) next.data.description = pyStr(merged.background)
   return next
+}
+
+/** 按路径删除（就地修改 merged，它已是本次补丁的新副本）；数组项用下标删除，其余项前移 */
+function removePath(root: JsonObject, path: CardFieldPath): void {
+  if (!path.length) throw new Error('remove path must not be empty')
+  let parent: unknown = root
+  for (const key of path.slice(0, -1)) {
+    if (Array.isArray(parent)) parent = parent[Number(key)]
+    else if (isJsonObject(parent)) parent = parent[key]
+    else return
+  }
+  const last = path[path.length - 1]
+  if (Array.isArray(parent)) {
+    const index = Number(last)
+    if (Number.isInteger(index) && index >= 0 && index < parent.length) parent.splice(index, 1)
+  } else if (isJsonObject(parent)) {
+    delete parent[last]
+  }
 }
 
 /** 替换（或移除）卡片内嵌书，其余内容不动 */

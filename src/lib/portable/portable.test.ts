@@ -212,7 +212,7 @@ describe('lorebook_v3', () => {
     expect(readLorebookV3({ spec: 'lorebook_v3', data: { lorebook: { name: 'x' } } })).toEqual({ name: 'x', entries: [] })
     expect(codeOf(() => readLorebookV3({ spec: 'other', data: { lorebook: serverBook } }))).toBe('LOREBOOK_V3_INVALID')
     expect(codeOf(() => readLorebookV3({ spec: 'lorebook_v3', data: {} }))).toBe('LOREBOOK_V3_INVALID')
-    expect(readLorebookV3({ lorebook: { entries: [1, 2] } })).toEqual({ entries: [] })
+    expect(readLorebookV3({ lorebook: { entries: [1, 2] } })).toEqual({ entries: [{}, {}] })
     expect(codeOf(() => readLorebookV3('x'))).toBe('LOREBOOK_V3_INVALID')
   })
 
@@ -335,8 +335,8 @@ describe('评审修复：保真', () => {
     doc.data.character_book = { name: 'b', entries: 'nope' }
     expect(readCardV3(doc).characterBook).toEqual({ name: 'b', entries: [] })
     doc.data.character_book = { name: 'b', entries: [serverEntry, 3, null, 'x'] }
-    expect(readCardV3(doc).characterBook?.entries).toEqual([serverEntry])
-    expect(readLorebookV3({ lorebook: { entries: [1, serverEntry] } }).entries).toEqual([serverEntry])
+    expect(readCardV3(doc).characterBook?.entries).toEqual([serverEntry, {}, {}, {}])
+    expect(readLorebookV3({ lorebook: { entries: [1, serverEntry] } }).entries).toEqual([{}, serverEntry])
   })
 
   it('假值与 Python 的 or 对齐：character_name 为 0/false/空串时回退 data.name；name 写出时同理', () => {
@@ -347,5 +347,37 @@ describe('评审修复：保真', () => {
     }
     expect(writeCardV3({ character_name: 0, background: false } as unknown as CardBody).data).toMatchObject({ name: '', description: '' })
     expect(isPortablePortrait({ kind: 'builtin', id: 0 })).toBe(false)
+  })
+})
+
+describe('跟进：显式删除与条目位置', () => {
+  it('patchCardDocument 支持按路径显式删除：自定义属性、嵌套键、数组项', () => {
+    const doc = writeCardV3({
+      ...serverCardBody,
+      attributes: { str: 50, dex: 60, custom_luck: 7 },
+      character_sheet: { hp: 10, homebrew: { a: 1, b: 2 } },
+      skills: [{ name: '侦查', value: 60 }, { name: '自定义', value: 5 }],
+    } as unknown as CardBody)
+    const next = patchCardDocument(doc, { race: '精灵' }, {
+      remove: [['attributes', 'custom_luck'], ['character_sheet', 'homebrew', 'b'], ['skills', '1'], ['custom_future_field']],
+    })
+    const body = readCardV3(next).body
+    expect(body.attributes).toEqual({ str: 50, dex: 60 })
+    expect(body.character_sheet).toEqual({ hp: 10, homebrew: { a: 1 } })
+    expect(body.skills).toEqual([{ name: '侦查', value: 60 }])
+    expect(body).not.toHaveProperty('custom_future_field')
+    expect(body.race).toBe('精灵')
+  })
+
+  it('删除路径不存在时什么也不做；空路径拒绝', () => {
+    const next = patchCardDocument(serverCardDocument, {}, { remove: [['nope', 'deeper'], ['skills', '9']] })
+    expect(readCardV3(next).body).toEqual(serverCardBody)
+    expect(() => patchCardDocument(serverCardDocument, {}, { remove: [[]] })).toThrow()
+  })
+
+  it('内嵌书里的非对象条目变成空条目（与服务端一样），条目位置不错位', () => {
+    const doc = cloneJson(serverCardDocument) as unknown as { data: { character_book: unknown } }
+    doc.data.character_book = { name: 'b', entries: [serverEntry, 3, null, 'x', serverEntry] }
+    expect(readCardV3(doc).characterBook?.entries).toEqual([serverEntry, {}, {}, {}, serverEntry])
   })
 })
