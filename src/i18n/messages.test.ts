@@ -4,6 +4,7 @@ import i18n from './index'
 import { auth } from './messages/mobile/auth'
 import { characters } from './messages/mobile/characters'
 import { common } from './messages/mobile/common'
+import { content } from './messages/mobile/content'
 import { create } from './messages/mobile/create'
 import { lore } from './messages/mobile/lore'
 import { overview } from './messages/mobile/overview'
@@ -25,6 +26,7 @@ const MOBILE_CLUSTERS = {
   play,
   characters,
   lore,
+  content,
 } as const
 
 const keysOf = (obj: Record<string, unknown>): string[] => Object.keys(obj).sort()

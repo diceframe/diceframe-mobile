@@ -9,6 +9,7 @@
 import type { auth } from './messages/mobile/auth'
 import type { characters } from './messages/mobile/characters'
 import type { common } from './messages/mobile/common'
+import type { content } from './messages/mobile/content'
 import type { create } from './messages/mobile/create'
 import type { lore } from './messages/mobile/lore'
 import type { overview } from './messages/mobile/overview'
@@ -29,7 +30,8 @@ export type AppTranslation = WidenValues<
     (typeof profile)['zh'] &
     (typeof play)['zh'] &
     (typeof characters)['zh'] &
-    (typeof lore)['zh']
+    (typeof lore)['zh'] &
+    (typeof content)['zh']
 >
 
 /** 全部合法文案 key（上游镜像 + 移动端 df 簇） */
