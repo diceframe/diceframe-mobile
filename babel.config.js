@@ -3,9 +3,12 @@
 // presets 按数组逆序执行：nativewind 的 JSX 重定向先于 babel-preset-expo 应用，
 // 保证 className 走 react-native-css-interop 的 jsx-runtime。
 // React Compiler 由 babel-preset-expo 在 experiments.reactCompiler 开启时自动注入。
+// inline-import：把本机内容库的 Drizzle 迁移（.sql）内联成字符串打进包里
+// （Drizzle 官方 Expo 用法，配合 metro.config.js 的 sourceExts 'sql'）。
 module.exports = function (api) {
   api.cache(true)
   return {
     presets: [['babel-preset-expo', { jsxImportSource: 'nativewind' }], 'nativewind/babel'],
+    plugins: [['inline-import', { extensions: ['.sql'] }]],
   }
 }
