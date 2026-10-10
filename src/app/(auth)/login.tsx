@@ -23,7 +23,7 @@ import {
 } from '@/api/client'
 import { claimPairingCode } from '@/api/pairing'
 import { toastNotice } from '@/components/patterns/toast'
-import { contentErrorKey } from '@/api/content'
+import { pairingInstallIdNoticeKey } from '@/api/content'
 import { resolveInstallId } from '@/stores/local-library'
 import { QrScannerSheet } from '@/features/scan/QrScannerSheet'
 import { parsePairLink } from '@/lib/pair-link'
@@ -189,7 +189,7 @@ export default function LoginScreen() {
       )
       const deviceToken = claimed.deviceToken
       if (claimed.replacedDeviceId) toastNotice(t('dfContentPairingReplaced'))
-      const rejectedKey = contentErrorKey(claimed.installIdRejected)
+      const rejectedKey = pairingInstallIdNoticeKey(claimed.installIdRejected)
       if (rejectedKey) toastNotice(t(rejectedKey))
       if (!mountedRef.current) return
       if (parsed.baseUrl !== settings.baseUrl) {

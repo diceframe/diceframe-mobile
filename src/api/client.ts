@@ -112,6 +112,10 @@ export function currentShare(): ShareIdentity | null {
   return context.share
 }
 
+export function currentBaseUrl(): string {
+  return context.baseUrl
+}
+
 export function currentToken(): string | null {
   return context.token
 }
@@ -430,7 +434,8 @@ export async function api<T = unknown>(
   const mode = requestModeOf(path, options)
   const response = await send(path, init, mode)
   const data = (await readJson(response)) as T & Record<string, unknown>
-  handleUnauthorized(response, mode === 'owner' ? !!context.share : false)
+  // shareless（内容同步）的 401 是「需要房主」，由调用方提示，不触发全局跳登录页
+  if (mode !== 'shareless') handleUnauthorized(response, mode === 'owner' ? !!context.share : false)
   if (!response.ok) throw failure(path, response, data, mode)
   return data
 }
@@ -442,7 +447,7 @@ export async function apiBlob(
 ): Promise<Response> {
   const mode = requestModeOf(path, options)
   const response = await send(path, init, mode)
-  handleUnauthorized(response, mode === 'owner' ? !!context.share : false)
+  if (mode !== 'shareless') handleUnauthorized(response, mode === 'owner' ? !!context.share : false)
   if (!response.ok) throw failure(path, response, await readJson(response), mode)
   return response
 }

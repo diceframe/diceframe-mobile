@@ -23,6 +23,7 @@ import type { ContentPushItem } from './types'
 import { credentialKey } from '@/lib/seat-credentials'
 
 const SRV = 'srv-aaaa'
+const SERVER = { serverInstanceId: SRV, baseUrl: 'http://h:18000', strict: false, hasStatus: true }
 const SOURCE = { kind: 'device' as const, id: 'install-1' }
 const ITEM: ContentPushItem = { client_ref: 'card-1', kind: 'character_template', format: 'chara_card_v3', document: { spec: 'chara_card_v3' } }
 
@@ -68,7 +69,7 @@ afterEach(() => {
 describe('/api/content/* 不带分享上下文', () => {
   it('预览：POST + 确认头 + 房主凭据，没有分享 query、席位凭证或房间令牌', async () => {
     fetchMock.mockResolvedValue(json({ ok: true, plan_digest: 'sha256:p', items: [], server_instance_id: SRV }))
-    await previewImport({ serverInstanceId: SRV, source: SOURCE, items: [ITEM] })
+    await previewImport({ server: SERVER, source: SOURCE, items: [ITEM] })
     const { url, init, headers, body } = sent()
     expect(url.pathname).toBe('/api/content/import/preview')
     expect(url.search).toBe('')
@@ -95,31 +96,31 @@ describe('/api/content/* 不带分享上下文', () => {
 describe('预览与提交', () => {
   it('响应来自另一台服务器（server_instance_id 不符）时中止，成功与错误响应都检查', async () => {
     fetchMock.mockResolvedValueOnce(json({ ok: true, plan_digest: 'p', items: [], server_instance_id: 'srv-other' }))
-    expect(await rejectionOf(previewImport({ serverInstanceId: SRV, source: SOURCE, items: [ITEM] })))
+    expect(await rejectionOf(previewImport({ server: SERVER, source: SOURCE, items: [ITEM] })))
       .toMatchObject({ code: SERVER_MISMATCH })
     fetchMock.mockResolvedValueOnce(json({ ok: false, error_code: 'DECISION_REQUIRED', server_instance_id: 'srv-other' }, 400))
-    expect(await rejectionOf(commitImport({ serverInstanceId: SRV, source: SOURCE, items: [ITEM], planDigest: 'p', decisions: {} })))
+    expect(await rejectionOf(commitImport({ server: SERVER, source: SOURCE, items: [ITEM], planDigest: 'p', decisions: {} })))
       .toMatchObject({ code: SERVER_MISMATCH })
   })
 
   it('install id 或服务器 id 不规范时不发请求', async () => {
-    expect(await rejectionOf(previewImport({ serverInstanceId: SRV, source: { kind: 'device', id: 'bad id' }, items: [] })))
+    expect(await rejectionOf(previewImport({ server: SERVER, source: { kind: 'device', id: 'bad id' }, items: [] })))
       .toMatchObject({ code: 'INSTALL_ID_INVALID' })
-    expect(await rejectionOf(previewImport({ serverInstanceId: '', source: SOURCE, items: [] })))
+    expect(await rejectionOf(previewImport({ server: { ...SERVER, serverInstanceId: '' }, source: SOURCE, items: [] })))
       .toMatchObject({ code: SERVER_IDENTITY_UNAVAILABLE })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('超过 50 项在本地就拦下（与服务端 413 同码），不发请求', async () => {
     const items = Array.from({ length: 51 }, (_, index) => ({ ...ITEM, client_ref: `card-${index}` }))
-    expect(await rejectionOf(previewImport({ serverInstanceId: SRV, source: SOURCE, items }))).toMatchObject({ code: 'TOO_MANY_ITEMS' })
+    expect(await rejectionOf(previewImport({ server: SERVER, source: SOURCE, items }))).toMatchObject({ code: 'TOO_MANY_ITEMS' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('提交：发回文档 + plan_digest + 决策；成功返回逐项结果', async () => {
     const rows = [{ client_ref: 'card-1', kind: 'character_template', status: 'updated', canonical_id: 'card_x', state_token: 's' }]
     fetchMock.mockResolvedValue(json({ ok: true, items: rows, server_instance_id: SRV }))
-    const result = await commitImport({ serverInstanceId: SRV, source: SOURCE, items: [ITEM], planDigest: 'sha256:p', decisions: { 'card-1': 'update' } })
+    const result = await commitImport({ server: SERVER, source: SOURCE, items: [ITEM], planDigest: 'sha256:p', decisions: { 'card-1': 'update' } })
     expect(result.items).toEqual(rows)
     expect(sent().body).toEqual({ source: SOURCE, items: [ITEM], plan_digest: 'sha256:p', decisions: { 'card-1': 'update' } })
     expect(sent().url.pathname).toBe('/api/content/import/commit')
@@ -128,7 +129,7 @@ describe('预览与提交', () => {
   it('409 PLAN_STALE：交出服务端内嵌的新预览', async () => {
     const fresh = { ok: true, plan_digest: 'sha256:new', items: [{ client_ref: 'card-1', kind: 'character_template', action: 'update', allowed: ['update', 'duplicate', 'skip'], existing: { canonical_id: 'c', state_token: 't', server_modified: true } }] }
     fetchMock.mockResolvedValue(json({ ok: false, error_code: 'PLAN_STALE', preview: fresh }, 409))
-    const error = await rejectionOf(commitImport({ serverInstanceId: SRV, source: SOURCE, items: [ITEM], planDigest: 'old', decisions: {} }))
+    const error = await rejectionOf(commitImport({ server: SERVER, source: SOURCE, items: [ITEM], planDigest: 'old', decisions: {} }))
     expect(error).toBeInstanceOf(PlanStaleError)
     expect((error as PlanStaleError).preview).toEqual(fresh)
     expect(contentErrorMessage(error)).toBe('服务器上的内容在你确认期间变了，请按最新情况重新确认。')
@@ -141,7 +142,7 @@ describe('预览与提交', () => {
       { client_ref: 'book-2', kind: 'lorebook', status: 'not_attempted' },
     ]
     fetchMock.mockResolvedValue(json({ ok: false, error_code: 'IMPORT_FAILED', items: rows }, 500))
-    const error = await rejectionOf(commitImport({ serverInstanceId: SRV, source: SOURCE, items: [ITEM], planDigest: 'p', decisions: {} }))
+    const error = await rejectionOf(commitImport({ server: SERVER, source: SOURCE, items: [ITEM], planDigest: 'p', decisions: {} }))
     expect(error).toBeInstanceOf(CommitPartialError)
     expect((error as CommitPartialError).rows).toEqual(rows)
     expect((error as CommitPartialError).status).toBe(500)
@@ -149,7 +150,7 @@ describe('预览与提交', () => {
 
   it('没有内容同步路由的旧服务端（404 无错误码）→ CONTENT_SYNC_UNSUPPORTED', async () => {
     fetchMock.mockResolvedValue(new Response('404: Not Found', { status: 404 }))
-    expect(await rejectionOf(previewImport({ serverInstanceId: SRV, source: SOURCE, items: [ITEM] })))
+    expect(await rejectionOf(previewImport({ server: SERVER, source: SOURCE, items: [ITEM] })))
       .toMatchObject({ code: CONTENT_SYNC_UNSUPPORTED })
   })
 })
@@ -157,7 +158,7 @@ describe('预览与提交', () => {
 describe('导出与状态', () => {
   it('导出：origin 指向别的服务器时中止', async () => {
     fetchMock.mockResolvedValue(json({ ok: true, items: [{ kind: 'lorebook', format: 'lorebook_v3', document: {}, origin: { server_instance_id: 'srv-x', canonical_id: 'b', state_token: '1', provenance: null } }] }))
-    expect(await rejectionOf(exportContent(SRV, [{ kind: 'lorebook', canonical_id: 'b' }]))).toMatchObject({ code: SERVER_MISMATCH })
+    expect(await rejectionOf(exportContent(SERVER, [{ kind: 'lorebook', canonical_id: 'b' }]))).toMatchObject({ code: SERVER_MISMATCH })
   })
 
   it('状态：用 /api/content/status，超过 500 项自动分批', async () => {
@@ -166,14 +167,14 @@ describe('导出与状态', () => {
       return json({ ok: true, server_instance_id: SRV, items: items.map((item) => ({ ...item, exists: true, state_token: 't', provenance: null })) })
     })
     const refs = Array.from({ length: MAX_STATUS_ITEMS + 3 }, (_, index) => ({ kind: 'lorebook' as const, canonical_id: `b${index}` }))
-    const statuses = await contentStatus(SRV, refs)
+    const statuses = await contentStatus(SERVER, refs)
     expect(statuses).toHaveLength(MAX_STATUS_ITEMS + 3)
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(sent(0).url.pathname).toBe('/api/content/status')
     expect((sent(1).body.items as unknown[]).length).toBe(3)
   })
 
-  it('服务端还没有 /status（#500 之前）：退化为逐项导出，不存在的项记为 exists:false', async () => {
+  it('服务端没有 /status（#500 之前，hasStatus=false）：退化为导出，不存在的项记为 exists:false', async () => {
     fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
       const path = new URL(url).pathname
       if (path === '/api/content/status') return new Response('404: Not Found', { status: 404 })
@@ -181,7 +182,7 @@ describe('导出与状态', () => {
       if (ref.canonical_id === 'gone') return json({ ok: false, error_code: 'NOT_FOUND', error: 'not found' }, 404)
       return json({ ok: true, items: [{ kind: ref.kind, format: 'lorebook_v3', document: {}, origin: { server_instance_id: SRV, canonical_id: ref.canonical_id, state_token: '7', provenance: { link: 'tracked' } } }] })
     })
-    const statuses = await contentStatus(SRV, [{ kind: 'lorebook', canonical_id: 'b1' }, { kind: 'lorebook', canonical_id: 'gone' }])
+    const statuses = await contentStatus({ ...SERVER, hasStatus: false }, [{ kind: 'lorebook', canonical_id: 'b1' }, { kind: 'lorebook', canonical_id: 'gone' }])
     expect(statuses).toEqual([
       { kind: 'lorebook', canonical_id: 'b1', exists: true, state_token: '7', provenance: { link: 'tracked' } },
       { kind: 'lorebook', canonical_id: 'gone', exists: false, state_token: '', provenance: null },
