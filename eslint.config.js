@@ -28,5 +28,6 @@ module.exports = defineConfig([
       '@typescript-eslint/array-type': 'off',
     },
   },
-  globalIgnores(['dist/*', '.expo/*']),
+  // drizzle-kit 生成的迁移包（含 .sql 内联导入），不手改也不 lint
+  globalIgnores(['dist/*', '.expo/*', 'src/lib/local-library/migrations/*']),
 ])

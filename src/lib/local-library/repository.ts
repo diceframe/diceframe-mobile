@@ -1,13 +1,23 @@
 /**
- * 本机内容库仓储：items / server_links / rule_cache 的读写（纯 TS，只依赖 SqlDatabase）。
+ * 本机内容库仓储（Drizzle，同步驱动：运行时 expo-sqlite openDatabaseSync，测试 better-sqlite3）。
  *
- * 每个公开方法都经 SerialQueue 排队，多步写入包在事务里，所以「提交后更新映射与
- * 同步基线」「删除项连同映射」这类操作要么全部生效要么全不生效。
- * 文档内容的解析/补丁（可移植格式）不在这里，见 M2 的格式模块；这里只存原文。
+ * 串行化：两个驱动都是同步 API、同一个连接，每个方法从开始到结束不会让出 JS 线程，
+ * 调用之间不可能交错；多步写入包在 Drizzle 事务里，要么全部生效要么全不生效。
+ * 代价是大文档读写会占用 JS 线程，单次操作只涉及一项，可接受。
+ *
+ * **不可重入、事务不可嵌套**：在一次写事务内部再调用仓储的写方法（例如从事务回调里
+ * 调另一个公开方法）会被直接拒绝——SQLite 不支持嵌套 BEGIN，内层失败的 ROLLBACK
+ * 还会把外层一起回滚。需要组合时在仓储内部写成接收 tx 的私有函数，由最外层包一次。
+ *
+ * 文档内容的解析/补丁（可移植格式）不在这里，见 lib/portable；这里只存原文。
  */
-import { EMBEDDED_BOOK_SUFFIX, isCanonicalId, isLocalItemKind, newLocalId, type LocalItemKind } from './ids'
+import { and, desc, eq, inArray, ne } from 'drizzle-orm'
+import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core'
 
-import { SerialQueue, inTransaction, type SqlDatabase } from './sql'
+import { EMBEDDED_BOOK_SUFFIX, isCanonicalId, isLocalItemKind, newLocalId, type LocalItemKind } from './ids'
+import { items, librarySchema, meta, ruleCache, serverLinks } from './schema'
+
+export type LibraryDb = BaseSQLiteDatabase<'sync', unknown, typeof librarySchema>
 
 const INSTALL_ID_KEY = 'install_id'
 
@@ -51,9 +61,9 @@ export interface ServerLink {
   localId: string
   canonicalId: string
   stateToken: string
-  /** 推送/拉取成功时本机项的 revision；当前 revision 更大即「本机有改动」 */
+  /** 推送/拉取成功时那份文档的 revision；当前 revision 更大即「本机有改动」 */
   syncedRevision: number
-  /** 推送/拉取时文档的摘要（M2 定义算法），用于识别无实质变化的编辑 */
+  /** 推送/拉取时文档的本地摘要（lib/portable localDigest），识别无实质变化的编辑 */
   syncedDigest: string
   /** 记录时连接的地址，只用于展示，不参与身份 */
   baseUrlHint: string
@@ -89,32 +99,8 @@ export interface SyncRecord {
   baseUrlHint?: string
 }
 
-interface ItemRow {
-  local_id: string
-  kind: string
-  format: string
-  document?: string
-  name: string
-  rule_id: string
-  read_only: number
-  revision: number
-  origin: string | null
-  created_at: string
-  updated_at: string
-}
-
-interface LinkRow {
-  server_instance_id: string
-  local_id: string
-  canonical_id: string
-  state_token: string
-  synced_revision: number
-  synced_digest: string
-  base_url_hint: string
-  updated_at: string
-}
-
-const SUMMARY_COLUMNS = 'local_id, kind, format, name, rule_id, read_only, revision, origin, created_at, updated_at'
+type ItemRow = typeof items.$inferSelect
+type LinkRow = typeof serverLinks.$inferSelect
 
 function parseOrigin(raw: string | null): LocalItemOrigin | null {
   if (!raw) return null
@@ -131,37 +117,46 @@ function parseOrigin(raw: string | null): LocalItemOrigin | null {
   }
 }
 
-function toSummary(row: ItemRow): LocalItemSummary {
+function toSummary(row: Omit<ItemRow, 'document'>): LocalItemSummary {
   if (!isLocalItemKind(row.kind)) throw new Error(`unknown local item kind in storage: ${row.kind}`)
   return {
-    localId: row.local_id,
+    localId: row.localId,
     kind: row.kind,
     format: row.format,
     name: row.name,
-    ruleId: row.rule_id,
-    readOnly: row.read_only === 1,
-    revision: Number(row.revision),
+    ruleId: row.ruleId,
+    readOnly: row.readOnly,
+    revision: row.revision,
     origin: parseOrigin(row.origin),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   }
 }
 
 function toLink(row: LinkRow): ServerLink {
-  return {
-    serverInstanceId: row.server_instance_id,
-    localId: row.local_id,
-    canonicalId: row.canonical_id,
-    stateToken: row.state_token,
-    syncedRevision: Number(row.synced_revision),
-    syncedDigest: row.synced_digest,
-    baseUrlHint: row.base_url_hint,
-    updatedAt: row.updated_at,
-  }
+  return { ...row }
 }
 
 function requireCanonical(value: string, field: string): void {
   if (!isCanonicalId(value)) throw new LocalLibraryError('INVALID_ID', `${field} is not a canonical id`)
+}
+
+/** 映射所属的本机项 id（内嵌书 `<id>.book` 属于它的父卡） */
+function ownerOf(localId: string): string {
+  return localId.endsWith(EMBEDDED_BOOK_SUFFIX) ? localId.slice(0, -EMBEDDED_BOOK_SUFFIX.length) : localId
+}
+
+const SUMMARY_COLUMNS = {
+  localId: items.localId,
+  kind: items.kind,
+  format: items.format,
+  name: items.name,
+  ruleId: items.ruleId,
+  readOnly: items.readOnly,
+  revision: items.revision,
+  origin: items.origin,
+  createdAt: items.createdAt,
+  updatedAt: items.updatedAt,
 }
 
 export interface LocalLibraryDeps {
@@ -172,99 +167,99 @@ export interface LocalLibraryDeps {
 }
 
 export class LocalLibraryRepository {
-  private readonly queue = new SerialQueue()
   private readonly now: () => string
   private readonly uuid: () => string
+  private writing = false
 
-  constructor(private readonly db: SqlDatabase, deps: LocalLibraryDeps) {
+  constructor(private readonly db: LibraryDb, deps: LocalLibraryDeps) {
     this.now = deps.now ?? (() => new Date().toISOString())
     this.uuid = deps.uuid
   }
 
   // ---------- items ----------
 
-  listItems(filter: { kind?: LocalItemKind } = {}): Promise<LocalItemSummary[]> {
-    return this.queue.run(async () => {
-      const rows = filter.kind
-        ? await this.db.all<ItemRow>(
-          `SELECT ${SUMMARY_COLUMNS} FROM items WHERE kind = ? ORDER BY updated_at DESC, local_id`, [filter.kind])
-        : await this.db.all<ItemRow>(`SELECT ${SUMMARY_COLUMNS} FROM items ORDER BY updated_at DESC, local_id`)
-      return rows.map(toSummary)
-    })
+  listItems(filter: { kind?: LocalItemKind } = {}): LocalItemSummary[] {
+    const query = this.db.select(SUMMARY_COLUMNS).from(items)
+    const rows = (filter.kind ? query.where(eq(items.kind, filter.kind)) : query)
+      .orderBy(desc(items.updatedAt), items.localId)
+      .all()
+    return rows.map(toSummary)
   }
 
-  getItem(localId: string): Promise<LocalItem | null> {
-    return this.queue.run(() => this.readItem(localId))
+  getItem(localId: string): LocalItem | null {
+    return this.readItem(this.db, localId)
   }
 
-  createItem(input: NewLocalItem): Promise<LocalItem> {
-    return this.queue.run(async () => {
-      if (!isLocalItemKind(input.kind)) throw new LocalLibraryError('INVALID_KIND', 'unknown local item kind')
+  createItem(input: NewLocalItem): LocalItem {
+    if (!isLocalItemKind(input.kind)) throw new LocalLibraryError('INVALID_KIND', 'unknown local item kind')
+    return this.write((tx) => {
       const localId = newLocalId(input.kind, this.uuid())
       const now = this.now()
-      await this.db.run(
-        `INSERT INTO items (local_id, kind, format, document, name, rule_id, read_only, revision, origin, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
-        [
-          localId, input.kind, input.format, JSON.stringify(input.document),
-          input.name ?? '', input.ruleId ?? '', input.readOnly ? 1 : 0,
-          input.origin ? JSON.stringify(input.origin) : null, now, now,
-        ],
-      )
-      return (await this.readItem(localId))!
+      tx.insert(items).values({
+        localId,
+        kind: input.kind,
+        format: input.format,
+        document: JSON.stringify(input.document),
+        name: input.name ?? '',
+        ruleId: input.ruleId ?? '',
+        readOnly: !!input.readOnly,
+        revision: 1,
+        origin: input.origin ? JSON.stringify(input.origin) : null,
+        createdAt: now,
+        updatedAt: now,
+      }).run()
+      return this.readItem(tx, localId)!
     })
   }
 
   /** 本地编辑：替换文档原文（调用方已按字段打好补丁），revision +1；只读项拒绝 */
-  updateDocument(localId: string, update: DocumentUpdate): Promise<LocalItem> {
-    return this.queue.run(async () => {
-      const current = await this.readItem(localId)
+  updateDocument(localId: string, update: DocumentUpdate): LocalItem {
+    return this.write((tx) => {
+      const current = this.readItem(tx, localId)
       if (!current) throw new LocalLibraryError(LOCAL_ITEM_NOT_FOUND, `local item ${localId} not found`)
       if (current.readOnly) throw new LocalLibraryError(LOCAL_ITEM_READ_ONLY, `local item ${localId} is read-only`)
-      await this.db.run(
-        `UPDATE items SET document = ?, name = ?, rule_id = ?, revision = revision + 1, updated_at = ? WHERE local_id = ?`,
-        [
-          JSON.stringify(update.document), update.name ?? current.name, update.ruleId ?? current.ruleId,
-          this.now(), localId,
-        ],
-      )
-      return (await this.readItem(localId))!
+      tx.update(items).set({
+        document: JSON.stringify(update.document),
+        name: update.name ?? current.name,
+        ruleId: update.ruleId ?? current.ruleId,
+        revision: current.revision + 1,
+        updatedAt: this.now(),
+      }).where(eq(items.localId, localId)).run()
+      return this.readItem(tx, localId)!
     })
   }
 
   /** 删除本机项及其在所有服务器上的映射（含内嵌书 `<id>.book`）；服务器上的内容不受影响 */
-  deleteItem(localId: string): Promise<boolean> {
-    return this.queue.run(() => inTransaction(this.db, async () => {
-      await this.db.run('DELETE FROM server_links WHERE local_id = ? OR local_id = ?', [localId, `${localId}${EMBEDDED_BOOK_SUFFIX}`])
-      const result = await this.db.run('DELETE FROM items WHERE local_id = ?', [localId])
-      return result.changes > 0
-    }))
+  deleteItem(localId: string): boolean {
+    return this.write((tx) => {
+      tx.delete(serverLinks).where(inArray(serverLinks.localId, [localId, `${localId}${EMBEDDED_BOOK_SUFFIX}`])).run()
+      const result = tx.delete(items).where(eq(items.localId, localId)).returning({ localId: items.localId }).all()
+      return result.length > 0
+    })
   }
 
   // ---------- server links ----------
 
-  listLinks(serverInstanceId: string): Promise<ServerLink[]> {
-    return this.queue.run(async () => {
-      const rows = await this.db.all<LinkRow>(
-        'SELECT * FROM server_links WHERE server_instance_id = ? ORDER BY local_id', [serverInstanceId])
-      return rows.map(toLink)
-    })
+  listLinks(serverInstanceId: string): ServerLink[] {
+    return this.db.select().from(serverLinks)
+      .where(eq(serverLinks.serverInstanceId, serverInstanceId))
+      .orderBy(serverLinks.localId)
+      .all()
+      .map(toLink)
   }
 
-  getLink(serverInstanceId: string, localId: string): Promise<ServerLink | null> {
-    return this.queue.run(async () => {
-      const row = await this.db.get<LinkRow>(
-        'SELECT * FROM server_links WHERE server_instance_id = ? AND local_id = ?', [serverInstanceId, localId])
-      return row ? toLink(row) : null
-    })
+  getLink(serverInstanceId: string, localId: string): ServerLink | null {
+    const row = this.db.select().from(serverLinks)
+      .where(and(eq(serverLinks.serverInstanceId, serverInstanceId), eq(serverLinks.localId, localId)))
+      .get()
+    return row ? toLink(row) : null
   }
 
-  findByCanonical(serverInstanceId: string, canonicalId: string): Promise<ServerLink | null> {
-    return this.queue.run(async () => {
-      const row = await this.db.get<LinkRow>(
-        'SELECT * FROM server_links WHERE server_instance_id = ? AND canonical_id = ?', [serverInstanceId, canonicalId])
-      return row ? toLink(row) : null
-    })
+  findByCanonical(serverInstanceId: string, canonicalId: string): ServerLink | null {
+    const row = this.db.select().from(serverLinks)
+      .where(and(eq(serverLinks.serverInstanceId, serverInstanceId), eq(serverLinks.canonicalId, canonicalId)))
+      .get()
+    return row ? toLink(row) : null
   }
 
   /**
@@ -276,85 +271,79 @@ export class LocalLibraryRepository {
    *   （所属本机项已不存在），先清掉；若是另一个仍存在的本机项，说明调用方映射错了，
    *   整批拒绝（SERVER_LINK_CONFLICT），不默默改写别人的映射。
    */
-  recordSync(serverInstanceId: string, records: readonly SyncRecord[]): Promise<{ skipped: string[] }> {
-    return this.queue.run(() => inTransaction(this.db, async () => {
-      requireCanonical(serverInstanceId, 'server_instance_id')
+  recordSync(serverInstanceId: string, records: readonly SyncRecord[]): { skipped: string[] } {
+    requireCanonical(serverInstanceId, 'server_instance_id')
+    for (const record of records) {
+      requireCanonical(record.localId, 'local_id')
+      if (!record.canonicalId) throw new LocalLibraryError('INVALID_ID', 'canonical_id is required')
+    }
+    return this.write((tx) => {
       const now = this.now()
       const skipped: string[] = []
       for (const record of records) {
-        requireCanonical(record.localId, 'local_id')
-        if (!record.canonicalId) throw new LocalLibraryError('INVALID_ID', 'canonical_id is required')
-        if (!(await this.ownerExists(record.localId))) {
+        if (!this.itemExists(tx, ownerOf(record.localId))) {
           skipped.push(record.localId)
           continue
         }
-        const holder = await this.db.get<{ local_id: string }>(
-          'SELECT local_id FROM server_links WHERE server_instance_id = ? AND canonical_id = ? AND local_id <> ?',
-          [serverInstanceId, record.canonicalId, record.localId],
-        )
+        const holder = tx.select({ localId: serverLinks.localId }).from(serverLinks).where(and(
+          eq(serverLinks.serverInstanceId, serverInstanceId),
+          eq(serverLinks.canonicalId, record.canonicalId),
+          ne(serverLinks.localId, record.localId),
+        )).get()
         if (holder) {
-          if (await this.ownerExists(holder.local_id)) {
-            throw new LocalLibraryError(
-              SERVER_LINK_CONFLICT,
-              `canonical id already mapped to ${holder.local_id} on this server`,
-            )
+          if (this.itemExists(tx, ownerOf(holder.localId))) {
+            throw new LocalLibraryError(SERVER_LINK_CONFLICT, `canonical id already mapped to ${holder.localId} on this server`)
           }
-          await this.db.run(
-            'DELETE FROM server_links WHERE server_instance_id = ? AND local_id = ?', [serverInstanceId, holder.local_id])
+          tx.delete(serverLinks).where(and(
+            eq(serverLinks.serverInstanceId, serverInstanceId), eq(serverLinks.localId, holder.localId),
+          )).run()
         }
-        await this.db.run(
-          `INSERT INTO server_links (server_instance_id, local_id, canonical_id, state_token, synced_revision,
-                                     synced_digest, base_url_hint, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT (server_instance_id, local_id) DO UPDATE SET
-             canonical_id = excluded.canonical_id,
-             state_token = excluded.state_token,
-             synced_revision = excluded.synced_revision,
-             synced_digest = excluded.synced_digest,
-             base_url_hint = excluded.base_url_hint,
-             updated_at = excluded.updated_at`,
-          [
-            serverInstanceId, record.localId, record.canonicalId, record.stateToken,
-            Math.max(0, Math.trunc(record.syncedRevision)), record.syncedDigest ?? '', record.baseUrlHint ?? '', now,
-          ],
-        )
+        const values = {
+          canonicalId: record.canonicalId,
+          stateToken: record.stateToken,
+          syncedRevision: Math.max(0, Math.trunc(record.syncedRevision)),
+          syncedDigest: record.syncedDigest ?? '',
+          baseUrlHint: record.baseUrlHint ?? '',
+          updatedAt: now,
+        }
+        tx.insert(serverLinks)
+          .values({ serverInstanceId, localId: record.localId, ...values })
+          .onConflictDoUpdate({ target: [serverLinks.serverInstanceId, serverLinks.localId], set: values })
+          .run()
       }
       return { skipped }
-    }))
+    })
   }
 
-  removeLink(serverInstanceId: string, localId: string): Promise<boolean> {
-    return this.queue.run(async () => {
-      const result = await this.db.run(
-        'DELETE FROM server_links WHERE server_instance_id = ? AND local_id = ?', [serverInstanceId, localId])
-      return result.changes > 0
-    })
+  removeLink(serverInstanceId: string, localId: string): boolean {
+    return this.write((tx) => tx.delete(serverLinks)
+      .where(and(eq(serverLinks.serverInstanceId, serverInstanceId), eq(serverLinks.localId, localId)))
+      .returning({ localId: serverLinks.localId })
+      .all().length > 0)
   }
 
   // ---------- rule cache ----------
 
   /** 规则缓存：ruleId 为空串表示规则库列表本身 */
-  getRuleCache<T = unknown>(serverKey: string, ruleId: string): Promise<{ payload: T; fetchedAt: string } | null> {
-    return this.queue.run(async () => {
-      const row = await this.db.get<{ payload: string; fetched_at: string }>(
-        'SELECT payload, fetched_at FROM rule_cache WHERE server_key = ? AND rule_id = ?', [serverKey, ruleId])
-      if (!row) return null
-      try {
-        return { payload: JSON.parse(row.payload) as T, fetchedAt: row.fetched_at }
-      } catch {
-        return null
-      }
-    })
+  getRuleCache<T = unknown>(serverKey: string, ruleId: string): { payload: T; fetchedAt: string } | null {
+    const row = this.db.select().from(ruleCache)
+      .where(and(eq(ruleCache.serverKey, serverKey), eq(ruleCache.ruleId, ruleId)))
+      .get()
+    if (!row) return null
+    try {
+      return { payload: JSON.parse(row.payload) as T, fetchedAt: row.fetchedAt }
+    } catch {
+      return null
+    }
   }
 
-  putRuleCache(serverKey: string, ruleId: string, payload: unknown): Promise<void> {
-    return this.queue.run(async () => {
-      if (!serverKey) throw new LocalLibraryError('INVALID_ID', 'server key is required')
-      await this.db.run(
-        `INSERT INTO rule_cache (server_key, rule_id, payload, fetched_at) VALUES (?, ?, ?, ?)
-         ON CONFLICT (server_key, rule_id) DO UPDATE SET payload = excluded.payload, fetched_at = excluded.fetched_at`,
-        [serverKey, ruleId, JSON.stringify(payload), this.now()],
-      )
+  putRuleCache(serverKey: string, ruleId: string, payload: unknown): void {
+    if (!serverKey) throw new LocalLibraryError('INVALID_ID', 'server key is required')
+    const values = { payload: JSON.stringify(payload), fetchedAt: this.now() }
+    this.write((tx) => {
+      tx.insert(ruleCache).values({ serverKey, ruleId, ...values })
+        .onConflictDoUpdate({ target: [ruleCache.serverKey, ruleCache.ruleId], set: values })
+        .run()
     })
   }
 
@@ -362,34 +351,45 @@ export class LocalLibraryRepository {
 
   /**
    * 本安装的 install id，存在本库的 meta 表里，与内容和映射同生共死（settings 里只是缓存）。
-   * 库里有合法值就永远用它；库里没有（或已被破坏）时，收编 settings 里缓存的合法值（seed），
-   * 都没有才生成新的。
+   * 库里有合法值就永远用它；库里没有（或已被破坏）时，收编 settings 里缓存的合法值
+   * （seed，一次性迁移），都没有才生成新的。
    */
-  ensureInstallId(seed: string): Promise<string> {
-    return this.queue.run(() => inTransaction(this.db, async () => {
-      const row = await this.db.get<{ value: string }>('SELECT value FROM meta WHERE key = ?', [INSTALL_ID_KEY])
+  ensureInstallId(seed: string): string {
+    return this.write((tx) => {
+      const row = tx.select().from(meta).where(eq(meta.key, INSTALL_ID_KEY)).get()
       if (row && isCanonicalId(row.value)) return row.value
       const id = isCanonicalId(seed) ? seed : this.uuid().toLowerCase()
       if (!isCanonicalId(id)) throw new LocalLibraryError('INVALID_ID', 'uuid source returned a non-canonical id')
-      await this.db.run(
-        'INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value',
-        [INSTALL_ID_KEY, id],
-      )
+      tx.insert(meta).values({ key: INSTALL_ID_KEY, value: id })
+        .onConflictDoUpdate({ target: meta.key, set: { value: id } })
+        .run()
       return id
-    }))
+    })
   }
 
   // ---------- internals ----------
 
-  /** 映射所属的本机项是否还在（内嵌书 `<id>.book` 看它的父卡） */
-  private async ownerExists(localId: string): Promise<boolean> {
-    const owner = localId.endsWith(EMBEDDED_BOOK_SUFFIX) ? localId.slice(0, -EMBEDDED_BOOK_SUFFIX.length) : localId
-    return !!(await this.db.get<{ found: number }>('SELECT 1 AS found FROM items WHERE local_id = ?', [owner]))
+  /** 唯一的写事务入口：拒绝重入/嵌套（见文件头说明） */
+  private write<T>(body: (tx: LibraryDb) => T): T {
+    if (this.writing) {
+      throw new Error('LocalLibraryRepository is not re-entrant: nested write transactions are not supported')
+    }
+    this.writing = true
+    try {
+      return this.db.transaction((tx) => body(tx))
+    } finally {
+      this.writing = false
+    }
   }
 
-  private async readItem(localId: string): Promise<LocalItem | null> {
-    const row = await this.db.get<ItemRow>(`SELECT ${SUMMARY_COLUMNS}, document FROM items WHERE local_id = ?`, [localId])
+  private itemExists(q: LibraryDb, localId: string): boolean {
+    return !!q.select({ localId: items.localId }).from(items).where(eq(items.localId, localId)).get()
+  }
+
+  private readItem(q: LibraryDb, localId: string): LocalItem | null {
+    const row = q.select().from(items).where(eq(items.localId, localId)).get()
     if (!row) return null
-    return { ...toSummary(row), document: JSON.parse(row.document ?? 'null') as unknown }
+    return { ...toSummary(row), document: JSON.parse(row.document) as unknown }
   }
 }
+
