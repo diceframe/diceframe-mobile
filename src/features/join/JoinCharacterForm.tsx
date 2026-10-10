@@ -23,6 +23,8 @@ interface JoinCharacterFormProps {
   portrait: CharacterPortrait | null | undefined
   selectedCard: CharacterCard | null
   cards: CharacterCard[]
+  /** 本机角色库里可用于加入的卡 */
+  localCards: CharacterCard[]
   cardsLoading: boolean
   onChangeCharacterName: (name: string) => void
   onChangeBackground: (background: string) => void
@@ -43,6 +45,7 @@ export function JoinCharacterForm({
   portrait,
   selectedCard,
   cards,
+  localCards,
   cardsLoading,
   onChangeCharacterName,
   onChangeBackground,
@@ -59,7 +62,7 @@ export function JoinCharacterForm({
         <Text variant="muted">{t('createCharacterHelp')}</Text>
       </View>
 
-      {cards.length > 0 ? (
+      {cards.length + localCards.length > 0 ? (
         selectedCard ? (
           // 选中后的卡面摘要：点卡片可换选，X 清除回到纯手填
           <View className="gap-2 rounded-xl border border-border p-3">
@@ -142,6 +145,7 @@ export function JoinCharacterForm({
       <JoinCardPickerSheet
         open={pickerOpen}
         cards={cards}
+        localCards={localCards}
         loading={cardsLoading}
         onClose={() => setPickerOpen(false)}
         onSelect={(card) => {

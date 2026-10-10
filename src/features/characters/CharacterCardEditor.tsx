@@ -3,7 +3,16 @@ import { View } from 'react-native'
 
 import { libraryAvatarSource } from '@/api/assets'
 import { fetchCharacterSchema, fetchRuleLibrary } from '@/api/library'
-import type { CharacterCard, CharacterPortrait, CharacterSkill, RuleMeta, RuleSummary, SkillSpec } from '@/api/types'
+import type {
+  CharacterCard,
+  CharacterPortrait,
+  CharacterSchemaResponse,
+  CharacterSkill,
+  RuleMeta,
+  RulesResponse,
+  RuleSummary,
+  SkillSpec,
+} from '@/api/types'
 import { RemoteAvatar } from '@/components/patterns/remote-avatar'
 import { SheetSelect } from '@/components/patterns/sheet-select'
 import { Button } from '@/components/ui/button'
@@ -36,13 +45,21 @@ export function CharacterCardEditor({
   card,
   onSubmit,
   onClose,
+  editing,
+  ruleLibrarySource = fetchRuleLibrary,
+  schemaSource = fetchCharacterSchema,
 }: {
   card: CharacterCard | null
   onSubmit: (payload: CharacterCardPatch) => Promise<void>
   onClose: () => void
+  /** 是否编辑已有卡；缺省按服务器卡的 id 判断（本机卡没有服务器 id，由调用方显式给出） */
+  editing?: boolean
+  /** 规则库 / 角色模板来源；本机库传带离线缓存的版本 */
+  ruleLibrarySource?: () => Promise<RulesResponse>
+  schemaSource?: (ruleId: string) => Promise<CharacterSchemaResponse>
 }) {
   const t = useT()
-  const isEditing = Boolean(card?.card_id || card?.id)
+  const isEditing = editing ?? Boolean(card?.card_id || card?.id)
 
   const [name, setName] = React.useState(card?.character_name ?? '')
   const [race, setRace] = React.useState(card?.race ?? '')
@@ -67,7 +84,7 @@ export function CharacterCardEditor({
     let cancelled = false
     async function loadRules() {
       try {
-        const result = await fetchRuleLibrary()
+        const result = await ruleLibrarySource()
         if (cancelled) return
         const list = result.rules ?? []
         setRules(list)
@@ -87,7 +104,7 @@ export function CharacterCardEditor({
     let cancelled = false
     async function loadSchema() {
       try {
-        const result = await fetchCharacterSchema(ruleId)
+        const result = await schemaSource(ruleId)
         if (cancelled) return
         setSchemaError('')
         setSchema({
