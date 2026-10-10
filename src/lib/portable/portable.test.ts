@@ -76,8 +76,8 @@ describe('chara_card_v3：读', () => {
     expect(codeOf(() => readCardV3({ spec: CARD_V3_SPEC, data: { name: 'x', extensions: {} } }))).toBe('CARD_V3_INVALID')
     expect(codeOf(() => readCardV3({ spec: CARD_V3_SPEC, data: { extensions: { diceframe: [] } } }))).toBe('CARD_V3_INVALID')
     const badBook = cloneJson(serverCardDocument) as unknown as { data: { character_book: unknown } }
-    badBook.data.character_book = { entries: 'nope' }
-    expect(codeOf(() => readCardV3(badBook))).toBe('CARD_V3_INVALID')
+    badBook.data.character_book = 'not an object'
+    expect(readCardV3(badBook).characterBook).toBeNull()
   })
 })
 
@@ -212,7 +212,7 @@ describe('lorebook_v3', () => {
     expect(readLorebookV3({ spec: 'lorebook_v3', data: { lorebook: { name: 'x' } } })).toEqual({ name: 'x', entries: [] })
     expect(codeOf(() => readLorebookV3({ spec: 'other', data: { lorebook: serverBook } }))).toBe('LOREBOOK_V3_INVALID')
     expect(codeOf(() => readLorebookV3({ spec: 'lorebook_v3', data: {} }))).toBe('LOREBOOK_V3_INVALID')
-    expect(codeOf(() => readLorebookV3({ lorebook: { entries: [1, 2] } }))).toBe('LOREBOOK_V3_INVALID')
+    expect(readLorebookV3({ lorebook: { entries: [1, 2] } })).toEqual({ entries: [] })
     expect(codeOf(() => readLorebookV3('x'))).toBe('LOREBOOK_V3_INVALID')
   })
 
@@ -287,5 +287,65 @@ describe('json 工具', () => {
     expect(localDigest({ a: 1, b: 2 })).toBe(localDigest({ b: 2, a: 1 }))
     expect(localDigest({ a: 1 })).not.toBe(localDigest({ a: 2 }))
     expect(localDigest(serverCardDocument)).toMatch(/^local:[0-9a-f]{14}$/)
+  })
+})
+
+describe('评审修复：嵌套对象按字段合并', () => {
+  it('表单重建 character_sheet 时，未知的嵌套键（任意深度）不丢', () => {
+    const doc = writeCardV3({
+      ...serverCardBody,
+      character_sheet: { hp: 10, unknown_x: { a: 1 }, resources: { mp: { current: 1, extra: true } } },
+      identity: { age: 30, hometown: '旧城' },
+    } as unknown as CardBody)
+    const next = patchCardDocument(doc, {
+      character_sheet: { hp: 12, resources: { mp: { current: 2 } } },
+      identity: { age: 31 },
+    } as Partial<CardBody>)
+    const body = readCardV3(next).body
+    expect(body.character_sheet).toEqual({ hp: 12, unknown_x: { a: 1 }, resources: { mp: { current: 2, extra: true } } })
+    expect(body.identity).toEqual({ age: 31, hometown: '旧城' })
+  })
+
+  it('头像、技能等「整体值」仍是替换：不会把旧头像的字段混进新头像', () => {
+    const doc = writeCardV3({ ...serverCardBody, portrait: { kind: 'upload', asset_id: 'a1' } } as CardBody)
+    const next = patchCardDocument(doc, { portrait: { kind: 'builtin', id: 'coc/1' }, skills: [{ name: 'x', value: 1 }] })
+    expect(readCardV3(next).body.portrait).toEqual({ kind: 'builtin', id: 'coc/1' })
+    expect(readCardV3(next).body.skills).toEqual([{ name: 'x', value: 1 }])
+  })
+})
+
+describe('评审修复：条目 id 边界（与服务端 str(id or "") 同语义）', () => {
+  it('id 键存在但为 null / 空串 / 0 时视为没有 id，即使有 uid 也补新的稳定 id', () => {
+    const book = { entries: [{ id: null, uid: 7 }, { id: '' }, { id: 0 }, { uid: 9 }, { id: '0' }] }
+    const fixed = ensureEntryIds(book as never, counter('Z'))
+    expect(fixed.entries.map(entryIdOf)).toEqual(['entry-z1', 'entry-z2', 'entry-z3', '9', '0'])
+    expect(entryIdOf({ id: null, uid: 7 } as never)).toBe('')
+  })
+})
+
+describe('评审修复：保真', () => {
+  it('写卡时内嵌书原样拷贝，不补 entries 等字段', () => {
+    const rawBook = { name: '只有名字', custom: 1 }
+    expect(writeCardV3(serverCardBody as CardBody, rawBook as never).data.character_book).toEqual(rawBook)
+    expect(withCharacterBook(serverCardDocument, rawBook as never).data.character_book).toEqual(rawBook)
+  })
+
+  it('内嵌书 entries 不是数组 / 含非对象行：忽略坏条目，不拒绝整张卡（同服务端）', () => {
+    const doc = cloneJson(serverCardDocument) as unknown as { data: { character_book: unknown } }
+    doc.data.character_book = { name: 'b', entries: 'nope' }
+    expect(readCardV3(doc).characterBook).toEqual({ name: 'b', entries: [] })
+    doc.data.character_book = { name: 'b', entries: [serverEntry, 3, null, 'x'] }
+    expect(readCardV3(doc).characterBook?.entries).toEqual([serverEntry])
+    expect(readLorebookV3({ lorebook: { entries: [1, serverEntry] } }).entries).toEqual([serverEntry])
+  })
+
+  it('假值与 Python 的 or 对齐：character_name 为 0/false/空串时回退 data.name；name 写出时同理', () => {
+    for (const falsy of [0, false, '', null]) {
+      const doc = cloneJson(serverCardDocument) as unknown as { data: { extensions: { diceframe: Record<string, unknown> } } }
+      doc.data.extensions.diceframe.character_name = falsy
+      expect(readCardV3(doc).body.character_name).toBe('Mira')
+    }
+    expect(writeCardV3({ character_name: 0, background: false } as unknown as CardBody).data).toMatchObject({ name: '', description: '' })
+    expect(isPortablePortrait({ kind: 'builtin', id: 0 })).toBe(false)
   })
 })

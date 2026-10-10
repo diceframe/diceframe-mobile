@@ -65,3 +65,14 @@ export function localDigest(value: unknown): string {
   const hash = 4294967296 * (2097151 & h2) + (h1 >>> 0)
   return `local:${hash.toString(16).padStart(14, '0')}`
 }
+
+/**
+ * Python `str(value or "")` 的同语义转换（对齐服务端适配器）：假值——null/undefined、
+ * false、0、NaN、空串、空对象、空数组——都得到空串，其余按字符串化。
+ */
+export function pyStr(value: unknown): string {
+  if (!value) return ''
+  if (Array.isArray(value)) return value.length ? JSON.stringify(value) : ''
+  if (isJsonObject(value)) return Object.keys(value).length ? JSON.stringify(value) : ''
+  return String(value)
+}

@@ -44,15 +44,19 @@ export interface LorebookEntryEdit {
   enabled?: boolean
 }
 
-/** 条目的稳定 id（`id` 优先，旧 Tavern 数据回退 `uid`），按字符串比较 */
+/**
+ * 条目的稳定 id，与服务端 `str(row.get("id", row.get("uid", "")) or "")` 同语义：
+ * 有 `id` 键就只看它（null / 空串 / 0 都算没有 id，不再回退 uid）；没有 `id` 键
+ * 才看旧 Tavern 数据的 `uid`。按字符串比较。
+ */
 export function entryIdOf(entry: LorebookEntry): string {
-  const raw = entry.id ?? entry.uid
-  return raw === undefined || raw === null ? '' : String(raw)
+  const raw = 'id' in entry ? entry.id : entry.uid
+  return raw ? String(raw) : ''
 }
 
 /**
  * 校验并取出 book 对象（返回深拷贝）。接受服务端也接受的两种外形：
- * `{spec, data: {lorebook}}` 与 `{lorebook}`；缺 entries 视为空书，entries 不是数组则拒绝。
+ * `{spec, data: {lorebook}}` 与 `{lorebook}`。entries 与服务端一样宽容（见 normalizeBook）。
  */
 export function readLorebookV3(document: unknown): LorebookBook {
   if (!isJsonObject(document)) throw new PortableFormatError(LOREBOOK_V3_INVALID, 'lorebook document must be an object')
@@ -65,13 +69,14 @@ export function readLorebookV3(document: unknown): LorebookBook {
   return normalizeBook(book)
 }
 
-/** 卡片内嵌书 / 独立书共用的 book 校验 */
+/**
+ * 卡片内嵌书 / 独立书共用的读取视图。与服务端 from_lorebook_v3 一样宽容：entries 缺失
+ * 或不是数组按空书，非对象的行忽略——坏条目不该让整本书（或整张卡）读不出来。
+ * 这是读取视图：本机存储与推送用的文档原文不经它改写。
+ */
 export function normalizeBook(book: unknown): LorebookBook {
   if (!isJsonObject(book)) throw new PortableFormatError(LOREBOOK_V3_INVALID, 'lorebook must be an object')
-  const entries = book.entries ?? []
-  if (!Array.isArray(entries) || !entries.every(isJsonObject)) {
-    throw new PortableFormatError(LOREBOOK_V3_INVALID, 'lorebook entries must be an array of objects')
-  }
+  const entries = Array.isArray(book.entries) ? book.entries.filter(isJsonObject) : []
   return { ...cloneJson(book), entries: cloneJson(entries) as LorebookEntry[] }
 }
 
@@ -86,6 +91,9 @@ export function newLorebookDocument(name: string, description = ''): LorebookDoc
 /**
  * 给没有 id 的条目补上稳定 id（拉取的旧数据、外部导入的书）；已有 id 一律不动。
  * 同一本书里出现重复 id 时，后出现的那条换新 id——镜像按 id 对齐，重复会互相覆盖。
+ *
+ * **只在导入/拉取写入本机库时调用一次，并把结果存回本机文档**。绝不能在每次推送前
+ * 对临时副本调用：新 id 每次都不同，服务端会把这些条目当成删了又建、每次推送都换 id。
  */
 export function ensureEntryIds(book: LorebookBook, uuid: () => string): LorebookBook {
   const seen = new Set<string>()

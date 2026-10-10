@@ -14,7 +14,7 @@
 import type { CharacterCard, CharacterPortrait } from '@/api/types'
 
 import { CARD_READ_ONLY, CARD_V3_INVALID, PortableFormatError } from './errors'
-import { cloneJson, isJsonObject, type JsonObject } from './json'
+import { cloneJson, isJsonObject, pyStr, type JsonObject } from './json'
 import { normalizeBook, type LorebookBook } from './lorebook-v3'
 
 export const CARD_V3_SPEC = 'chara_card_v3'
@@ -34,6 +34,24 @@ export const SERVER_ONLY_CARD_FIELDS = [
 const RULESET_FIELDS = ['ruleset_character', 'rule_binding'] as const
 
 export const PORTRAIT_NOT_PORTABLE = 'PORTRAIT_NOT_PORTABLE'
+
+/**
+ * 打补丁时按字段递归合并（而不是整体替换）的卡体字段：它们是开放的键值袋，
+ * 编辑器只认识其中一部分，整体替换会丢掉不认识的键，推送 update 时服务端也会随之删掉。
+ * 其余字段（头像、技能列表、属性表…）是「整体值」，补丁里给出就整体替换。
+ */
+export const DEEP_MERGE_CARD_FIELDS = ['character_sheet', 'identity'] as const
+
+/** 递归合并：双方都是对象才往下合并，数组与标量整体替换，undefined 表示不改 */
+function mergeObjects(base: JsonObject, patch: JsonObject): JsonObject {
+  const merged: JsonObject = { ...base }
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue
+    const current = base[key]
+    merged[key] = isJsonObject(value) && isJsonObject(current) ? mergeObjects(current, value) : cloneJson(value)
+  }
+  return merged
+}
 
 export type CardBody = CharacterCard & JsonObject
 
@@ -64,23 +82,18 @@ export function readCardV3(document: unknown): ParsedCard {
   const body = isJsonObject(extensions) ? extensions[DICEFRAME_EXTENSION] : undefined
   if (!isJsonObject(body)) throw new PortableFormatError(CARD_V3_INVALID, 'card has no data.extensions.diceframe body')
   const copy = cloneJson(body) as CardBody
-  if (!String(copy.character_name ?? '').trim()) copy.character_name = String(data.name ?? '').trim()
-  let characterBook: LorebookBook | null = null
-  if (isJsonObject(data.character_book)) {
-    try {
-      characterBook = normalizeBook(data.character_book)
-    } catch {
-      throw new PortableFormatError(CARD_V3_INVALID, 'card character_book is not a valid lorebook')
-    }
-  }
+  // 与服务端 `str(x or "")` 同语义：0 / false / 空串 / 空对象都算没有名字
+  if (!pyStr(copy.character_name).trim()) copy.character_name = pyStr(data.name).trim()
+  // 内嵌书与服务端一样宽容：entries 不是数组或含非对象行时忽略坏条目，不拒绝整张卡
+  const characterBook = isJsonObject(data.character_book) ? normalizeBook(data.character_book) : null
   return { body: copy, characterBook }
 }
 
 /** 把卡体包成完整的 v3 信封（与服务端 write_card_v3 逐字段一致） */
 export function writeCardV3(body: CardBody, characterBook?: LorebookBook | null): CardV3Document {
   const data: CardV3Document['data'] = {
-    name: String(body.character_name ?? ''),
-    description: String(body.background ?? ''),
+    name: pyStr(body.character_name),
+    description: pyStr(body.background),
     personality: '',
     scenario: '',
     first_mes: '',
@@ -95,7 +108,8 @@ export function writeCardV3(body: CardBody, characterBook?: LorebookBook | null)
     character_version: '',
     extensions: { [DICEFRAME_EXTENSION]: cloneJson(body) } as CardV3Document['data']['extensions'],
   }
-  if (characterBook) data.character_book = normalizeBook(characterBook)
+  // 与服务端一样原样拷贝内嵌书，不补字段、不过滤
+  if (characterBook) data.character_book = cloneJson(characterBook)
   return { spec: CARD_V3_SPEC, spec_version: CARD_V3_SPEC_VERSION, data }
 }
 
@@ -114,12 +128,17 @@ export function patchCardDocument(document: unknown, patch: Partial<CardBody>): 
   if (isRulesAwareCard(body)) throw new PortableFormatError(CARD_READ_ONLY, 'rules-aware cards are read-only on this device')
   const next = cloneJson(document) as CardV3Document
   const merged: CardBody = { ...body }
+  const deep = new Set<string>(DEEP_MERGE_CARD_FIELDS)
   for (const [key, value] of Object.entries(patch)) {
-    if (value !== undefined) merged[key] = cloneJson(value)
+    if (value === undefined) continue
+    const current = body[key]
+    merged[key] = deep.has(key) && isJsonObject(value) && isJsonObject(current)
+      ? mergeObjects(current, value)
+      : cloneJson(value)
   }
   next.data.extensions[DICEFRAME_EXTENSION] = merged
-  if (patch.character_name !== undefined) next.data.name = String(merged.character_name ?? '')
-  if (patch.background !== undefined) next.data.description = String(merged.background ?? '')
+  if (patch.character_name !== undefined) next.data.name = pyStr(merged.character_name)
+  if (patch.background !== undefined) next.data.description = pyStr(merged.background)
   return next
 }
 
@@ -127,7 +146,7 @@ export function patchCardDocument(document: unknown, patch: Partial<CardBody>): 
 export function withCharacterBook(document: unknown, book: LorebookBook | null): CardV3Document {
   readCardV3(document)
   const next = cloneJson(document) as CardV3Document
-  if (book) next.data.character_book = normalizeBook(book)
+  if (book) next.data.character_book = cloneJson(book)
   else delete next.data.character_book
   return next
 }
@@ -140,7 +159,7 @@ export function isRulesAwareCard(body: JsonObject): boolean {
 /** 头像能否随卡跨服务器：只有带 id 的 builtin（id ≤ 100 字符，同服务端） */
 export function isPortablePortrait(portrait: unknown): portrait is CharacterPortrait & { kind: 'builtin'; id: string } {
   if (!isJsonObject(portrait) || portrait.kind !== 'builtin') return false
-  const id = String(portrait.id ?? '')
+  const id = pyStr(portrait.id)
   return !!id && id.length <= 100
 }
 
@@ -180,8 +199,8 @@ export function pushableCardDocument(document: unknown): { document: CardV3Docum
 export function cardSummary(document: unknown): { name: string; ruleId: string; readOnly: boolean } {
   const { body } = readCardV3(document)
   return {
-    name: String(body.character_name ?? ''),
-    ruleId: String(body.rule_id ?? ''),
+    name: pyStr(body.character_name),
+    ruleId: pyStr(body.rule_id),
     readOnly: isRulesAwareCard(body),
   }
 }
