@@ -13,15 +13,12 @@ import {
 import { ensureEntryIds, newLorebookDocument, upsertEntry, writeLorebookV3 } from './lorebook-v3'
 
 /**
- * 服务端发布的 JSON Schema（docs/content-sync/schemas）。
- * chara-card-v3 用相对 $ref「lorebook-v3.schema.json#/$defs/entry」引用条目定义，而
- * lorebook schema 自己的 $id 是 …/lorebook-v3.json（不带 .schema），按 $id 解析不到；
- * 这里把同一份 schema 也挂在文件名对应的 id 下，等服务端统一后可去掉。
+ * 服务端发布的 JSON Schema（docs/content-sync/schemas）。各 schema 的 $id 以文件名结尾
+ * （#502），chara-card-v3 对 lorebook-v3.schema.json 的相对 $ref 按 $id 直接解析。
  */
 function validator() {
   const ajv = new Ajv2020({ allErrors: true, strict: false })
   ajv.addSchema(schemas.lorebookV3Schema)
-  ajv.addSchema({ ...schemas.lorebookV3Schema, $id: 'https://diceframe.dev/schemas/content-sync/lorebook-v3.schema.json' })
   ajv.addSchema(schemas.cardBodySchema)
   ajv.addSchema(schemas.charaCardV3Schema)
   const card = ajv.getSchema(schemas.charaCardV3Schema.$id)!

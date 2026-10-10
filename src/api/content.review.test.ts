@@ -165,7 +165,7 @@ describe('7. 删除多个数组下标与给出的顺序无关', () => {
   })
 })
 
-describe('错误码映射覆盖服务端 CONTRACT.md（diceframe/diceframe@6cf8e56f）', () => {
+describe('错误码映射覆盖服务端 CONTRACT.md（diceframe/diceframe@aa460848，含 #502 补列的码）', () => {
   // CONTRACT.md 里出现的全部错误 / 原因 / 警告码
   const CONTRACT_CODES = [
     'BODY_TOO_LARGE', 'DECISION_NOT_ALLOWED', 'DECISION_REQUIRED', 'DETACHED_FROM_OTHER_SOURCE', 'ENTRY_TOO_LARGE',
@@ -173,11 +173,11 @@ describe('错误码映射覆盖服务端 CONTRACT.md（diceframe/diceframe@6cf8e
     'PLAN_STALE', 'PLUGIN_BOOK', 'PLUGIN_CARD', 'PORTRAIT_NOT_PORTABLE', 'REQUEST_INVALID', 'RULESET_CARD',
     'RULESET_CARD_UNSUPPORTED', 'SERVER_IDENTITY_UNAVAILABLE', 'SOURCE_NOT_THIS_DEVICE', 'TOO_MANY_ENTRIES',
     'TOO_MANY_ITEMS', 'TRACKED_BY_OTHER_SOURCE',
+    // #502 补进 CONTRACT.md 的 5 个码
+    'CARD_IDENTITY_CONFLICT', 'LOREBOOK_IDENTITY_CONFLICT', 'CARD_V3_INVALID', 'IMPORT_SOURCE_INVALID', 'BOOK_NOT_IMPORTED',
   ]
-  // 服务端源码里存在、但 CONTRACT.md 未列出的码（已反馈服务端补文档）
-  const SOURCE_ONLY_CODES = ['CARD_IDENTITY_CONFLICT', 'LOREBOOK_IDENTITY_CONFLICT', 'CARD_V3_INVALID', 'IMPORT_SOURCE_INVALID', 'BOOK_NOT_IMPORTED']
 
-  it.each([...CONTRACT_CODES, ...SOURCE_ONLY_CODES])('%s 有文案', (code) => {
+  it.each(CONTRACT_CODES)('%s 有文案', (code) => {
     expect(contentErrorKey(code)).toBeTruthy()
   })
 })
