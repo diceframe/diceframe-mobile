@@ -10,7 +10,7 @@ import {
   SERVER_LINK_CONFLICT,
 } from './repository'
 import { LATEST_SCHEMA_VERSION, LocalLibrarySchemaError, migrate, schemaVersion } from './schema'
-import { SerialQueue } from './sql'
+import { SerialQueue, inTransaction } from './sql'
 import { needsPush, syncStatusOf } from './sync-status'
 
 const SRV = 'srv-0123456789abcdef'
@@ -30,6 +30,15 @@ async function setup() {
   await migrate(db)
   const repo = new LocalLibraryRepository(db, { uuid: sequence('00000000'), now: clock() })
   return { db, raw, repo }
+}
+
+/** 直接插入指定 id 的本机项（映射测试只关心 id，不关心内容） */
+function seedItems(raw: ReturnType<typeof openTestDatabase>['raw'], ids: string[]) {
+  const now = new Date().toISOString()
+  for (const id of ids) {
+    raw.prepare(`INSERT INTO items (local_id, kind, format, document, created_at, updated_at)
+      VALUES (?, 'character_template', 'chara_card_v3', '{}', ?, ?)`).run(id, now, now)
+  }
 }
 
 const cardDoc = (name: string) => ({
@@ -69,13 +78,13 @@ describe('ids', () => {
 })
 
 describe('schema 迁移', () => {
-  it('新库迁到最新版本，建出三张表；重复迁移是空操作', async () => {
+  it('新库迁到最新版本，建出全部表；重复迁移是空操作', async () => {
     const { db, raw } = openTestDatabase()
     expect(await schemaVersion(db)).toBe(0)
     await expect(migrate(db)).resolves.toBe(LATEST_SCHEMA_VERSION)
     await expect(migrate(db)).resolves.toBe(LATEST_SCHEMA_VERSION)
     const tables = raw.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all()
-    expect(tables).toEqual([{ name: 'items' }, { name: 'rule_cache' }, { name: 'server_links' }])
+    expect(tables).toEqual([{ name: 'items' }, { name: 'meta' }, { name: 'rule_cache' }, { name: 'server_links' }])
   })
 
   it('比本 App 新的库拒绝打开，且不改动它', async () => {
@@ -182,7 +191,8 @@ describe('LocalLibraryRepository：server links', () => {
   })
 
   it('同一服务器上一个 canonical id 只能映射一个本机项：冲突整批回滚', async () => {
-    const { repo } = await setup()
+    const { repo, raw } = await setup()
+    seedItems(raw, ['card-a', 'card-b', 'card-c'])
     await repo.recordSync(SRV, [{ localId: 'card-a', canonicalId: 'card_1', stateToken: 't', syncedRevision: 1 }])
     const error = await repo.recordSync(SRV, [
       { localId: 'card-b', canonicalId: 'card_2', stateToken: 't', syncedRevision: 1 },
@@ -193,7 +203,7 @@ describe('LocalLibraryRepository：server links', () => {
     // 第一条也没有写进去
     expect((await repo.listLinks(SRV)).map((link) => link.localId)).toEqual(['card-a'])
     // 别的服务器上同名 canonical id 互不影响
-    await expect(repo.recordSync('srv-other', [{ localId: 'card-c', canonicalId: 'card_1', stateToken: 't', syncedRevision: 1 }])).resolves.toBeUndefined()
+    await expect(repo.recordSync('srv-other', [{ localId: 'card-c', canonicalId: 'card_1', stateToken: 't', syncedRevision: 1 }])).resolves.toEqual({ skipped: [] })
   })
 
   it('非规范的服务器 id / 本机 id 拒绝写入', async () => {
@@ -204,7 +214,8 @@ describe('LocalLibraryRepository：server links', () => {
   })
 
   it('removeLink 只删这台服务器的映射', async () => {
-    const { repo } = await setup()
+    const { repo, raw } = await setup()
+    seedItems(raw, ['card-a'])
     await repo.recordSync(SRV, [{ localId: 'card-a', canonicalId: 'c1', stateToken: '', syncedRevision: 1 }])
     await repo.recordSync('srv-other', [{ localId: 'card-a', canonicalId: 'c1', stateToken: '', syncedRevision: 1 }])
     expect(await repo.removeLink(SRV, 'card-a')).toBe(true)
@@ -257,5 +268,76 @@ describe('同步状态推导', () => {
     expect(needsPush({ revision: 1, readOnly: false }, null)).toBe(true)
     expect(needsPush({ revision: 3, readOnly: false }, { syncedRevision: 3 })).toBe(false)
     expect(needsPush({ revision: 4, readOnly: true }, { syncedRevision: 3 })).toBe(false)
+  })
+})
+
+describe('评审修复：install id 与内容库同生共死', () => {
+  it('install id 存在同一个 SQLite 文件的 meta 表里：重开仓储、换新实例都不变', async () => {
+    const { db } = openTestDatabase()
+    await migrate(db)
+    const first = new LocalLibraryRepository(db, { uuid: () => 'AAAAAAAA-0000-4000-8000-000000000001' })
+    const id = await first.ensureInstallId('')
+    expect(id).toBe('aaaaaaaa-0000-4000-8000-000000000001')
+    // settings 缓存丢失 / 被重置后换了一个新 uuid 源，也必须拿回库里那一个
+    const second = new LocalLibraryRepository(db, { uuid: () => 'bbbbbbbb-0000-4000-8000-000000000002' })
+    expect(await second.ensureInstallId('')).toBe(id)
+    expect(await second.ensureInstallId('cccccccc-0000-4000-8000-000000000003')).toBe(id)
+  })
+
+  it('库里还没有时，一次性收编 settings 里已有的合法 install id（不另起一个）', async () => {
+    const { repo } = await setup()
+    expect(await repo.ensureInstallId('legacy-settings-id')).toBe('legacy-settings-id')
+    expect(await repo.ensureInstallId('')).toBe('legacy-settings-id')
+  })
+
+  it('meta 里的值被破坏时重新生成并落库', async () => {
+    const { repo, raw } = await setup()
+    const id = await repo.ensureInstallId('')
+    raw.prepare("UPDATE meta SET value = 'bad id!' WHERE key = 'install_id'").run()
+    const fresh = await repo.ensureInstallId('')
+    expect(fresh).not.toBe(id)
+    expect(isCanonicalId(fresh)).toBe(true)
+    expect(await repo.ensureInstallId('')).toBe(fresh)
+  })
+})
+
+describe('评审修复：推送过程中被删除的项不留孤儿映射', () => {
+  it('提交返回时本机项（或内嵌书的父卡）已删除：跳过这些记录，其余照常写入', async () => {
+    const { repo } = await setup()
+    const kept = await repo.createItem({ kind: 'lorebook', format: 'lorebook_v3', document: {} })
+    const gone = await repo.createItem({ kind: 'character_template', format: 'chara_card_v3', document: cardDoc('G') })
+    await repo.deleteItem(gone.localId)
+    const result = await repo.recordSync(SRV, [
+      { localId: gone.localId, canonicalId: 'card_gone', stateToken: 't', syncedRevision: 1 },
+      { localId: embeddedBookRef(gone.localId), canonicalId: 'book_gone', stateToken: '1', syncedRevision: 1 },
+      { localId: kept.localId, canonicalId: 'book_kept', stateToken: '1', syncedRevision: 1 },
+    ])
+    expect(result.skipped).toEqual([gone.localId, embeddedBookRef(gone.localId)])
+    expect((await repo.listLinks(SRV)).map((link) => link.localId)).toEqual([kept.localId])
+  })
+
+  it('已有的孤儿映射占着 canonical id 时被清掉，之后的拉取/推送不再永久冲突', async () => {
+    const { repo, raw } = await setup()
+    const now = new Date().toISOString()
+    raw.prepare(`INSERT INTO server_links (server_instance_id, local_id, canonical_id, state_token, synced_revision,
+      synced_digest, base_url_hint, updated_at) VALUES (?, 'card-orphan', 'card_1', 't', 1, '', '', ?)`).run(SRV, now)
+    const item = await repo.createItem({ kind: 'character_template', format: 'chara_card_v3', document: cardDoc('N') })
+    await repo.recordSync(SRV, [{ localId: item.localId, canonicalId: 'card_1', stateToken: 't2', syncedRevision: 1 }])
+    expect(await repo.findByCanonical(SRV, 'card_1')).toMatchObject({ localId: item.localId })
+    expect(await repo.getLink(SRV, 'card-orphan')).toBeNull()
+  })
+})
+
+describe('评审修复：事务不可嵌套', () => {
+  it('嵌套 inTransaction 直接拒绝，外层事务不被内层的 ROLLBACK 破坏', async () => {
+    const { db, raw } = openTestDatabase()
+    await migrate(db)
+    const now = new Date().toISOString()
+    await inTransaction(db, async () => {
+      await db.run(`INSERT INTO rule_cache (server_key, rule_id, payload, fetched_at) VALUES ('s', 'a', '{}', ?)`, [now])
+      await expect(inTransaction(db, async () => undefined)).rejects.toThrow(/nested/)
+      await db.run(`INSERT INTO rule_cache (server_key, rule_id, payload, fetched_at) VALUES ('s', 'b', '{}', ?)`, [now])
+    })
+    expect(raw.prepare('SELECT rule_id FROM rule_cache ORDER BY rule_id').all()).toEqual([{ rule_id: 'a' }, { rule_id: 'b' }])
   })
 })
