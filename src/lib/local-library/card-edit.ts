@@ -50,9 +50,6 @@ export interface LocalCardEdit {
   remove: CardFieldPath[]
 }
 
-/** 编辑器管的技能字段 */
-const EDITOR_SKILL_FIELDS = ['name', 'value', 'effect'] as const
-
 function editorView(row: CharacterSkill): JsonObject {
   return { name: row.name ?? '', value: row.value, ...(row.effect ? { effect: row.effect } : {}) }
 }
@@ -74,14 +71,51 @@ export function mergeEditedSkills(stored: unknown, rows: readonly EditorSkillRow
     unchanged = false
     // 改成空名的行与编辑器语义一致：丢弃（buildCardPatch 同样去掉空名技能）
     if (!String(row.name ?? '').trim()) return []
-    const base: JsonObject = hasSource && isJsonObject(pool[source]) ? cloneJson(pool[source] as JsonObject) : {}
-    for (const field of EDITOR_SKILL_FIELDS) delete base[field]
-    const next: JsonObject = { ...base, name: String(row.name).trim(), value: Number(row.value) || 0 }
-    const effect = typeof row.effect === 'string' ? row.effect.trim() : ''
-    if (effect) next.effect = effect
-    return [next]
+    if (!hasSource) return [newSkill(row)]
+    return [editedSkill(pool[source], normalized[source], row)]
   })
   return unchanged ? null : merged
+}
+
+function editedName(row: CharacterSkill): string {
+  return String(row.name).trim()
+}
+
+function editedEffect(row: CharacterSkill): string {
+  return typeof row.effect === 'string' ? row.effect.trim() : ''
+}
+
+/** 编辑器里新增的行：按编辑器的值新建 */
+function newSkill(row: CharacterSkill): JsonObject {
+  const next: JsonObject = { name: editedName(row), value: Number(row.value) || 0 }
+  const effect = editedEffect(row)
+  if (effect) next.effect = effect
+  return next
+}
+
+/**
+ * 改过的、有来源的行：以存着的那一项为基底，name / value / effect 逐个与来源项的归一形态
+ * 比较，只写用户改了的那几个，没改的保留存着的原值（值 0 不会变 20，对象 effect 不会被
+ * 字符串化）。纯字符串的技能被改时只能变成对象，它没有存着的 value，用编辑器显示的值。
+ */
+function editedSkill(stored: unknown, shown: CharacterSkill, row: CharacterSkill): JsonObject {
+  const next: JsonObject = isJsonObject(stored) ? cloneJson(stored) : { name: String(stored ?? ''), value: shown.value }
+  if ((row.name ?? '') !== (shown.name ?? '')) next.name = editedName(row)
+  if (Number(row.value) !== Number(shown.value)) next.value = Number(row.value) || 0
+  if ((row.effect ?? '') !== (shown.effect ?? '')) {
+    const effect = editedEffect(row)
+    if (effect) next.effect = effect
+    else delete next.effect
+  }
+  return next
+}
+
+/**
+ * 编辑器改某一行（SkillRowsEditor 用）：必须用对象展开更新，SKILL_SOURCE 才会跟着行走；
+ * 经 JSON 或 structuredClone 拷贝会丢掉 Symbol 键，那一行就会被当成新增、丢掉未知字段。
+ */
+export function updateSkillRow<T extends CharacterSkill>(rows: readonly T[], index: number, patch: Partial<CharacterSkill>): T[] {
+  return rows.map((row, at) => (at === index ? { ...row, ...patch } : row))
 }
 
 /** 编辑器打开时各标量字段显示的值（与 CharacterCardEditor 的 state 初值一致） */

@@ -182,6 +182,22 @@ describe('错误码映射覆盖服务端 CONTRACT.md（diceframe/diceframe@aa460
   })
 })
 
+describe('地址锁：无法解析的地址一律视为不同（同源 Web 两边都为空串除外）', () => {
+  it('两边都是无效地址也不算同一台', () => {
+    const locked = server({ baseUrl: 'ftp://a' })
+    configureApiClient({ baseUrl: 'ftp://b' })
+    expect(() => assertContentServer(locked)).toThrow(expect.objectContaining({ code: SERVER_MISMATCH }))
+    configureApiClient({ baseUrl: 'http://h:18000' })
+    expect(() => assertContentServer(locked)).toThrow(expect.objectContaining({ code: SERVER_MISMATCH }))
+  })
+
+  it('同源 Web（地址都是空串）视为同一台', () => {
+    const locked = server({ baseUrl: '' })
+    configureApiClient({ baseUrl: '' })
+    expect(() => assertContentServer(locked)).not.toThrow()
+  })
+})
+
 describe('地址锁按规范化后的地址比较', () => {
   it('同一台服务器的不同写法（大小写、尾斜杠、默认端口）不算换了服务器', () => {
     const locked = server({ baseUrl: 'http://h:18000' })

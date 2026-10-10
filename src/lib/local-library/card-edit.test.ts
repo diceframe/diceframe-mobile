@@ -6,7 +6,16 @@ import { buildCardPatch, type CharacterCardForm } from '@/lib/character-card'
 import { buildJoinNewPayload } from '@/lib/join-form'
 import { joinCardFromDocument, newCardDocument, patchCardDocument, readCardV3, writeCardV3, type CardBody } from '@/lib/portable/card-v3'
 import { canonicalJson } from '@/lib/portable/json'
-import { editorSkillRows, localCardEdit, mergeEditedSkills, newLocalCardBody, type EditorSkillRow, type EditorSnapshot } from './card-edit'
+import {
+  SKILL_SOURCE,
+  editorSkillRows,
+  localCardEdit,
+  mergeEditedSkills,
+  newLocalCardBody,
+  updateSkillRow,
+  type EditorSkillRow,
+  type EditorSnapshot,
+} from './card-edit'
 import { withRuleCache } from './rule-cache'
 import { createLatestGuard, createYielder } from './yielder'
 
@@ -94,6 +103,31 @@ describe('本机卡编辑：只写用户改过的字段', () => {
     editor.state.skills = editor.state.skills.map((row) => (row.name === '侦查' ? { ...row, name: '侦查（改）' } : row))
     const { body } = editor.save()
     expect((body.skills as unknown[])[0]).toEqual({ name: '侦查（改）', value: 60, effect: '找线索', base: 25, occupation: true })
+  })
+
+  it('只改名的技能：存着的值 0 与对象 effect 原样保留，只写名字', () => {
+    const stored = [{ name: '格斗', value: 0, effect: { rich: 'object effect' }, weapon: 'knife' }]
+    const rows = editorSkillRows(stored)
+    expect(mergeEditedSkills(stored, [{ ...rows[0], name: '近战' }])).toEqual([
+      { name: '近战', value: 0, effect: { rich: 'object effect' }, weapon: 'knife' },
+    ])
+  })
+
+  it('只改值的技能：名字与对象 effect 原样保留；纯字符串技能被改时变成对象', () => {
+    const stored = [{ name: ' 格斗 ', value: 0, effect: { rich: 1 } }, '闪避']
+    const rows = editorSkillRows(stored)
+    expect(mergeEditedSkills(stored, [{ ...rows[0], value: 5 }, { ...rows[1], value: 30 }])).toEqual([
+      { name: ' 格斗 ', value: 5, effect: { rich: 1 } },
+      { name: '闪避', value: 30 },
+    ])
+  })
+
+  it('编辑行必须用展开更新：updateSkillRow 保留来源下标，JSON 拷贝则会丢', () => {
+    const rows = editorSkillRows([{ name: 'a', value: 1, extra: true }])
+    const updated = updateSkillRow(rows, 0, { value: 2 })
+    expect(updated[0][SKILL_SOURCE]).toBe(0)
+    expect((JSON.parse(JSON.stringify(updated)) as EditorSkillRow[])[0][SKILL_SOURCE]).toBeUndefined()
+    expect(mergeEditedSkills([{ name: 'a', value: 1, extra: true }], updated)).toEqual([{ name: 'a', value: 2, extra: true }])
   })
 
   it('两项同名技能调换顺序：各自的字段跟着各自走，不会互换', () => {
