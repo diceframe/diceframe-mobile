@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://diceframe.dev/schemas/content-sync/card-body-2.json",
+  "title": "DiceFrame character card body (schema 2)",
+  "description": "The body a client puts in data.extensions.diceframe of a chara_card_v3 envelope. Only character_name and schema_version are required; every other field falls back to a server default. Server-only fields (id, card_id, provenance, source_plugin, plugin_content_id, raw_sillytavern, ruleset_revision, ruleset_operation_log, ruleset_runtime) are ignored on push.",
+  "type": "object",
+  "required": ["schema_version", "character_name"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 2},
+    "character_name": {"type": "string", "minLength": 1},
+    "race": {"type": "string"},
+    "class": {"type": "string"},
+    "background": {"type": "string"},
+    "identity": {"type": "object"},
+    "attributes": {"type": "object"},
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "value"],
+        "properties": {
+          "name": {"type": "string"},
+          "value": {"type": "number"},
+          "effect": {"type": "string", "description": "Stored as sent; only the first 500 characters are used in play."}
+        }
+      }
+    },
+    "equipment": {"type": "array"},
+    "inventory": {"type": "array"},
+    "key_items": {"type": "array"},
+    "gold": {"type": "number"},
+    "currency": {"type": "object"},
+    "portrait": {
+      "type": "object",
+      "description": "{} for none, or {\"kind\": \"builtin\", \"id\": \"...\"}. upload/generated portraits refer to server-local assets and are dropped on push."
+    },
+    "rule_id": {"type": "string"},
+    "rule_name": {"type": "string"},
+    "rule_version": {"type": "string"},
+    "mechanics": {"type": "string"},
+    "language": {"type": "string"},
+    "source": {"type": "string"},
+    "rule_binding": {
+      "type": "object",
+      "description": "Present only on rules-aware (e.g. D&D 2024) cards; such cards are unsupported for push in v1."
+    },
+    "ruleset_character": {
+      "type": "object",
+      "description": "Rules-runtime authority of a rules-aware card; unsupported for push in v1."
+    }
+  }
+}

@@ -82,6 +82,7 @@
     "@react-native-reusables/cli": "^0.7.1",
     "@types/better-sqlite3": "^9.6.0",
     "@types/react": "~19.2.2",
+    "ajv": "8.20.0",
     "better-sqlite3": "^12.11.1",
     "drizzle-kit": "0.31.11",
     "eslint": "^9.39.5",
