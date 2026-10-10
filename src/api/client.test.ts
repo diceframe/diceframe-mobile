@@ -533,3 +533,76 @@ describe('凭证相关错误文案与工具', () => {
     }
   })
 })
+
+describe('normalizeBaseUrl 与凭证键的一致性（统一规范化）', () => {
+  it('query / hash / 地址栏凭据不是服务器身份的一部分；路径前缀保留', () => {
+    expect(normalizeBaseUrl('http://h:18000/trpg/?x=1#y')).toBe('http://h:18000/trpg')
+    expect(normalizeBaseUrl('HTTPS://User:pw@NAS.local:443/Trpg/')).toBe('https://nas.local/Trpg')
+  })
+
+  it('非 http(s) 协议与无法解析的地址一律无效，不拼出奇怪的键', () => {
+    expect(normalizeBaseUrl('ftp://h')).toBe('')
+    expect(normalizeBaseUrl('javascript://alert(1)')).toBe('')
+    expect(normalizeBaseUrl('http://')).toBe('')
+  })
+
+  it('scheme、host、路径前缀不同的地址永不相撞', () => {
+    const keys = [
+      'http://h:18000', 'https://h:18000', 'http://h2:18000', 'http://h:18001',
+      'http://h:18000/a', 'http://h:18000/A', 'http://h:18000/a/b',
+    ].map(normalizeBaseUrl)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+})
+
+describe('跨源重定向不得带走凭证', () => {
+  function redirectedTo(url: string, body: unknown = { ok: true }): Response {
+    const response = new Response(JSON.stringify(body), { status: 200 })
+    Object.defineProperty(response, 'url', { value: url })
+    Object.defineProperty(response, 'redirected', { value: true })
+    return response
+  }
+
+  beforeEach(() => {
+    configureApiClient({
+      baseUrl: 'http://h:18000',
+      share: { game: 'abc', user: 'u1' },
+      credentials: { [credentialKey('http://h:18000', 'abc')]: { seat: 'S', room: 'R' } },
+    })
+  })
+
+  it('请求一律 redirect: manual（浏览器与 expo/fetch 据此不跟随跳转）', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }))
+    await api('/games/abc/log')
+    await apiBlob('/games/abc/speech', { method: 'POST', body: '{}' })
+    expect(fetchMock.mock.calls[0][1].redirect).toBe('manual')
+    expect(fetchMock.mock.calls[1][1].redirect).toBe('manual')
+  })
+
+  it('最终落到别的源（含 http→https 换协议）时拒绝响应', async () => {
+    fetchMock.mockResolvedValueOnce(redirectedTo('http://evil.example/api/games/abc/log'))
+    const error = (await rejectionOf(api('/games/abc/log'))) as ApiError
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error.code).toBe('CROSS_ORIGIN_REDIRECT')
+
+    fetchMock.mockResolvedValueOnce(redirectedTo('https://h:18000/api/games/abc/log'))
+    expect(((await rejectionOf(apiBlob('/games/abc/log'))) as ApiError).code).toBe('CROSS_ORIGIN_REDIRECT')
+  })
+
+  it('manual 模式下的跳转响应（opaqueredirect / 3xx）同样拒绝，不当成功处理', async () => {
+    const opaque = new Response(null, { status: 200 })
+    Object.defineProperty(opaque, 'type', { value: 'opaqueredirect' })
+    Object.defineProperty(opaque, 'status', { value: 0 })
+    fetchMock.mockResolvedValueOnce(opaque)
+    expect(((await rejectionOf(api('/games/abc/log'))) as ApiError).code).toBe('CROSS_ORIGIN_REDIRECT')
+
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 302, headers: { Location: 'http://evil/' } }))
+    expect(((await rejectionOf(api('/games/abc/log'))) as ApiError).code).toBe('CROSS_ORIGIN_REDIRECT')
+  })
+
+  it('同源的最终地址照常放行；拦截提示有本地化文案', async () => {
+    fetchMock.mockResolvedValueOnce(redirectedTo('http://h:18000/api/games/abc/log', { ok: 'same' }))
+    await expect(api('/games/abc/log')).resolves.toEqual({ ok: 'same' })
+    expect(errorMessage(new ApiError('x', 0, 'CROSS_ORIGIN_REDIRECT'))).toContain('重定向')
+  })
+})

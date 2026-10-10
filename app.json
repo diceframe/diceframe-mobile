@@ -26,6 +26,7 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.diceframe.mobile",
       "versionCode": 15,
+      "allowBackup": false,
       "permissions": [
         "RECORD_AUDIO",
         "CAMERA",

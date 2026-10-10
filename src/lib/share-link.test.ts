@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildShareLink, parseShareLink, redactShareLink } from './share-link'
+import {
+  buildShareLink,
+  joinLinkAutoParseAllowed,
+  parseShareLink,
+  redactShareLink,
+  serverSwitchTarget,
+} from './share-link'
 
 describe('parseShareLink', () => {
   it('解析 hash 路由分享链接；只带公开 uid 的旧接管链接标为 legacyUser', () => {
@@ -100,5 +106,37 @@ describe('redactShareLink', () => {
     const link = 'http://h/#/join?game=a&share=1&server=http%3A%2F%2Fnas'
     expect(redactShareLink(link)).toBe(link)
     expect(redactShareLink('http://h/#/join?game=a&seats=1')).toBe('http://h/#/join?game=a&seats=1')
+  })
+})
+
+describe('邀请链接与当前连接共用同一规范化（凭证键拼写一致）', () => {
+  it('server 参数里的 query/凭据/大小写不影响后端地址；非 http(s) server 视为无效链接', () => {
+    const parsed = parseShareLink('http://web/#/join?game=a&server=' + encodeURIComponent('HTTP://u:p@NAS:80/trpg/?x=1'))
+    expect(parsed?.baseUrl).toBe('http://nas/trpg')
+    expect(parseShareLink('http://web/#/join?game=a&server=' + encodeURIComponent('ftp://nas'))).toBeNull()
+  })
+})
+
+describe('深链自动解析只在同一后端上发生', () => {
+  it('指向当前服务器、且不带席位凭证的链接可以自动解析（凭证被拒后的内部回跳）', () => {
+    const link = buildShareLink('g', 'http://h:18000', undefined, 'http://h:18000')
+    expect(joinLinkAutoParseAllowed(link, 'http://h:18000')).toBe(true)
+    expect(joinLinkAutoParseAllowed(link, 'HTTP://h:18000/')).toBe(true)
+  })
+
+  it('指向别的服务器、当前未连接、带 seat= 或无效链接都不自动解析', () => {
+    const evil = 'http://h:18000/#/join?game=g&share=1&server=' + encodeURIComponent('https://evil.example')
+    expect(joinLinkAutoParseAllowed(evil, 'http://h:18000')).toBe(false)
+    expect(joinLinkAutoParseAllowed('http://h:18000/#/join?game=g', '')).toBe(false)
+    expect(joinLinkAutoParseAllowed('http://h:18000/#/join?game=g&seat=S', 'http://h:18000')).toBe(false)
+    expect(joinLinkAutoParseAllowed('not a link', 'http://h:18000')).toBe(false)
+  })
+
+  it('切换服务器需要确认，并给出规范化后的目标地址', () => {
+    expect(serverSwitchTarget('https://evil.example/#/join?game=g', 'http://h:18000')).toBe('https://evil.example')
+    expect(serverSwitchTarget('http://h:18000/#/join?game=g', 'http://h:18000/')).toBeNull()
+    // 从未连接过任何服务器时没有可丢失的登录态，不打扰
+    expect(serverSwitchTarget('https://evil.example/#/join?game=g', '')).toBeNull()
+    expect(serverSwitchTarget('garbage', 'http://h:18000')).toBeNull()
   })
 })

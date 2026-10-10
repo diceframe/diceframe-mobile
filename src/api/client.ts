@@ -19,6 +19,7 @@ import { getRandomValues } from 'expo-crypto'
 
 import { getT } from '@/i18n/t'
 import type { TKey } from '@/i18n/keyset'
+import { normalizeBaseUrl } from '@/lib/base-url'
 import {
   ROOM_TOKEN_HEADER,
   SEAT_TOKEN_HEADER,
@@ -155,22 +156,10 @@ function ensureSessionToken(): string {
 }
 
 /**
- * 生成服务器唯一键：补协议、规范主机与默认端口、去尾斜杠及地址栏凭据。
- * 当前连接、历史列表和原生会话映射必须共同使用这一份规范化结果。
+ * 服务器唯一键：实现在 lib/base-url（邀请链接解析与凭证槽位共用同一份），
+ * 这里转出以保持既有 import 路径。
  */
-export function normalizeBaseUrl(input: string): string {
-  let value = input.trim()
-  if (!value) return ''
-  if (!/^https?:\/\//i.test(value)) value = `http://${value}`
-  try {
-    const url = new URL(value)
-    url.username = ''
-    url.password = ''
-    return url.toString().replace(/\/$/, '')
-  } catch {
-    return value.replace(/\/+$/, '')
-  }
-}
+export { normalizeBaseUrl }
 
 /**
  * 分享模式下是否下发公开 uid（对齐 Web shareQuery 的 sendUser）：
@@ -359,11 +348,38 @@ function requestQuery(query: ApiQuery | undefined, anonymous = false): { params:
   return { params, drop: [...SHARE_QUERY_KEYS] }
 }
 
+function originOf(url: string): string {
+  try {
+    const base = typeof location !== 'undefined' ? location.href : undefined
+    return new URL(url, base).origin
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * 重定向防线：请求头里手动带着会话 Cookie、席位凭证与房间令牌，跟随跨源跳转会把
+ * 它们原样发给别的主机（服务端 API 本身从不重定向）。
+ * - 一律 `redirect: 'manual'`：浏览器与 expo/fetch 据此不跟随；
+ * - RN 内置 fetch（XMLHttpRequest）忽略该选项会自行跟随，只能事后按最终地址拒收，
+ *   并提示用户直接填写最终地址（多见于 http→https 的反代跳转）。
+ */
+async function guardedFetch(url: string, init: RequestInit): Promise<Response> {
+  const response = await fetch(url, { ...init, redirect: 'manual' })
+  const finalUrl = response.url
+  const crossOrigin = !!finalUrl && !!originOf(url) && originOf(finalUrl) !== originOf(url)
+  const unfollowedRedirect = response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)
+  if (crossOrigin || unfollowedRedirect) {
+    throw new ApiError('cross-origin redirect blocked', response.status, 'CROSS_ORIGIN_REDIRECT')
+  }
+  return response
+}
+
 async function send(path: string, init: ApiRequestInit, anonymous: boolean): Promise<Response> {
   const { query, ...requestInit } = init
   const { params, drop } = requestQuery(query, anonymous)
   const url = buildUrl(path, params, drop)
-  return fetch(url, { ...requestInit, headers: buildHeaders(requestInit, anonymous, path) })
+  return guardedFetch(url, { ...requestInit, headers: buildHeaders(requestInit, anonymous, path) })
 }
 
 function failure(path: string, response: Response, data: Record<string, unknown>, anonymous: boolean): ApiError {
@@ -401,7 +417,7 @@ export async function apiBlob(
 export async function validateAccessToken(value: string): Promise<void> {
   const headers = new Headers()
   if (value) headers.set('Authorization', `Bearer ${value}`)
-  const response = await fetch(buildUrl('/login'), { method: 'POST', headers })
+  const response = await guardedFetch(buildUrl('/login'), { method: 'POST', headers })
   const data = await readJson(response)
   if (response.status === 429) {
     throw new ApiError('请求过于频繁，请稍后再试', 429, errorCodeOf(data), retryAfterOf(data, response))
@@ -417,7 +433,7 @@ export async function checkOwnerAccess(): Promise<OwnerAccessStatus> {
   try {
     const headers = new Headers()
     if (context.token) headers.set('Authorization', `Bearer ${context.token}`)
-    const response = await fetch(buildUrl('/me'), { headers })
+    const response = await guardedFetch(buildUrl('/me'), { headers })
     if (response.status === 401) return 'login-required'
     return response.ok ? 'allowed' : 'unavailable'
   } catch {
@@ -435,6 +451,7 @@ export function errorMessage(error: unknown, fallback: TKey = 'dfErrorsUnexpecte
   const t = getT()
   if (error instanceof UserFacingError) return t(error.key)
   if (error instanceof ApiError) {
+    if (error.code === 'CROSS_ORIGIN_REDIRECT') return t('dfErrorsRedirectBlocked')
     if (error.code) {
       // 只展示已收录的业务提示；未知错误码和服务端异常原文留在异常对象中供排查。
       // 上游 apiErrors 既有原样大写码（FIELD_REQUIRES_GM / SEAT_TOKEN_*）也有小写码：先精确后小写。

@@ -29,7 +29,14 @@ import {
 import { QrScannerSheet } from '@/features/scan/QrScannerSheet'
 import { seatUidOf } from '@/lib/player-identity'
 import { parseJoinNotice, readCredential, withSeatToken, type JoinNotice } from '@/lib/seat-credentials'
-import { parseShareLink, redactShareLink, type ParsedShareLink } from '@/lib/share-link'
+import {
+  joinLinkAutoParseAllowed,
+  parseShareLink,
+  redactShareLink,
+  serverSwitchTarget,
+  type ParsedShareLink,
+} from '@/lib/share-link'
+import { confirmDestructive } from '@/lib/confirm'
 import { ServerCompatBlocked, fetchServerCompat, serverCompatErrorText } from '@/lib/server-compat'
 import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
 import { useT } from '@/i18n/t'
@@ -80,6 +87,12 @@ export default function JoinScreen() {
   const cooldownTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const noticeRef = React.useRef<JoinNotice | null>(parseJoinNotice(params.notice))
   const autoParsedRef = React.useRef(false)
+  // 深链带来的链接指向别的服务器时不自动解析，只预填并提示目标主机，由用户明确操作
+  const [foreignLinkHost] = React.useState(() =>
+    params.link && !joinLinkAutoParseAllowed(params.link, useSettingsStore.getState().baseUrl)
+      ? serverSwitchTarget(params.link, useSettingsStore.getState().baseUrl)
+      : null,
+  )
 
   React.useEffect(() => {
     mountedRef.current = true
@@ -90,10 +103,13 @@ export default function JoinScreen() {
     }
   }, [])
 
-  // 路由层带着邀请链接回来（凭证被拒、席位失效）：直接解析，省得玩家再找一遍链接
+  // 路由层带着邀请链接回来（凭证被拒、席位失效）：直接解析，省得玩家再找一遍链接。
+  // 这个路由也能被任意网页经 diceframe:// 深链拉起，所以只自动解析指向当前服务器、
+  // 且不带席位凭证的链接；其余只预填输入框，等用户明确点击（切服务器还要再确认）。
   React.useEffect(() => {
     if (autoParsedRef.current || !params.link) return
     autoParsedRef.current = true
+    if (!joinLinkAutoParseAllowed(params.link, useSettingsStore.getState().baseUrl)) return
     void parse(params.link)
   }, [params.link])
 
@@ -130,6 +146,17 @@ export default function JoinScreen() {
       return
     }
     const { seat, ...publicLink } = result
+    // 切到另一台服务器会登出房主、清掉本机玩家身份：先让用户看清目标主机并确认
+    const switchTarget = serverSwitchTarget(input, useSettingsStore.getState().baseUrl)
+    if (switchTarget) {
+      const confirmed = await confirmDestructive({
+        title: t('dfJoinSwitchServerTitle'),
+        message: t('dfJoinSwitchServerMessage', { host: switchTarget }),
+        confirmText: t('dfJoinSwitchServerConfirm'),
+        cancelText: t('dfCommonCancel'),
+      })
+      if (!confirmed || !mountedRef.current) return
+    }
     setBusy(true)
     const targetBaseUrl = normalizeBaseUrl(result.baseUrl)
     const current = useSettingsStore.getState()
@@ -360,6 +387,9 @@ export default function JoinScreen() {
         >
       {step === 'link' && (
         <View className="gap-3">
+          {foreignLinkHost ? (
+            <Text className="text-destructive">{t('dfJoinOtherServerNotice', { host: foreignLinkHost })}</Text>
+          ) : null}
           <Text variant="small">{t('dfJoinLinkLabel')}</Text>
           <Input
             value={link}
