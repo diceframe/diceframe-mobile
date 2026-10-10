@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { randomUUID } from 'expo-crypto'
-import { Appearance } from 'react-native'
+import { Appearance, Platform } from 'react-native'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
@@ -53,6 +53,19 @@ interface PersistedSettings {
   language: LocalePreference
 }
 
+/**
+ * settings 里的 install id 缓存：生成失败（Web 非安全上下文没有 crypto.randomUUID）
+ * 时返回空串而不是抛出——这里抛错会卡死水合、整个 App 停在启动页。
+ * 权威值在本机内容库的 meta 表里（stores/local-library.ts 的 resolveInstallId）。
+ */
+export function safeInstallId(stored: unknown, uuid: () => string): string {
+  try {
+    return ensureInstallId(stored, uuid)
+  } catch {
+    return ''
+  }
+}
+
 /** 新安装与数据版本重置使用同一套默认值，不转换旧数据。 */
 function defaultSettings(): PersistedSettings {
   return {
@@ -99,9 +112,9 @@ interface SettingsState {
    */
   shareCredentials: CredentialSlots
   /**
-   * 本安装的 install id（内容同步契约的 device source id）：首次启动生成、跨服务器
-   * 共用、永不改变；不是凭证（服务端设备列表会公开显示它），所以与设置一起存。
-   * 水合完成后一定是规范 id，水合前为空串。
+   * 本安装的 install id（内容同步契约的 device source id）的**缓存**。权威值存在本机
+   * 内容库（SQLite meta 表），与内容、映射同生共死；同步前一律经 resolveInstallId 取。
+   * 不是凭证（服务端设备列表会公开显示它）。Web 端不生成（没有本机库），可能为空串。
    */
   installId: string
   /** TTS 播放速率（对齐 Web localStorage trpg_tts_rate） */
@@ -337,15 +350,21 @@ export const useSettingsStore = create<SettingsState>()(
         themeMode: state.themeMode,
         language: state.language,
       }),
-      migrate: () => defaultSettings(),
+      // 结构升级照旧重置设置，但保留 install id 缓存（双保险；权威值在本机库里）
+      migrate: (persisted) => {
+        const installId = (persisted as { installId?: unknown } | null)?.installId
+        return { ...defaultSettings(), installId: typeof installId === 'string' ? installId : '' }
+      },
       onRehydrateStorage: () => (state) => {
         if (state) {
           const adopted = adoptLegacyRoomTokens(state.shares ?? {}, state.shareCredentials ?? {}, state.baseUrl)
           if (adopted.shares !== state.shares || adopted.credentials !== state.shareCredentials) {
             useSettingsStore.setState({ shares: adopted.shares, shareCredentials: adopted.credentials })
           }
-          const installId = ensureInstallId(state.installId, randomUUID)
-          if (installId !== state.installId) useSettingsStore.setState({ installId })
+          if (Platform.OS !== 'web') {
+            const installId = safeInstallId(state.installId, randomUUID)
+            if (installId && installId !== state.installId) useSettingsStore.setState({ installId })
+          }
           syncApiClient(useSettingsStore.getState())
           state.markHydrated()
         }

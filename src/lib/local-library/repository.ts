@@ -6,7 +6,10 @@
  * 文档内容的解析/补丁（可移植格式）不在这里，见 M2 的格式模块；这里只存原文。
  */
 import { EMBEDDED_BOOK_SUFFIX, isCanonicalId, isLocalItemKind, newLocalId, type LocalItemKind } from './ids'
+
 import { SerialQueue, inTransaction, type SqlDatabase } from './sql'
+
+const INSTALL_ID_KEY = 'install_id'
 
 export const LOCAL_ITEM_READ_ONLY = 'LOCAL_ITEM_READ_ONLY'
 export const LOCAL_ITEM_NOT_FOUND = 'LOCAL_ITEM_NOT_FOUND'
@@ -77,6 +80,10 @@ export interface SyncRecord {
   localId: string
   canonicalId: string
   stateToken: string
+  /**
+   * **被推送（或拉取写入）那份文档的 revision**，不是写入映射时本机项的当前 revision：
+   * 推送进行中用户又改了一次时，当前 revision 已经更大，记成它会把这次改动错标为已同步。
+   */
   syncedRevision: number
   syncedDigest?: string
   baseUrlHint?: string
@@ -262,25 +269,38 @@ export class LocalLibraryRepository {
 
   /**
    * 一次提交/拉取的结果整体写入映射与同步基线（单事务）。
-   * 一个 canonical id 在同一服务器上只能对应一个本机项：冲突说明调用方映射错了，
-   * 整批拒绝（SERVER_LINK_CONFLICT），不默默改写别人的映射。
+   *
+   * - 本机项（内嵌书看它的父卡）在推送途中被删掉的记录直接跳过，不写孤儿映射，
+   *   返回值的 skipped 列出它们；
+   * - 一个 canonical id 在同一服务器上只能对应一个本机项：占着它的若是孤儿映射
+   *   （所属本机项已不存在），先清掉；若是另一个仍存在的本机项，说明调用方映射错了，
+   *   整批拒绝（SERVER_LINK_CONFLICT），不默默改写别人的映射。
    */
-  recordSync(serverInstanceId: string, records: readonly SyncRecord[]): Promise<void> {
+  recordSync(serverInstanceId: string, records: readonly SyncRecord[]): Promise<{ skipped: string[] }> {
     return this.queue.run(() => inTransaction(this.db, async () => {
       requireCanonical(serverInstanceId, 'server_instance_id')
       const now = this.now()
+      const skipped: string[] = []
       for (const record of records) {
         requireCanonical(record.localId, 'local_id')
         if (!record.canonicalId) throw new LocalLibraryError('INVALID_ID', 'canonical_id is required')
+        if (!(await this.ownerExists(record.localId))) {
+          skipped.push(record.localId)
+          continue
+        }
         const holder = await this.db.get<{ local_id: string }>(
           'SELECT local_id FROM server_links WHERE server_instance_id = ? AND canonical_id = ? AND local_id <> ?',
           [serverInstanceId, record.canonicalId, record.localId],
         )
         if (holder) {
-          throw new LocalLibraryError(
-            SERVER_LINK_CONFLICT,
-            `canonical id already mapped to ${holder.local_id} on this server`,
-          )
+          if (await this.ownerExists(holder.local_id)) {
+            throw new LocalLibraryError(
+              SERVER_LINK_CONFLICT,
+              `canonical id already mapped to ${holder.local_id} on this server`,
+            )
+          }
+          await this.db.run(
+            'DELETE FROM server_links WHERE server_instance_id = ? AND local_id = ?', [serverInstanceId, holder.local_id])
         }
         await this.db.run(
           `INSERT INTO server_links (server_instance_id, local_id, canonical_id, state_token, synced_revision,
@@ -299,6 +319,7 @@ export class LocalLibraryRepository {
           ],
         )
       }
+      return { skipped }
     }))
   }
 
@@ -337,7 +358,34 @@ export class LocalLibraryRepository {
     })
   }
 
+  // ---------- install id ----------
+
+  /**
+   * 本安装的 install id，存在本库的 meta 表里，与内容和映射同生共死（settings 里只是缓存）。
+   * 库里有合法值就永远用它；库里没有（或已被破坏）时，收编 settings 里缓存的合法值（seed），
+   * 都没有才生成新的。
+   */
+  ensureInstallId(seed: string): Promise<string> {
+    return this.queue.run(() => inTransaction(this.db, async () => {
+      const row = await this.db.get<{ value: string }>('SELECT value FROM meta WHERE key = ?', [INSTALL_ID_KEY])
+      if (row && isCanonicalId(row.value)) return row.value
+      const id = isCanonicalId(seed) ? seed : this.uuid().toLowerCase()
+      if (!isCanonicalId(id)) throw new LocalLibraryError('INVALID_ID', 'uuid source returned a non-canonical id')
+      await this.db.run(
+        'INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value',
+        [INSTALL_ID_KEY, id],
+      )
+      return id
+    }))
+  }
+
   // ---------- internals ----------
+
+  /** 映射所属的本机项是否还在（内嵌书 `<id>.book` 看它的父卡） */
+  private async ownerExists(localId: string): Promise<boolean> {
+    const owner = localId.endsWith(EMBEDDED_BOOK_SUFFIX) ? localId.slice(0, -EMBEDDED_BOOK_SUFFIX.length) : localId
+    return !!(await this.db.get<{ found: number }>('SELECT 1 AS found FROM items WHERE local_id = ?', [owner]))
+  }
 
   private async readItem(localId: string): Promise<LocalItem | null> {
     const row = await this.db.get<ItemRow>(`SELECT ${SUMMARY_COLUMNS}, document FROM items WHERE local_id = ?`, [localId])

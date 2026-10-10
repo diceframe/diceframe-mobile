@@ -10,6 +10,7 @@ import { Platform } from 'react-native'
 import { openDatabaseAsync, type SQLiteBindValue, type SQLiteDatabase } from 'expo-sqlite'
 
 import { LocalLibraryRepository } from '@/lib/local-library/repository'
+import { useSettingsStore } from '@/stores/settings'
 import { migrate } from '@/lib/local-library/schema'
 import type { SqlDatabase, SqlValue } from '@/lib/local-library/sql'
 
@@ -51,4 +52,18 @@ export function localLibrary(): Promise<LocalLibraryRepository | null> {
     })
   }
   return opening
+}
+
+/**
+ * 本安装的 install id（内容同步与配对上报都用它）：以本机库 meta 表为准，
+ * 首次调用时收编 settings 里的缓存值，并把权威值回写到 settings 缓存。
+ * Web 端没有本机库，返回 null（不参与内容同步）。
+ */
+export async function resolveInstallId(): Promise<string | null> {
+  const library = await localLibrary()
+  if (!library) return null
+  const cached = useSettingsStore.getState().installId
+  const installId = await library.ensureInstallId(cached)
+  if (installId !== cached) useSettingsStore.setState({ installId })
+  return installId
 }

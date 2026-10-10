@@ -11,6 +11,10 @@
  * - rule_cache：离线建卡用的规则库与角色模板缓存，按服务器地址分槽（玩家拿不到
  *   server_instance_id，而规则是公开、可随时重取的缓存）。
  *
+ * - meta（v2）：键值表，目前只放 install id。它必须和内容、映射存在同一个文件里、
+ *   同生共死：settings 被重置或清空时 install id 若随之改变，已有映射会悄悄推出重复
+ *   副本（密码登录）或被拒（配对设备 403 SOURCE_NOT_THIS_DEVICE）。
+ *
  * 迁移只增不改；遇到比本 App 更新的 user_version 一律拒绝打开（不降级、不猜）。
  */
 import { inTransaction, type SqlDatabase } from './sql'
@@ -58,6 +62,13 @@ export const MIGRATIONS: readonly string[] = [
     payload TEXT NOT NULL,
     fetched_at TEXT NOT NULL,
     PRIMARY KEY (server_key, rule_id)
+  );
+  `,
+  // v2
+  `
+  CREATE TABLE meta (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
   );
   `,
 ]

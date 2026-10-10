@@ -15,7 +15,7 @@ import {
 } from '@/api/client'
 import { credentialKey } from '@/lib/seat-credentials'
 import { readThemeToken, resolveTheme } from '@/lib/theme'
-import { activeIdentityOf, adoptLegacyRoomTokens, useSettingsStore } from './settings'
+import { activeIdentityOf, adoptLegacyRoomTokens, safeInstallId, useSettingsStore } from './settings'
 
 // settings store 依赖 AsyncStorage（RN 模块），单测里换成内存实现。
 // vitest 会把 vi.mock 提升到文件顶部，实际先于上面的 import 执行。
@@ -35,6 +35,7 @@ vi.mock('react-native', () => ({
   Appearance: {
     getColorScheme: () => 'dark',
   },
+  Platform: { OS: 'android' },
 }))
 
 describe('settings store 登录/登出状态机（回归：退出登录后必须能重新进入）', () => {
@@ -471,5 +472,20 @@ describe('settings store install id', () => {
     await AsyncStorage.setItem('diceframe-settings', JSON.stringify({ version: 3, state: { installId: '../bad id' } }))
     await useSettingsStore.persist.rehydrate()
     expect(useSettingsStore.getState().installId).toMatch(/^[0-9a-f-]{36}$/)
+  })
+})
+
+describe('评审修复：settings 里的 install id 缓存', () => {
+  it('settings 结构升级（migrate）保留已有的 install id', async () => {
+    useSettingsStore.setState({ ...useSettingsStore.getInitialState() })
+    const migrate = useSettingsStore.persist.getOptions().migrate!
+    const migrated = await migrate({ installId: 'kept-install-id', token: 'old' }, 2) as { installId: string; token: unknown }
+    expect(migrated.installId).toBe('kept-install-id')
+    expect(migrated.token).toBeNull()
+  })
+
+  it('随机源不可用（Web 非安全上下文）时不抛错、不阻塞水合', () => {
+    expect(safeInstallId(undefined, () => { throw new Error('crypto.randomUUID is not available') })).toBe('')
+    expect(safeInstallId('kept-id', () => { throw new Error('unused') })).toBe('kept-id')
   })
 })
