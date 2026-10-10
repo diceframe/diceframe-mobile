@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { randomUUID } from 'expo-crypto'
 import { Appearance } from 'react-native'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
@@ -15,6 +16,7 @@ import {
   type IdentitySlots,
   type PlayerIdentity,
 } from '@/lib/player-identity'
+import { ensureInstallId } from '@/lib/local-library/ids'
 import type { LocalePreference } from '@/lib/locale'
 import { updateRecentServers } from '@/lib/recent-servers'
 import {
@@ -42,6 +44,7 @@ interface PersistedSettings {
   shares: IdentitySlots
   activeShareGame: string | null
   shareCredentials: CredentialSlots
+  installId: string
   ttsRate: number
   ttsEngine: TtsEngine
   ttsAuto: boolean
@@ -61,6 +64,7 @@ function defaultSettings(): PersistedSettings {
     shares: {},
     activeShareGame: null,
     shareCredentials: {},
+    installId: '',
     ttsRate: 1,
     ttsEngine: 'server',
     ttsAuto: true,
@@ -94,6 +98,12 @@ interface SettingsState {
    * 不随 clearShares 清空：换服务器再换回来时凭证仍属于原服务器，且只会发给原服务器。
    */
   shareCredentials: CredentialSlots
+  /**
+   * 本安装的 install id（内容同步契约的 device source id）：首次启动生成、跨服务器
+   * 共用、永不改变；不是凭证（服务端设备列表会公开显示它），所以与设置一起存。
+   * 水合完成后一定是规范 id，水合前为空串。
+   */
+  installId: string
   /** TTS 播放速率（对齐 Web localStorage trpg_tts_rate） */
   ttsRate: number
   /** 朗读引擎；server 引擎不可用时对局页会整体隐藏朗读入口 */
@@ -319,6 +329,7 @@ export const useSettingsStore = create<SettingsState>()(
         shares: state.shares,
         activeShareGame: state.activeShareGame,
         shareCredentials: state.shareCredentials,
+        installId: state.installId,
         ttsRate: state.ttsRate,
         ttsEngine: state.ttsEngine,
         ttsAuto: state.ttsAuto,
@@ -333,6 +344,8 @@ export const useSettingsStore = create<SettingsState>()(
           if (adopted.shares !== state.shares || adopted.credentials !== state.shareCredentials) {
             useSettingsStore.setState({ shares: adopted.shares, shareCredentials: adopted.credentials })
           }
+          const installId = ensureInstallId(state.installId, randomUUID)
+          if (installId !== state.installId) useSettingsStore.setState({ installId })
           syncApiClient(useSettingsStore.getState())
           state.markHydrated()
         }

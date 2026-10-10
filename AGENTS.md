@@ -122,6 +122,10 @@ src/
 - 扫码用 `expo-camera`（含原生代码）：改 `app.json` 的权限与 config plugin，不改 `android/`；
   新增原生依赖后必须 `npx expo prebuild -p android --clean --no-install` 重新生成再出包，
   并递增 `android.versionCode`。
+- 本机内容库用 `expo-sqlite`（含原生代码，同样需要重新 prebuild）。业务代码只依赖
+  `src/lib/local-library/sql.ts` 的 `SqlDatabase` 接口，唯一引入 expo-sqlite 的地方是
+  `src/stores/local-library.ts`；单测用开发依赖 `better-sqlite3`（预编译二进制）实现同一接口，
+  对真实 SQLite 跑迁移与仓储（`src/test/better-sqlite-database.ts`）。Web 端不提供本机库。
 - `.env.local` 是个人环境（隧道地址等），已被 gitignore，不要把里面的值写死进代码。
 - 后台/前台切换有专门生命周期处理（暂停 SSE、回前台刷新）；动 `stream/` 或 `stores/game.ts`
   时先读 `src/stream/gameStream.ts` 的现有机制，别重复造轮子。

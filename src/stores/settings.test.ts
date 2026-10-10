@@ -267,7 +267,10 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     expect(useSettingsStore.getState()).toMatchObject({ ...defaults, hydrated: true })
     expect(currentShare()).toBeNull()
     expect(currentToken()).toBeNull()
-    expect(JSON.parse((await AsyncStorage.getItem('diceframe-settings'))!)).toEqual({ version: 3, state: defaults })
+    // 重置同样只保留设备级的 install id（重置后新生成一个，规范 uuid）
+    const installId = useSettingsStore.getState().installId
+    expect(installId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(JSON.parse((await AsyncStorage.getItem('diceframe-settings'))!)).toEqual({ version: 3, state: { ...defaults, installId } })
   })
 
   it('v3 重新登录后的设置正常持久化，后续启动不再清空', async () => {
@@ -443,5 +446,30 @@ describe('settings store 分享凭证（席位凭证 / 房间令牌）', () => {
     const [url, init] = fetchMock.mock.calls[0]
     expect(new URL(url).searchParams.has('room_token')).toBe(false)
     expect(new Headers(init.headers).get('X-Room-Token')).toBe('legacy-room')
+  })
+})
+
+describe('settings store install id', () => {
+  it('首次启动生成规范 install id 并落盘，之后的启动沿用、绝不改变', async () => {
+    useSettingsStore.setState({ ...useSettingsStore.getInitialState() })
+    await AsyncStorage.setItem('diceframe-settings', JSON.stringify({ version: 3, state: { baseUrl: '' } }))
+    await useSettingsStore.persist.rehydrate()
+    const first = useSettingsStore.getState().installId
+    expect(first).toMatch(/^[0-9a-f-]{36}$/)
+    const saved = JSON.parse((await AsyncStorage.getItem('diceframe-settings'))!)
+    expect(saved.state.installId).toBe(first)
+
+    // 模拟下次启动：内存态清空（这一步会触发 persist 写盘，所以随后放回原落盘内容）
+    useSettingsStore.setState({ ...useSettingsStore.getInitialState() })
+    await AsyncStorage.setItem('diceframe-settings', JSON.stringify(saved))
+    await useSettingsStore.persist.rehydrate()
+    expect(useSettingsStore.getState().installId).toBe(first)
+  })
+
+  it('落盘的 install id 被破坏（非规范 id）时重新生成', async () => {
+    useSettingsStore.setState({ ...useSettingsStore.getInitialState() })
+    await AsyncStorage.setItem('diceframe-settings', JSON.stringify({ version: 3, state: { installId: '../bad id' } }))
+    await useSettingsStore.persist.rehydrate()
+    expect(useSettingsStore.getState().installId).toMatch(/^[0-9a-f-]{36}$/)
   })
 })
