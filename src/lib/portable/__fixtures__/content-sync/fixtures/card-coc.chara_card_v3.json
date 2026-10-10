@@ -1,0 +1,71 @@
+{
+  "spec": "chara_card_v3",
+  "spec_version": "3.0",
+  "data": {
+    "name": "Harvey Walters",
+    "description": "Reporter for the Arkham Advertiser, chasing a story he should not.",
+    "personality": "",
+    "scenario": "",
+    "first_mes": "",
+    "mes_example": "",
+    "creator_notes": "",
+    "system_prompt": "",
+    "post_history_instructions": "",
+    "alternate_greetings": [],
+    "group_only_greetings": [],
+    "tags": [],
+    "creator": "",
+    "character_version": "",
+    "extensions": {
+      "diceframe": {
+        "schema_version": 2,
+        "character_name": "Harvey Walters",
+        "race": "Human",
+        "class": "Journalist",
+        "background": "Reporter for the Arkham Advertiser, chasing a story he should not.",
+        "identity": {
+          "age": "42",
+          "occupation": "Journalist"
+        },
+        "attributes": {
+          "STR": 50,
+          "CON": 60,
+          "SIZ": 65,
+          "DEX": 45,
+          "APP": 55,
+          "INT": 75,
+          "POW": 65,
+          "EDU": 80
+        },
+        "skills": [
+          {
+            "name": "Library Use",
+            "value": 60
+          },
+          {
+            "name": "Persuade",
+            "value": 45
+          },
+          {
+            "name": "Spot Hidden",
+            "value": 50
+          }
+        ],
+        "equipment": [
+          "Notebook",
+          "Camera"
+        ],
+        "inventory": [],
+        "key_items": [],
+        "gold": 0,
+        "currency": {},
+        "portrait": {},
+        "rule_id": "freeform_coc",
+        "rule_name": "Call of Cthulhu (freeform)",
+        "mechanics": "coc",
+        "language": "en",
+        "source": "device"
+      }
+    }
+  }
+}

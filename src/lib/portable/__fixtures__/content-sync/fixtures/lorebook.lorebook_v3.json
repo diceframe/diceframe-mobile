@@ -1,0 +1,44 @@
+{
+  "spec": "lorebook_v3",
+  "data": {
+    "lorebook": {
+      "name": "Ashen Atlas",
+      "description": "Places of the ashen frontier.",
+      "scan_depth": 4,
+      "token_budget": 2048,
+      "recursive_scanning": false,
+      "entries": [
+        {
+          "id": "town-cinder",
+          "name": "Cinder Town",
+          "content": "A mining town built on cooling lava.",
+          "keys": [
+            "cinder town",
+            "cinder"
+          ],
+          "secondary_keys": [],
+          "enabled": true,
+          "constant": false,
+          "insertion_order": 100,
+          "priority": 10
+        },
+        {
+          "id": "keep-ash",
+          "name": "Ash Keep",
+          "content": "A ruined keep; its watchfire still burns.",
+          "keys": [
+            "ash keep"
+          ],
+          "enabled": true
+        },
+        {
+          "id": "lore-basics",
+          "name": "Frontier basics",
+          "content": "The frontier has no king.",
+          "keys": [],
+          "constant": true
+        }
+      ]
+    }
+  }
+}

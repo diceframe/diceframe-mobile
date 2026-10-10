@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://diceframe.dev/schemas/content-sync/chara-card-v3.json",
+  "title": "Portable character card (chara_card_v3 envelope)",
+  "description": "Tavern chara_card_v3 envelope. DiceFrame reads only data.extensions.diceframe (see card-body.schema.json) and data.character_book (see lorebook-v3.schema.json, the book object). The standard Tavern fields are written for interoperability and ignored on import.",
+  "type": "object",
+  "required": ["spec", "data"],
+  "properties": {
+    "spec": {"type": "string", "const": "chara_card_v3"},
+    "spec_version": {"type": "string"},
+    "data": {
+      "type": "object",
+      "required": ["name", "extensions"],
+      "properties": {
+        "name": {"type": "string"},
+        "description": {"type": "string"},
+        "extensions": {
+          "type": "object",
+          "required": ["diceframe"],
+          "properties": {"diceframe": {"type": "object"}}
+        },
+        "character_book": {
+          "type": "object",
+          "required": ["entries"],
+          "properties": {
+            "name": {"type": "string"},
+            "entries": {"type": "array", "items": {"$ref": "lorebook-v3.schema.json#/$defs/entry"}}
+          }
+        }
+      }
+    }
+  }
+}

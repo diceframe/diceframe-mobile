@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildJoinNewPayload } from '@/lib/join-form'
-import { serverBook, serverCardBody, serverCardDocument, serverEntry, serverLorebookDocument } from './__fixtures__/server-export'
+import { serverBook, serverCardBody, serverCardDocument, serverEntry, serverLorebookBook, serverLorebookDocument } from './__fixtures__/server-export'
 import {
   CARD_V3_SPEC,
   PORTRAIT_NOT_PORTABLE,
@@ -60,13 +60,13 @@ describe('chara_card_v3：读', () => {
     expect(parsed.body).toEqual(serverCardBody)
     expect(parsed.characterBook).toEqual(serverBook)
     parsed.body.character_name = 'changed'
-    expect(serverCardDocument.data.extensions.diceframe.character_name).toBe('Mira')
+    expect(serverCardDocument.data.extensions.diceframe.character_name).toBe('Mira Thornwood')
   })
 
   it('卡体没写名字时回退到 v3 的 data.name（同服务端）', () => {
     const doc = cloneJson(serverCardDocument)
     doc.data.extensions.diceframe = { ...serverCardBody, character_name: '' }
-    expect(readCardV3(doc).body.character_name).toBe('Mira')
+    expect(readCardV3(doc).body.character_name).toBe('Mira Thornwood')
   })
 
   it('外形不对一律拒绝（CARD_V3_INVALID）', () => {
@@ -107,6 +107,7 @@ describe('chara_card_v3：按字段打补丁（不重建）', () => {
     doc.data.tags = ['冒险', '旧城']
     doc.data.creator_notes = '来自别的工具'
     doc.data.extensions.other_tool = { keep: 'me' }
+    ;(doc.data.extensions.diceframe as Record<string, unknown>).custom_future_field = { nested: [1, 2, 3] }
     return doc
   }
 
@@ -114,14 +115,14 @@ describe('chara_card_v3：按字段打补丁（不重建）', () => {
     const doc = foreign()
     const next = patchCardDocument(doc, { race: '精灵', skills: [{ name: '潜行', value: 40 }], gold: undefined })
     const { body, characterBook } = readCardV3(next)
-    expect(body).toEqual({ ...serverCardBody, race: '精灵', skills: [{ name: '潜行', value: 40 }] })
+    expect(body).toEqual({ ...serverCardBody, custom_future_field: { nested: [1, 2, 3] }, race: '精灵', skills: [{ name: '潜行', value: 40 }] })
     expect(body.custom_future_field).toEqual({ nested: [1, 2, 3] })
     expect(characterBook).toEqual(serverBook)
     expect(next.data.tags).toEqual(['冒险', '旧城'])
     expect(next.data.creator_notes).toBe('来自别的工具')
     expect(next.data.extensions.other_tool).toEqual({ keep: 'me' })
     // 原文不被修改
-    expect(readCardV3(doc).body.race).toBe('人类')
+    expect(readCardV3(doc).body.race).toBe('Elf')
   })
 
   it('改名字 / 背景时同步 v3 的 name / description，别的字段不碰它们', () => {
@@ -163,7 +164,7 @@ describe('推送前的卡片：剥服务端字段与不可移植头像', () => {
       expect(body).not.toHaveProperty(key)
     }
     expect(body.character_sheet).toEqual({ hp: 10 })
-    expect(body.portrait).toEqual({ kind: 'builtin', id: 'coc/realistic-3' })
+    expect(body.portrait).toEqual({ kind: 'builtin', id: 'elf_ranger_f' })
     expect(warnings).toEqual([])
     expect(readCardV3(local).body.raw_sillytavern).toEqual({ huge: true })
   })
@@ -188,10 +189,10 @@ describe('玩家用本机卡加入对局', () => {
     const card = joinCardFromDocument(local)
     expect(card).not.toHaveProperty('id')
     expect(card).not.toHaveProperty('provenance')
-    const payload = buildJoinNewPayload({ characterName: 'Mira', background: card.background ?? '', portrait: card.portrait }, card)
+    const payload = buildJoinNewPayload({ characterName: 'Mira Thornwood', background: card.background ?? '', portrait: card.portrait }, card)
     expect(payload).toMatchObject({
-      join_as_new: true, character_name: 'Mira', race: '人类', class: '调查员', attributes: { str: 50, dex: 60 },
-      skills: [{ name: '侦查', value: 60, effect: '擅长发现线索' }], portrait: { kind: 'builtin', id: 'coc/realistic-3' },
+      join_as_new: true, character_name: 'Mira Thornwood', race: 'Elf', class: 'Ranger',
+      attributes: serverCardBody.attributes, skills: serverCardBody.skills, portrait: { kind: 'builtin', id: 'elf_ranger_f' },
     })
     expect(payload).not.toHaveProperty('rule_id')
     expect(payload).not.toHaveProperty('schema_version')
@@ -207,7 +208,7 @@ describe('玩家用本机卡加入对局', () => {
 
 describe('lorebook_v3', () => {
   it('读服务端导出的书：两种外形都认，缺 entries 视为空书，坏外形拒绝', () => {
-    expect(readLorebookV3(serverLorebookDocument)).toEqual(serverBook)
+    expect(readLorebookV3(serverLorebookDocument)).toEqual(serverLorebookBook)
     expect(readLorebookV3({ lorebook: serverBook })).toEqual(serverBook)
     expect(readLorebookV3({ spec: 'lorebook_v3', data: { lorebook: { name: 'x' } } })).toEqual({ name: 'x', entries: [] })
     expect(codeOf(() => readLorebookV3({ spec: 'other', data: { lorebook: serverBook } }))).toBe('LOREBOOK_V3_INVALID')
@@ -218,7 +219,7 @@ describe('lorebook_v3', () => {
 
   it('读 → 写往返不丢任何字段（含激活设置、extensions.diceframe、provenance）', () => {
     expect(writeLorebookV3(readLorebookV3(serverLorebookDocument))).toEqual(serverLorebookDocument)
-    expect(lorebookSummary(serverLorebookDocument)).toEqual({ name: '米拉的回忆', ruleId: '', readOnly: false })
+    expect(lorebookSummary(serverLorebookDocument)).toEqual({ name: 'Ashen Atlas', ruleId: '', readOnly: false })
     expect(newLorebookDocument('空书')).toEqual({ spec: 'lorebook_v3', data: { lorebook: { name: '空书', description: '', entries: [] } } })
   })
 
@@ -231,8 +232,8 @@ describe('lorebook_v3', () => {
 
   it('编辑条目只改开放字段，其余（激活设置、扩展、provenance）原样保留', () => {
     const book = readLorebookV3(serverLorebookDocument)
-    const { book: next, entryId } = upsertEntry(book, 'entry-aaaa', { content: '新内容', keys: [' 旧城 ', '', '夜'], enabled: false }, counter())
-    expect(entryId).toBe('entry-aaaa')
+    const { book: next, entryId } = upsertEntry(book, 'town-cinder', { content: '新内容', keys: [' 旧城 ', '', '夜'], enabled: false }, counter())
+    expect(entryId).toBe('town-cinder')
     expect(next.entries[0]).toEqual({ ...serverEntry, content: '新内容', keys: ['旧城', '夜'], enabled: false })
     expect(next.entries[1]).toEqual(book.entries[1])
     expect(book.entries[0].content).toBe(serverEntry.content)
@@ -243,15 +244,15 @@ describe('lorebook_v3', () => {
     const { book: added, entryId } = upsertEntry(book, '', { name: '新条目', keys: ['k'], content: 'c' }, counter('N'))
     expect(entryId).toBe('entry-n1')
     expect(added.entries.at(-1)).toEqual({ id: 'entry-n1', name: '新条目', keys: ['k'], content: 'c', enabled: true })
-    const removed = removeEntry(added, 'entry-aaaa')
-    expect(removed.entries.map(entryIdOf)).toEqual(['lb_entry_server_made', 'entry-n1'])
+    const removed = removeEntry(added, 'town-cinder')
+    expect(removed.entries.map(entryIdOf)).toEqual(['keep-ash', 'lore-basics', 'entry-n1'])
     expect(codeOf(() => removeEntry(book, 'missing'))).toBe('LOREBOOK_ENTRY_NOT_FOUND')
     expect(codeOf(() => upsertEntry(book, 'missing', { name: 'x' }, counter()))).toBe('LOREBOOK_ENTRY_NOT_FOUND')
   })
 
   it('改书名 / 描述保留设置与条目', () => {
     const book = readLorebookV3(serverLorebookDocument)
-    expect(patchBook(book, { name: '改名' })).toEqual({ ...serverBook, name: '改名' })
+    expect(patchBook(book, { name: '改名' })).toEqual({ ...serverLorebookBook, name: '改名' })
   })
 })
 
@@ -343,7 +344,7 @@ describe('评审修复：保真', () => {
     for (const falsy of [0, false, '', null]) {
       const doc = cloneJson(serverCardDocument) as unknown as { data: { extensions: { diceframe: Record<string, unknown> } } }
       doc.data.extensions.diceframe.character_name = falsy
-      expect(readCardV3(doc).body.character_name).toBe('Mira')
+      expect(readCardV3(doc).body.character_name).toBe('Mira Thornwood')
     }
     expect(writeCardV3({ character_name: 0, background: false } as unknown as CardBody).data).toMatchObject({ name: '', description: '' })
     expect(isPortablePortrait({ kind: 'builtin', id: 0 })).toBe(false)
