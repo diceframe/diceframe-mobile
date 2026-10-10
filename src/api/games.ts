@@ -48,8 +48,8 @@ export function fetchGames(): Promise<GamesResponse> {
   return api<GamesResponse>('/games')
 }
 
-export function fetchGameDetail(gameKey: string): Promise<GameDetail> {
-  return api<GameDetail>(gamePath(gameKey))
+export function fetchGameDetail(gameKey: string, signal?: AbortSignal): Promise<GameDetail> {
+  return api<GameDetail>(gamePath(gameKey), signal ? { signal } : {})
 }
 
 export function fetchCharacters(gameKey: string): Promise<CharacterListResponse> {

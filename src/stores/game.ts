@@ -362,6 +362,21 @@ export const useGameStore = create<GameStore>((set, get) => {
 
   }
 
+  /**
+   * claim 被明确拒绝后，?user= 回退是否仍被服务端认可：详情的 viewer 是本席位即可
+   * （无访问密码的服务端）；只给访客大厅视图（viewer.kind = outsider）说明服务端强制
+   * 席位凭证。没有 viewer 的旧负载或请求本身失败时不下结论，按可回退处理。
+   */
+  async function userFallbackRecognised(gameKey: string, signal: AbortSignal): Promise<boolean> {
+    try {
+      const detail = await fetchGameDetail(gameKey, signal)
+      if (!detail.viewer) return true
+      return isStoredPlayerMember(detail, currentShare()?.user ?? '')
+    } catch (error) {
+      return !(error instanceof ApiError && error.code === 'SEAT_TOKEN_REQUIRED')
+    }
+  }
+
   async function connect(gameKey: string, isPlayer: boolean, version: number) {
     if (!isCurrent(gameKey, version) || suspended) return
     set({ streamStatus: 'connecting' })
@@ -395,11 +410,18 @@ export const useGameStore = create<GameStore>((set, get) => {
       } catch (error) {
         if (!isCurrent(gameKey, version) || suspended) return
         if (error instanceof ApiError && isFinalClaimFailure(error)) {
-          // 席位已有别处的凭证 / 会话没绑席位：只有 GM 的接管链接能把本设备带回来
-          set({ seatCredentialLost: true, streamStatus: 'idle' })
-          return
+          // 席位已有别处的凭证 / 会话没绑席位。是否「回不去」取决于服务端是否强制席位凭证：
+          // 无访问密码的服务端仍按 ?user= 认人。不猜，直接问服务端——按当前身份取一次
+          // 详情，看它把这次请求投影成谁（viewer）。
+          const fallbackWorks = await userFallbackRecognised(gameKey, controller.signal)
+          if (!isCurrent(gameKey, version) || suspended) return
+          if (!fallbackWorks) {
+            // 服务端只给访客大厅视图：只有 GM 的接管链接能把本设备带回来
+            set({ seatCredentialLost: true, streamStatus: 'idle' })
+            return
+          }
         }
-        // 断网、限流、旧服务端没有该端点：不下结论，继续按 ?user= 回退
+        // 断网、限流、旧服务端没有该端点、或 ?user= 回退仍被认可：继续入局
       }
     }
 
