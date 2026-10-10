@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { randomUUID } from 'expo-crypto'
-import { Appearance, Platform } from 'react-native'
+import { Appearance } from 'react-native'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
@@ -16,7 +15,6 @@ import {
   type IdentitySlots,
   type PlayerIdentity,
 } from '@/lib/player-identity'
-import { ensureInstallId } from '@/lib/local-library/ids'
 import type { LocalePreference } from '@/lib/locale'
 import { updateRecentServers } from '@/lib/recent-servers'
 import {
@@ -51,19 +49,6 @@ interface PersistedSettings {
   hapticsEnabled: boolean
   themeMode: ThemeMode
   language: LocalePreference
-}
-
-/**
- * settings 里的 install id 缓存：生成失败（Web 非安全上下文没有 crypto.randomUUID）
- * 时返回空串而不是抛出——这里抛错会卡死水合、整个 App 停在启动页。
- * 权威值在本机内容库的 meta 表里（stores/local-library.ts 的 resolveInstallId）。
- */
-export function safeInstallId(stored: unknown, uuid: () => string): string {
-  try {
-    return ensureInstallId(stored, uuid)
-  } catch {
-    return ''
-  }
 }
 
 /** 新安装与数据版本重置使用同一套默认值，不转换旧数据。 */
@@ -112,9 +97,10 @@ interface SettingsState {
    */
   shareCredentials: CredentialSlots
   /**
-   * 本安装的 install id（内容同步契约的 device source id）的**缓存**。权威值存在本机
-   * 内容库（SQLite meta 表），与内容、映射同生共死；同步前一律经 resolveInstallId 取。
-   * 不是凭证（服务端设备列表会公开显示它）。Web 端不生成（没有本机库），可能为空串。
+   * 本安装的 install id（内容同步契约的 device source id）的**缓存**，只由
+   * stores/local-library 的 resolveInstallId 从本机库 meta 表回写，这里从不生成。
+   * 任何使用方（推送、配对上报 install_id）都必须经 resolveInstallId 取，不得直接读本字段
+   * （eslint no-restricted-syntax 兜底）。不是凭证（服务端设备列表会公开显示它）。
    */
   installId: string
   /** TTS 播放速率（对齐 Web localStorage trpg_tts_rate） */
@@ -360,10 +346,6 @@ export const useSettingsStore = create<SettingsState>()(
           const adopted = adoptLegacyRoomTokens(state.shares ?? {}, state.shareCredentials ?? {}, state.baseUrl)
           if (adopted.shares !== state.shares || adopted.credentials !== state.shareCredentials) {
             useSettingsStore.setState({ shares: adopted.shares, shareCredentials: adopted.credentials })
-          }
-          if (Platform.OS !== 'web') {
-            const installId = safeInstallId(state.installId, randomUUID)
-            if (installId && installId !== state.installId) useSettingsStore.setState({ installId })
           }
           syncApiClient(useSettingsStore.getState())
           state.markHydrated()

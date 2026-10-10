@@ -28,6 +28,19 @@ module.exports = defineConfig([
       '@typescript-eslint/array-type': 'off',
     },
   },
+  {
+    name: 'install id 唯一来源',
+    // install id 的权威值在本机库 meta 表里，settings.installId 只是缓存；
+    // 一律经 stores/local-library 的 resolveInstallId 取（推送、配对上报都一样）
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/stores/settings.ts', 'src/stores/local-library.ts', 'src/stores/local-library.web.ts', 'src/**/*.test.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', {
+        selector: "MemberExpression[property.name='installId']",
+        message: 'install id 只能经 resolveInstallId()（stores/local-library）取，settings.installId 只是缓存。',
+      }],
+    },
+  },
   // drizzle-kit 生成的迁移包（含 .sql 内联导入），不手改也不 lint
   globalIgnores(['dist/*', '.expo/*', 'src/lib/local-library/migrations/*']),
 ])

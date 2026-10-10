@@ -23,6 +23,7 @@ export type MigrationBundle = typeof bundledMigrations
 export const MIGRATIONS_TABLE = '__drizzle_migrations'
 
 export class LocalLibrarySchemaError extends Error {
+  /** 新库保护时为库里不认识的迁移；迁移后检查时为没被应用的随包迁移 */
   constructor(message: string, public readonly unknownMigrations: number[]) {
     super(message)
   }
@@ -51,10 +52,24 @@ export function assertNoUnknownMigrations(db: LibraryDb, bundle: MigrationBundle
   }
 }
 
-/** 打开时迁移到随包的最新结构；先做新库保护 */
+/**
+ * 打开时迁移到随包的最新结构；先做新库保护，迁移后确认每条随包迁移都已应用。
+ *
+ * 后一步防的是并行分支：两条分支各自生成迁移，后合入的那条时间戳反而更早，
+ * Drizzle 迁移器（只应用比库里最后一条更新的迁移）会静默跳过它，表结构就缺了一块。
+ * 规则：已发布的迁移绝不修改，只追加新迁移；合并分支时如遇此错，重新生成迁移。
+ */
 export async function migrateLibrary(db: LibraryDb, bundle: MigrationBundle = bundledMigrations): Promise<void> {
   assertNoUnknownMigrations(db, bundle)
   // 官方迁移器的类型只写了 expo 驱动；它调用的是两种同步驱动共有的 dialect.migrate，
   // 测试里用 better-sqlite3 驱动跑的就是这同一条路径
   await migrate(db as unknown as ExpoSQLiteDatabase, bundle)
+  const applied = new Set(appliedMigrations(db))
+  const missing = bundle.journal.entries.filter((entry) => !applied.has(entry.when)).map((entry) => entry.when)
+  if (missing.length) {
+    throw new LocalLibrarySchemaError(
+      `bundled migrations were not applied (older timestamp than the latest applied one): ${missing.join(', ')}`,
+      missing,
+    )
+  }
 }

@@ -124,6 +124,22 @@ describe('Drizzle 迁移（随包的 migrations.js）', () => {
     expect(appliedMigrations(db)).toContain(future)
   })
 
+  it('迁移后每条随包迁移都必须已应用：并行分支带来的「时间戳更早」的迁移被跳过时拒绝打开', async () => {
+    const { db } = openTestLibraryDb()
+    const [init] = bundledMigrations.journal.entries
+    const onlyInit = { journal: { entries: [init] }, migrations: { m0000: bundledMigrations.migrations.m0000 } }
+    await migrateLibrary(db, onlyInit)
+    // 另一条分支合进来的迁移，时间戳比已应用的 init 还早：Drizzle 迁移器会静默跳过它
+    const older = { idx: 1, when: init.when - 1000, tag: '0001_parallel', breakpoints: true }
+    const withOlder = {
+      journal: { entries: [init, older] },
+      migrations: { ...onlyInit.migrations, m0001: 'CREATE TABLE parallel_branch (x INTEGER);' },
+    }
+    const error = await migrateLibrary(db, withOlder).catch((cause: unknown) => cause)
+    expect(error).toBeInstanceOf(LocalLibrarySchemaError)
+    expect((error as LocalLibrarySchemaError).message).toMatch(/not applied/)
+  })
+
   it('打开一个从未建过表的库时，新库保护本身不建任何表', () => {
     const { db, raw } = openTestLibraryDb()
     expect(appliedMigrations(db)).toEqual([])

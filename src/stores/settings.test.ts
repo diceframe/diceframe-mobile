@@ -15,7 +15,7 @@ import {
 } from '@/api/client'
 import { credentialKey } from '@/lib/seat-credentials'
 import { readThemeToken, resolveTheme } from '@/lib/theme'
-import { activeIdentityOf, adoptLegacyRoomTokens, safeInstallId, useSettingsStore } from './settings'
+import { activeIdentityOf, adoptLegacyRoomTokens, useSettingsStore } from './settings'
 
 // settings store 依赖 AsyncStorage（RN 模块），单测里换成内存实现。
 // vitest 会把 vi.mock 提升到文件顶部，实际先于上面的 import 执行。
@@ -268,10 +268,9 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     expect(useSettingsStore.getState()).toMatchObject({ ...defaults, hydrated: true })
     expect(currentShare()).toBeNull()
     expect(currentToken()).toBeNull()
-    // 重置同样只保留设备级的 install id（重置后新生成一个，规范 uuid）
-    const installId = useSettingsStore.getState().installId
-    expect(installId).toMatch(/^[0-9a-f-]{36}$/)
-    expect(JSON.parse((await AsyncStorage.getItem('diceframe-settings'))!)).toEqual({ version: 3, state: { ...defaults, installId } })
+    // install id 只是本机库 meta 的缓存：水合时不生成，旧数据里没有就保持空串
+    expect(useSettingsStore.getState().installId).toBe('')
+    expect(JSON.parse((await AsyncStorage.getItem('diceframe-settings'))!)).toEqual({ version: 3, state: { ...defaults, installId: '' } })
   })
 
   it('v3 重新登录后的设置正常持久化，后续启动不再清空', async () => {
@@ -450,28 +449,19 @@ describe('settings store 分享凭证（席位凭证 / 房间令牌）', () => {
   })
 })
 
-describe('settings store install id', () => {
-  it('首次启动生成规范 install id 并落盘，之后的启动沿用、绝不改变', async () => {
+describe('settings store install id 缓存', () => {
+  it('水合时从不生成 install id：缓存只由本机库 meta 经 resolveInstallId 回写', async () => {
     useSettingsStore.setState({ ...useSettingsStore.getInitialState() })
     await AsyncStorage.setItem('diceframe-settings', JSON.stringify({ version: 3, state: { baseUrl: '' } }))
     await useSettingsStore.persist.rehydrate()
-    const first = useSettingsStore.getState().installId
-    expect(first).toMatch(/^[0-9a-f-]{36}$/)
-    const saved = JSON.parse((await AsyncStorage.getItem('diceframe-settings'))!)
-    expect(saved.state.installId).toBe(first)
-
-    // 模拟下次启动：内存态清空（这一步会触发 persist 写盘，所以随后放回原落盘内容）
-    useSettingsStore.setState({ ...useSettingsStore.getInitialState() })
-    await AsyncStorage.setItem('diceframe-settings', JSON.stringify(saved))
-    await useSettingsStore.persist.rehydrate()
-    expect(useSettingsStore.getState().installId).toBe(first)
+    expect(useSettingsStore.getState().installId).toBe('')
   })
 
-  it('落盘的 install id 被破坏（非规范 id）时重新生成', async () => {
+  it('已缓存的值原样恢复（即使不合法也不在这里修正，修正是 meta 的事）', async () => {
     useSettingsStore.setState({ ...useSettingsStore.getInitialState() })
-    await AsyncStorage.setItem('diceframe-settings', JSON.stringify({ version: 3, state: { installId: '../bad id' } }))
+    await AsyncStorage.setItem('diceframe-settings', JSON.stringify({ version: 3, state: { installId: 'cached-id' } }))
     await useSettingsStore.persist.rehydrate()
-    expect(useSettingsStore.getState().installId).toMatch(/^[0-9a-f-]{36}$/)
+    expect(useSettingsStore.getState().installId).toBe('cached-id')
   })
 })
 
@@ -484,8 +474,4 @@ describe('评审修复：settings 里的 install id 缓存', () => {
     expect(migrated.token).toBeNull()
   })
 
-  it('随机源不可用（Web 非安全上下文）时不抛错、不阻塞水合', () => {
-    expect(safeInstallId(undefined, () => { throw new Error('crypto.randomUUID is not available') })).toBe('')
-    expect(safeInstallId('kept-id', () => { throw new Error('unused') })).toBe('kept-id')
-  })
 })
