@@ -376,6 +376,10 @@ const CONTENT_ERROR_KEYS: Record<string, TKey> = {
   TRACKED_BY_OTHER_SOURCE: 'dfContentReasonTrackedByOtherSource',
   DETACHED_FROM_OTHER_SOURCE: 'dfContentReasonDetachedFromOtherSource',
   RULESET_CARD: 'dfContentReasonRulesetCard',
+  // 本机推送前的排除原因与取消
+  LOCAL_ITEM_READ_ONLY: 'dfContentLocalReadOnly',
+  LOREBOOK_V3_INVALID: 'dfContentLorebookInvalid',
+  CANCELLED: 'dfContentCancelled',
   // 警告码
   PORTRAIT_NOT_PORTABLE: 'dfContentWarningPortraitNotPortable',
   BOOK_NOT_IMPORTED: 'dfContentWarningBookNotImported',

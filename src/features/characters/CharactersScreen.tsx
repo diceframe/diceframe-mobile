@@ -16,6 +16,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
 import { CharacterCardEditor } from '@/features/characters/CharacterCardEditor'
+import { PushSheet } from '@/features/content-sync/PushSheet'
+import { currentPushAccess } from '@/features/content-sync/push-runner'
+import type { PushAccess } from '@/features/content-sync/sync-state'
 import { useCharacters } from '@/hooks/useCharacters'
 import { cachedCharacterSchema, cachedRuleLibrary, useLocalCards, type LocalCardView } from '@/hooks/useLocalCards'
 import { useT } from '@/i18n/t'
@@ -110,6 +113,18 @@ export default function CharactersScreen() {
   const [tab, setTab] = React.useState<LibraryTab>('local')
   const activeTab: LibraryTab = localAvailable ? tab : 'server'
   const [editor, setEditor] = React.useState<EditorTarget | null>(null)
+  // 推送入口只给房主（或没设访问密码的服务器，推送前再警告）；分享/席位凭证的玩家看不到
+  const [access, setAccess] = React.useState<PushAccess>('denied')
+  const [pushOpen, setPushOpen] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!localAvailable) return
+    let cancelled = false
+    currentPushAccess()
+      .then((value) => { if (!cancelled) setAccess(value) })
+      .catch(() => { if (!cancelled) setAccess('denied') })
+    return () => { cancelled = true }
+  }, [localAvailable])
 
   async function submitCard(payload: CharacterCardPatch, snapshot: EditorSnapshot) {
     if (!editor) return
@@ -172,6 +187,9 @@ export default function CharactersScreen() {
   const localList = (
     <View className="min-h-0 flex-1">
       {local.error ? <ErrorBanner message={local.error} onRetry={() => void local.refresh()} /> : null}
+      {access !== 'denied' ? (
+        <Button variant="outline" className="mb-3" onPress={() => setPushOpen(true)}><Text>{t('dfPushOpen')}</Text></Button>
+      ) : null}
       <FlatList
         data={local.cards ?? []}
         keyExtractor={(item) => item.localId}
@@ -225,6 +243,9 @@ export default function CharactersScreen() {
           <TabsContent value="server" className="min-h-0 flex-1 pt-3">{serverList}</TabsContent>
         </Tabs>
       ) : serverList}
+      {pushOpen ? (
+        <PushSheet open onClose={() => { setPushOpen(false); void local.refresh() }} />
+      ) : null}
       {editor ? (
         // 内容长（规则/头像/技能/背景/金钱），固定 85% 高并交给 Sheet 内部滚动，保证底部按钮可达
         <Sheet open onClose={() => setEditor(null)} className="h-[85%]">
