@@ -101,6 +101,15 @@ export interface PullImport {
   baseUrlHint?: string
 }
 
+export interface PullImportResult {
+  localId: string
+  /**
+   * 内嵌书的映射没写：这本书的 canonical id 在本机已由另一项（独立书或别的卡）跟随。
+   * 卡照常写入，只是不记 `.book` 映射——一个 canonical id 在同一服务器上只能对应一个本机项。
+   */
+  skippedBookLink: boolean
+}
+
 export interface NewLocalItem {
   kind: LocalItemKind
   format: string
@@ -356,6 +365,24 @@ export class LocalLibraryRepository {
       .all().length > 0)
   }
 
+  /**
+   * 只更新拉取项的锁定状态（服务器副本没变、但 locked_reason 变了）：readOnly 与来源里的
+   * locked_reason。不动文档、不加 revision——这不是本机改动，不该让它变成「待推送」。
+   */
+  setPulledLock(localId: string, lockedReason: string | undefined): void {
+    this.write((tx) => {
+      const current = this.readItem(tx, localId)
+      if (!current) throw new LocalLibraryError(LOCAL_ITEM_NOT_FOUND, `local item ${localId} not found`)
+      const origin = current.origin ? { ...current.origin } : null
+      if (origin) {
+        if (lockedReason) origin.locked_reason = lockedReason
+        else delete origin.locked_reason
+      }
+      tx.update(items).set({ readOnly: !!lockedReason, origin: origin ? JSON.stringify(origin) : null })
+        .where(eq(items.localId, localId)).run()
+    })
+  }
+
   /** 标记服务器上的副本已被删除（本机项不删）；只动这台服务器的映射 */
   markRemoteDeleted(serverInstanceId: string, localIds: readonly string[]): number {
     requireCanonical(serverInstanceId, 'server_instance_id')
@@ -371,7 +398,7 @@ export class LocalLibraryRepository {
    * 拉取写入（单事务，见 PullImport）：文档、来源与映射一起生效。映射的同步基线是写入后的
    * revision，所以拉下来的项一开始就是「已同步」。返回写入的本机 id。
    */
-  importFromServer(serverInstanceId: string, input: PullImport): string {
+  importFromServer(serverInstanceId: string, input: PullImport): PullImportResult {
     requireCanonical(serverInstanceId, 'server_instance_id')
     if (!isLocalItemKind(input.kind)) throw new LocalLibraryError('INVALID_KIND', 'unknown local item kind')
     return this.write((tx) => {
@@ -409,6 +436,7 @@ export class LocalLibraryRepository {
       tx.delete(serverLinks).where(and(
         eq(serverLinks.serverInstanceId, serverInstanceId), eq(serverLinks.localId, `${localId}${EMBEDDED_BOOK_SUFFIX}`),
       )).run()
+      let skippedBookLink = false
       for (const link of input.links) {
         const ref = `${localId}${link.suffix}`
         const holder = tx.select({ localId: serverLinks.localId }).from(serverLinks).where(and(
@@ -418,6 +446,11 @@ export class LocalLibraryRepository {
         )).get()
         if (holder) {
           if (this.itemExists(tx, ownerOf(holder.localId))) {
+            // 内嵌书被别的本机项跟随：只跳过这条映射，卡照常导入；卡本身的 id 冲突仍整项拒绝
+            if (link.suffix === EMBEDDED_BOOK_SUFFIX) {
+              skippedBookLink = true
+              continue
+            }
             throw new LocalLibraryError(SERVER_LINK_CONFLICT, `canonical id already mapped to ${holder.localId} on this server`)
           }
           tx.delete(serverLinks).where(and(
@@ -432,7 +465,7 @@ export class LocalLibraryRepository {
           .onConflictDoUpdate({ target: [serverLinks.serverInstanceId, serverLinks.localId], set: values })
           .run()
       }
-      return localId
+      return { localId, skippedBookLink }
     })
   }
 

@@ -46,9 +46,13 @@ export const SERVER_IDENTITY_UNAVAILABLE = 'SERVER_IDENTITY_UNAVAILABLE'
 export const PLAN_STALE = 'PLAN_STALE'
 export const KIND_NOT_SUPPORTED = 'KIND_NOT_SUPPORTED'
 export const CURSOR_INVALID = 'CURSOR_INVALID'
+/** 客户端自有：列举翻页停不下来（服务端重复给出同一个 cursor，或页数超出上限） */
+export const LIST_PAGING_STUCK = 'LIST_PAGING_STUCK'
 
 /** 列举每页最多 500 项（服务端上限） */
 export const MAX_LIST_ITEMS = 500
+/** 一次列举最多翻的页数（500 × 2000 = 100 万项，远超任何内容库；防止服务端异常时无限翻页） */
+export const MAX_LIST_PAGES = 2000
 /** 状态查询每次最多 500 项（服务端上限） */
 export const MAX_STATUS_ITEMS = 500
 /** 退化状态查询（#494 服务端没有 /status）每批导出的项数，与导入上限一致 */
@@ -322,19 +326,26 @@ export function listContentPage(server: ContentServer, kind: ContentKind, cursor
  * - 只在 next_cursor 为 null 时结束——中途删了东西时某页可能很短甚至为空；
  * - 400 CURSOR_INVALID：从头重来一次，再失败就抛出；
  * - 429 按 retry_after 等待后重试（同其他内容请求）；
- * - 每页都校验实例 id 与连接地址（contentRequest），中途换了服务器整个列举失败，不返回半份结果。
+ * - 每页都校验实例 id 与连接地址（contentRequest），中途换了服务器整个列举失败，不返回半份结果；
+ * - 服务端重复给出用过的 cursor、或页数超过 MAX_LIST_PAGES：抛 LIST_PAGING_STUCK，不无限翻页。
  * KIND_NOT_SUPPORTED（服务器没开 Lorebook）与旧服务端的裸 404/405 原样抛出，由调用方决定怎么展示。
  */
 export async function listContent(server: ContentServer, kind: ContentKind): Promise<ContentListItem[]> {
   let restarted = false
   for (;;) {
     const items: ContentListItem[] = []
+    const seen = new Set<string>()
     let cursor: string | null = null
     try {
       do {
+        if (seen.size >= MAX_LIST_PAGES) throw new ContentSyncError(LIST_PAGING_STUCK, `listing exceeded ${MAX_LIST_PAGES} pages`)
         const page: ContentListResponse = await withRateLimitRetry(() => listContentPage(server, kind, cursor))
         items.push(...(page.items ?? []))
         cursor = page.next_cursor ?? null
+        if (cursor !== null) {
+          if (seen.has(cursor)) throw new ContentSyncError(LIST_PAGING_STUCK, 'server repeated a list cursor')
+          seen.add(cursor)
+        }
       } while (cursor !== null)
       return items
     } catch (error) {
@@ -425,6 +436,8 @@ const CONTENT_ERROR_KEYS: Record<string, TKey> = {
   // 拉取
   EMBEDDED_BOOK_LINKED: 'dfPullEmbeddedBookLinked',
   CURSOR_INVALID: 'dfContentCursorInvalid',
+  LIST_PAGING_STUCK: 'dfContentListPagingStuck',
+  EMBEDDED_BOOK_HELD_STANDALONE: 'dfPullEmbeddedBookHeldStandalone',
   // 警告码
   PORTRAIT_NOT_PORTABLE: 'dfContentWarningPortraitNotPortable',
   BOOK_NOT_IMPORTED: 'dfContentWarningBookNotImported',

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
 import { ContentSyncError, SERVER_MISMATCH } from '@/api/content'
-import type { ContentExportItem, ContentKind, ContentStatusItem } from '@/api/types'
+import type { ContentExportItem, ContentKind, ContentPlanItem, ContentPushItem, ContentStatusItem } from '@/api/types'
 import { migrateLibrary } from '@/lib/local-library/migrate'
 import { LocalLibraryRepository } from '@/lib/local-library/repository'
 import { fixtures, schemas } from '@/lib/portable/__fixtures__/content-sync'
@@ -13,6 +13,7 @@ import { openTestLibraryDb } from '@/test/library-db'
 
 import {
   CANCELLED,
+  EMBEDDED_BOOK_HELD_STANDALONE,
   EMBEDDED_BOOK_LINKED,
   PullSession,
   RULESET_CARD_UNSUPPORTED,
@@ -21,6 +22,7 @@ import {
   type PullDeps,
   type ServerItemRef,
 } from './pull-session'
+import { preparePush } from './push-prepare'
 import { localSyncState, pushCandidateOf, pushListStates, statusRefsFor } from './sync-state'
 
 const SRV = 'srv-0123456789abcdef'
@@ -32,6 +34,8 @@ interface ServerCopy {
   provenance?: Record<string, unknown> | null
   warnings?: { code: string; message?: string }[]
   lockedReason?: string
+  /** 服务端身份（`<install id>:<client_ref>`）：这一项由哪台设备的哪个本机项推上来 */
+  identity?: string
 }
 
 /**
@@ -67,6 +71,23 @@ class FakeServer {
           provenance: copy.provenance ?? null,
           ...(copy.lockedReason ? { locked_reason: copy.lockedReason } : {}),
         },
+      }
+    })
+  }
+
+  /**
+   * 推送预览的匹配顺序（与服务端一致）：先按身份（install id + client_ref），再按 canonical_hint；
+   * 都不中就是新建。
+   */
+  preview(installId: string, items: ContentPushItem[]): ContentPlanItem[] {
+    return items.map((item) => {
+      const byIdentity = [...this.copies.entries()].find(([, copy]) => copy.identity === `${installId}:${item.client_ref}`)
+      const byHint = item.canonical_hint && this.copies.has(item.canonical_hint) ? [item.canonical_hint, this.copies.get(item.canonical_hint)!] as const : undefined
+      const match = byIdentity ?? byHint
+      if (!match) return { client_ref: item.client_ref, kind: item.kind, action: 'create', allowed: [], existing: null }
+      return {
+        client_ref: item.client_ref, kind: item.kind, action: 'update', allowed: ['update', 'duplicate', 'skip'],
+        existing: { canonical_id: match[0], state_token: match[1].token, server_modified: false, matched_by: byIdentity ? 'identity' : 'hint' },
       }
     })
   }
@@ -455,5 +476,99 @@ describe('server_links.remote_deleted_at', () => {
     h.library.recordSync(SRV, [{ localId: item.localId, canonicalId: 'book_1', stateToken: 't2', syncedRevision: 1 }])
     expect(h.library.getLink(SRV, item.localId)!.remoteDeletedAt).toBeNull()
     expect(h.library.markRemoteDeleted('srv-other-0123456789', [item.localId])).toBe(0)
+  })
+})
+
+describe('#7 评审：拉取 → 编辑 → 推送对准拉取的那一份', () => {
+  const INSTALL = 'install-1'
+
+  function pushPlan(h: Awaited<ReturnType<typeof harness>>, localId: string) {
+    const item = h.library.getItem(localId)!
+    const candidate = pushCandidateOf(item, h.library.getLink(SRV, localId), SRV)
+    const { prepared } = preparePush([candidate])
+    return h.server.preview(INSTALL, prepared.map((entry) => entry.item))[0]
+  }
+
+  it('拉下来的卡改过后推送：带 canonical_hint，预览是对拉取那一份的 update（不是新建）', async () => {
+    const h = await harness()
+    h.server.put('card_1', { kind: 'character_template', document: fixtures.cardFreeform })
+    const localId = outcome(await h.pull([cardRef('card_1')]), 'card_1').localId!
+    h.library.updateDocument(localId, { document: writeCardV3({ ...freeformBody, race: 'Edited' }) })
+    expect(pushPlan(h, localId)).toMatchObject({ action: 'update', existing: { canonical_id: 'card_1', matched_by: 'hint' } })
+  })
+
+  it('拉下来的书改过后推送：同样对准拉取的那一份', async () => {
+    const h = await harness()
+    h.server.put('book_1', { kind: 'lorebook', document: fixtures.lorebook })
+    const localId = outcome(await h.pull([bookRef('book_1')]), 'book_1').localId!
+    h.library.updateDocument(localId, { document: lorebookWith((book) => { book.entries[0].content = 'edited' }) })
+    expect(pushPlan(h, localId)).toMatchObject({ action: 'update', existing: { canonical_id: 'book_1', matched_by: 'hint' } })
+  })
+
+  it('本机自己推上去的项：仍按身份匹配', async () => {
+    const h = await harness()
+    const item = h.library.createItem({ kind: 'character_template', format: 'chara_card_v3', document: fixtures.cardFreeform, name: 'mine' })
+    h.server.put('card_self', { kind: 'character_template', document: fixtures.cardFreeform, identity: `${INSTALL}:${item.localId}` })
+    h.library.recordSync(SRV, [{ localId: item.localId, canonicalId: 'card_self', stateToken: 't1', syncedRevision: 1 }])
+    h.library.updateDocument(item.localId, { document: writeCardV3({ ...freeformBody, race: 'Edited' }) })
+    expect(pushPlan(h, item.localId)).toMatchObject({ action: 'update', existing: { canonical_id: 'card_self', matched_by: 'identity' } })
+  })
+
+  it('保留两份得到的本机副本（无映射、无来源）：推送为新建', async () => {
+    const h = await harness()
+    h.server.put('card_1', { kind: 'character_template', document: fixtures.cardFreeform })
+    const localId = outcome(await h.pull([cardRef('card_1')]), 'card_1').localId!
+    h.library.updateDocument(localId, { document: writeCardV3({ ...freeformBody, race: 'Mine' }) })
+    h.server.put('card_1', { kind: 'character_template', document: writeCardV3({ ...freeformBody, race: 'Theirs' }) })
+    expect(outcome(await h.pull([cardRef('card_1')]), 'card_1').status).toBe('kept-both')
+    expect(pushPlan(h, localId)).toMatchObject({ action: 'create', existing: null })
+  })
+})
+
+describe('#7 评审：其余修复', () => {
+  it('卡的内嵌书已由本机独立书跟随：卡照常导入，只跳过 .book 映射并警告；再拉不会每次都改写', async () => {
+    const h = await harness()
+    h.server.put('book_embedded', { kind: 'lorebook', document: fixtures.lorebook })
+    h.server.put('card_1', { kind: 'character_template', document: fixtures.cardWithBook, provenance: { book_id: 'book_embedded' } })
+    const bookLocal = outcome(await h.pull([bookRef('book_embedded')]), 'book_embedded').localId!
+    const s = await h.pull([cardRef('card_1')])
+    const card = outcome(s, 'card_1')
+    expect(card.status).toBe('created')
+    expect(card.warnings.map((warning) => warning.code)).toContain(EMBEDDED_BOOK_HELD_STANDALONE)
+    expect(h.library.getLink(SRV, card.localId!)).toMatchObject({ canonicalId: 'card_1' })
+    expect(h.library.getLink(SRV, `${card.localId}.book`)).toBeNull()
+    expect(h.library.findByCanonical(SRV, 'book_embedded')!.localId).toBe(bookLocal)
+    const again = await h.pull([cardRef('card_1')])
+    expect(outcome(again, 'card_1').status).toBe('unchanged')
+    expect(h.library.getItem(card.localId!)!.revision).toBe(1)
+  })
+
+  it('标过「服务器已删除」的项再拉到同一版本：重新写入并清掉标记（不算 unchanged）', async () => {
+    const h = await harness()
+    h.server.put('book_1', { kind: 'lorebook', document: fixtures.lorebook })
+    const localId = outcome(await h.pull([bookRef('book_1')]), 'book_1').localId!
+    h.library.markRemoteDeleted(SRV, [localId])
+    const s = await h.pull([bookRef('book_1')])
+    expect(outcome(s, 'book_1').status).toBe('updated')
+    expect(h.library.getLink(SRV, localId)!.remoteDeletedAt).toBeNull()
+  })
+
+  it('服务器副本没变但 locked_reason 变了：只更新只读与来源里的锁定原因，不动文档与 revision', async () => {
+    const h = await harness()
+    h.server.put('card_1', { kind: 'character_template', document: fixtures.cardFreeform })
+    const localId = outcome(await h.pull([cardRef('card_1')]), 'card_1').localId!
+    h.server.copies.get('card_1')!.lockedReason = 'PLUGIN_CARD'
+    const before = h.library.getItem(localId)!
+    const s = await h.pull([cardRef('card_1')])
+    expect(outcome(s, 'card_1').status).toBe('unchanged')
+    const locked = h.library.getItem(localId)!
+    expect(locked).toMatchObject({ readOnly: true, revision: before.revision, document: before.document })
+    expect(locked.origin?.locked_reason).toBe('PLUGIN_CARD')
+    expect(localSyncState(locked, h.library.getLink(SRV, localId), null)).toBe('in-sync')
+    h.server.copies.get('card_1')!.lockedReason = undefined
+    await h.pull([cardRef('card_1')])
+    const unlocked = h.library.getItem(localId)!
+    expect(unlocked.readOnly).toBe(false)
+    expect(unlocked.origin?.locked_reason).toBeUndefined()
   })
 })

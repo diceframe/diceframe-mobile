@@ -26,7 +26,7 @@
 import type { ContentExportItem, ContentKind, ContentStatusItem, ContentWarning } from '@/api/types'
 import { EMBEDDED_BOOK_SUFFIX, isCanonicalId } from '@/lib/local-library/ids'
 import { lorebookDocumentWith } from '@/lib/local-library/lorebook-library'
-import type { LocalItem, LocalItemOrigin, PullImport, ServerLink } from '@/lib/local-library/repository'
+import type { LocalItem, LocalItemOrigin, PullImport, PullImportResult, ServerLink } from '@/lib/local-library/repository'
 import {
   CARD_FORMAT,
   cardSummary,
@@ -54,6 +54,8 @@ export const CANCELLED = 'CANCELLED'
 export const RULESET_CARD_UNSUPPORTED = 'RULESET_CARD_UNSUPPORTED'
 /** 这本书在本机已作为某张卡的内嵌书跟随，不另存一份独立书 */
 export const EMBEDDED_BOOK_LINKED = 'EMBEDDED_BOOK_LINKED'
+/** 警告：卡的内嵌书在本机已由另一项跟随，卡照常导入，只是不记内嵌书映射 */
+export const EMBEDDED_BOOK_HELD_STANDALONE = 'EMBEDDED_BOOK_HELD_STANDALONE'
 
 export interface ServerItemRef {
   kind: ContentKind
@@ -99,7 +101,8 @@ export interface PullLibrary {
   getItem(localId: string): LocalItem | null
   getLink(serverInstanceId: string, localId: string): ServerLink | null
   findByCanonical(serverInstanceId: string, canonicalId: string): ServerLink | null
-  importFromServer(serverInstanceId: string, input: PullImport): string
+  importFromServer(serverInstanceId: string, input: PullImport): PullImportResult
+  setPulledLock(localId: string, lockedReason: string | undefined): void
   markRemoteDeleted(serverInstanceId: string, localIds: readonly string[]): number
 }
 
@@ -378,10 +381,20 @@ export class PullSession {
   private serverUnchanged(link: ServerLink, input: Prepared & { ok: true }): boolean {
     const { library, serverInstanceId } = this.deps
     if (link.remoteDeletedAt || link.stateToken !== input.input.origin.state_token) return false
-    const wanted = input.input.links.find((entry) => entry.suffix === EMBEDDED_BOOK_SUFFIX)
+    let wanted = input.input.links.find((entry) => entry.suffix === EMBEDDED_BOOK_SUFFIX)
+    // 内嵌书由本机别的项跟随时写入也不会记它（见 importFromServer），比较时同样不算
+    if (wanted && this.bookHeldElsewhere(wanted.canonicalId, link.localId)) wanted = undefined
     const bookLink = library.getLink(serverInstanceId, `${link.localId}${EMBEDDED_BOOK_SUFFIX}`)
     if (!wanted || !bookLink) return !wanted && !bookLink
     return wanted.canonicalId === bookLink.canonicalId && wanted.stateToken === bookLink.stateToken && !bookLink.remoteDeletedAt
+  }
+
+  private bookHeldElsewhere(bookCanonicalId: string, cardLocalId: string): boolean {
+    const { library, serverInstanceId } = this.deps
+    const holder = library.findByCanonical(serverInstanceId, bookCanonicalId)
+    if (!holder || holder.localId === `${cardLocalId}${EMBEDDED_BOOK_SUFFIX}`) return false
+    const owner = holder.localId.endsWith(EMBEDDED_BOOK_SUFFIX) ? holder.localId.slice(0, -EMBEDDED_BOOK_SUFFIX.length) : holder.localId
+    return !!library.getItem(owner)
   }
 
   private applyItem(item: ContentExportItem, bookStatuses: Map<string, ContentStatusItem>): void {
@@ -402,6 +415,12 @@ export class PullSession {
     let mode: PullImport['mode'] = 'create'
     if (link && current) {
       if (this.serverUnchanged(link, prepared)) {
+        // 文档没变但锁定状态变了（例如服务器上装/卸了插件）：只更新只读与来源里的锁定原因
+        const lockedReason = prepared.input.origin.locked_reason
+        if (current.readOnly !== !!lockedReason || current.origin?.locked_reason !== lockedReason) {
+          this.deps.assertServer()
+          library.setPulledLock(current.localId, lockedReason)
+        }
         this.setOutcome(key, { name, status: 'unchanged', localId: current.localId, warnings: prepared.warnings })
         return
       }
@@ -410,14 +429,17 @@ export class PullSession {
     // 写入前确认服务器（身份变了就整体停下，由 start 收尾）
     this.deps.assertServer()
     try {
-      const localId = library.importFromServer(serverInstanceId, {
+      const result = library.importFromServer(serverInstanceId, {
         ...prepared.input,
         mode,
         ...(mode === 'update' && current ? { targetLocalId: current.localId } : {}),
         ...(mode === 'keep-both' && current ? { detachLocalId: current.localId } : {}),
       })
       const status: PullItemStatus = mode === 'create' ? 'created' : mode === 'update' ? 'updated' : 'kept-both'
-      this.setOutcome(key, { name, status, localId, warnings: prepared.warnings })
+      const warnings = result.skippedBookLink
+        ? mergeWarnings(prepared.warnings, [{ code: EMBEDDED_BOOK_HELD_STANDALONE }])
+        : prepared.warnings
+      this.setOutcome(key, { name, status, localId: result.localId, warnings })
     } catch (error) {
       this.setOutcome(key, { name, status: 'rejected', code: codeOf(error), warnings: prepared.warnings })
     }

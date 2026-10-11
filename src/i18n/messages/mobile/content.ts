@@ -3,6 +3,8 @@
  */
 export const content = {
   zh: {
+    dfContentListPagingStuck: '服务器的内容列表一直翻不完（重复返回同一页），已停止。请稍后重试。',
+    dfPullEmbeddedBookHeldStandalone: '这张卡的内嵌设定在本机已由另一本书跟随：卡已导入，但内嵌设定的同步状态不单独记录。',
     // 拉取
     dfPullOpen: '从服务器拉取',
     dfPullTitle: '从服务器拉取',
@@ -114,6 +116,8 @@ export const content = {
     dfContentPairingReplaced: '已替换本设备之前的配对，旧的配对令牌已失效。',
   },
   en: {
+    dfContentListPagingStuck: 'The server content list kept returning the same page, so listing was stopped. Please try again later.',
+    dfPullEmbeddedBookHeldStandalone: 'The embedded book of this card is already followed by another item on this device. The card was pulled, but its embedded book is not tracked separately.',
     // 拉取
     dfPullOpen: 'Pull from server',
     dfPullTitle: 'Pull from server',
@@ -225,6 +229,8 @@ export const content = {
     dfContentPairingReplaced: 'This device’s previous pairing was replaced; the old pairing token no longer works.',
   },
   ja: {
+    dfContentListPagingStuck: 'サーバーの一覧が同じページを返し続けたため、取得を停止しました。しばらくしてから再試行してください。',
+    dfPullEmbeddedBookHeldStandalone: 'このカードの内蔵ブックは端末上の別の項目がすでに追従しています。カードは取得しましたが、内蔵ブックは個別に追跡しません。',
     // 拉取
     dfPullOpen: 'サーバーから取得',
     dfPullTitle: 'サーバーから取得',
@@ -336,6 +342,8 @@ export const content = {
     dfContentPairingReplaced: '本端末の以前のペアリングを置き換えました。古いペアリングトークンは無効です。',
   },
   de: {
+    dfContentListPagingStuck: 'Die Inhaltsliste des Servers lieferte immer wieder dieselbe Seite, daher wurde abgebrochen. Bitte später erneut versuchen.',
+    dfPullEmbeddedBookHeldStandalone: 'Das eingebettete Buch dieser Karte wird auf diesem Gerät bereits von einem anderen Eintrag verfolgt. Die Karte wurde geholt, ihr eingebettetes Buch wird aber nicht separat verfolgt.',
     // 拉取
     dfPullOpen: 'Vom Server holen',
     dfPullTitle: 'Vom Server holen',

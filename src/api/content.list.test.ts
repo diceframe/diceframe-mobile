@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { configureApiClient } from './client'
-import { CURSOR_INVALID, SERVER_MISMATCH, contentErrorKey, listContent, type ContentServer } from './content'
+import { CURSOR_INVALID, LIST_PAGING_STUCK, MAX_LIST_PAGES, SERVER_MISMATCH, contentErrorKey, listContent, type ContentServer } from './content'
 import type { ContentListItem } from './types'
 import { contentListSource } from '@/features/content-sync/list-source'
 import type { ServerItemSource } from '@/features/content-sync/pull-session'
@@ -105,6 +105,23 @@ describe('listContent', () => {
     })
     expect(await rejectionOf(listContent(server(), 'lorebook'))).toMatchObject({ code: SERVER_MISMATCH })
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('服务端重复给出用过的 cursor：抛 LIST_PAGING_STUCK，不无限翻页', async () => {
+    fetchMock
+      .mockResolvedValueOnce(page([item('a')], 'c1'))
+      .mockResolvedValueOnce(page([], 'c2'))
+      .mockResolvedValueOnce(page([], 'c1'))
+    expect(await rejectionOf(listContent(server(), 'lorebook'))).toMatchObject({ code: LIST_PAGING_STUCK })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(contentErrorKey(LIST_PAGING_STUCK)).toBe('dfContentListPagingStuck')
+  })
+
+  it('页数超过上限：抛 LIST_PAGING_STUCK', async () => {
+    let n = 0
+    fetchMock.mockImplementation(async () => page([], `c${++n}`))
+    expect(await rejectionOf(listContent(server(), 'lorebook'))).toMatchObject({ code: LIST_PAGING_STUCK })
+    expect(fetchMock).toHaveBeenCalledTimes(MAX_LIST_PAGES)
   })
 
   it('KIND_NOT_SUPPORTED / CURSOR_INVALID 都有四语文案', () => {

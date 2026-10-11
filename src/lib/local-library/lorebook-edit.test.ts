@@ -97,6 +97,10 @@ describe('本机 Lorebook 库操作', () => {
     saveLocalLorebookEntry(library, item.localId, 'keep-ash', entryEditOf(ash, { ...ash, priority: '7', insertionOrder: '3', constant: true }), sequence())
     const ashSaved = readLorebookV3(library.getItem(item.localId)!.document).entries[1]
     expect(ashSaved).toEqual({ ...expected.data.lorebook.entries[1], priority: 7, insertion_order: 3, constant: true })
+    // 清空整数框 = 不改：存着的值原样保留（不写 0、不删字段）
+    const cleared = entryFormOf(ashSaved)
+    saveLocalLorebookEntry(library, item.localId, 'keep-ash', entryEditOf(cleared, { ...cleared, priority: '', insertionOrder: ' ' }), sequence())
+    expect(readLorebookV3(library.getItem(item.localId)!.document).entries[1]).toMatchObject({ priority: 7, insertion_order: 3 })
   })
 
   it('新建、删除条目按 id；重命名保留书级设置；复制得到没有来源的新书', async () => {

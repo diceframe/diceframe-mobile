@@ -427,14 +427,14 @@ describe('推送入口与同步状态', () => {
     expect(localSyncState({ revision: 4 }, link, null)).toBe('local-changes')
   })
 
-  it('拉取来源就是这台服务器且尚无映射：带 canonical_hint；其余不带', () => {
+  it('canonical_hint：有映射取映射；无映射且来源是这台服务器取来源；其余不带', () => {
     const item = {
       localId: 'card-a', kind: 'character_template' as const, format: 'chara_card_v3', name: 'a', ruleId: '', readOnly: false,
       revision: 1, origin: { server_instance_id: 'srv-1', canonical_id: 'card_x' }, createdAt: '', updatedAt: '', document: {},
     }
     expect(pushCandidateOf(item, null, 'srv-1').canonicalHint).toBe('card_x')
     expect(pushCandidateOf(item, null, 'srv-2').canonicalHint).toBeUndefined()
-    expect(pushCandidateOf(item, { serverInstanceId: 'srv-1', localId: 'card-a', canonicalId: 'c', stateToken: '', syncedRevision: 1, syncedDigest: '', baseUrlHint: '', remoteDeletedAt: null, updatedAt: '' }, 'srv-1').canonicalHint).toBeUndefined()
+    expect(pushCandidateOf(item, { serverInstanceId: 'srv-1', localId: 'card-a', canonicalId: 'c', stateToken: '', syncedRevision: 1, syncedDigest: '', baseUrlHint: '', remoteDeletedAt: null, updatedAt: '' }, 'srv-1').canonicalHint).toBe('c')
   })
 })
 

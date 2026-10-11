@@ -5,8 +5,8 @@
  * - client_ref 即本机 id；卡片内嵌书的 client_ref 由服务端约定为 `<卡片 id>.book`。
  * - 文档是**推送那一刻的快照**：预览与提交必须发同一份文档（plan_digest 覆盖草稿摘要），
  *   映射记的也是这份快照的 revision 与摘要——推送途中用户再编辑，不会被错标为已同步。
- * - 拉取来的项（origin 指向这台服务器、但还没有映射）带 canonical_hint，让推送对准服务器上
- *   原来那一份；「保留两份」得到的本机副本没有 origin，作为新项推送（不带 hint）。
+ * - 有映射（或来源是这台服务器）的项带 canonical_hint，让推送对准服务器上跟随的那一份
+ *   （见 sync-state.pushCandidateOf）；「保留两份」得到的本机副本没有映射也没有来源，作为新项推送。
  */
 import type { ContentKind, ContentPushItem, ContentSyncSource, ContentWarning } from '@/api/types'
 import { CARD_FORMAT, isRulesAwareCard, pushableCardDocument, readCardV3 } from '@/lib/portable/card-v3'
@@ -26,7 +26,7 @@ export interface PushCandidate {
   revision: number
   readOnly: boolean
   document: unknown
-  /** 拉取来源的服务器 canonical id（仅当来源就是这台服务器且尚无映射时给出） */
+  /** 服务器上跟随的那一份：映射的 canonical id，没有映射时取来源（来源是这台服务器时） */
   canonicalHint?: string
 }
 

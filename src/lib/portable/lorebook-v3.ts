@@ -75,10 +75,11 @@ export function readLorebookV3(document: unknown): LorebookBook {
 }
 
 /**
- * 卡片内嵌书 / 独立书共用的读取视图。与服务端 from_lorebook_v3 一样宽容：entries 缺失
+ * 卡片内嵌书 / 独立书共用的规范化视图。与服务端 from_lorebook_v3 一样宽容：entries 缺失
  * 或不是数组按空书，非对象的行当作空条目（服务端 `row = raw if dict else {}`），
  * 条目位置与服务端一一对应——坏条目不该让整本书（或整张卡）读不出来。
- * 这是读取视图：本机存储与推送用的文档原文不经它改写。
+ * 本机写书（编辑、拉取、打开时补 id）存回的就是这个规范化结果：非对象的行变成空条目并补上 id。
+ * 服务端读取时同样把这些行当作空条目；原样保留非对象行不值得为此另走一套写入路径。
  */
 export function normalizeBook(book: unknown): LorebookBook {
   if (!isJsonObject(book)) throw new PortableFormatError(LOREBOOK_V3_INVALID, 'lorebook must be an object')
