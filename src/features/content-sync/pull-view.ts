@@ -3,7 +3,7 @@
  */
 import { EMBEDDED_BOOK_SUFFIX } from '@/lib/local-library/ids'
 
-import type { PullLibrary, PullOutcome, ServerItemRef } from './pull-session'
+import { UNSUPPORTED_LOCKS, type PullLibrary, type PullOutcome, type ServerItemRef } from './pull-session'
 import { localSyncState, type LocalSyncState } from './sync-state'
 
 export type PullRowState =
@@ -11,6 +11,8 @@ export type PullRowState =
   | 'new'
   /** 本机已作为某张卡的内嵌书跟随：拉取会跳过 */
   | 'embedded'
+  /** 服务器声明不能导入本机（规则托管卡） */
+  | 'unsupported'
   | Exclude<LocalSyncState, 'never'>
 
 export interface PullListRow {
@@ -30,6 +32,7 @@ export function pullListRows(
   serverInstanceId: string,
 ): PullListRow[] {
   return refs.map((ref) => {
+    if (ref.lockedReason && UNSUPPORTED_LOCKS.has(ref.lockedReason)) return { ref, state: 'unsupported' }
     const link = library.findByCanonical(serverInstanceId, ref.canonicalId)
     if (!link) return { ref, state: 'new' }
     if (link.localId.endsWith(EMBEDDED_BOOK_SUFFIX)) {
@@ -43,9 +46,9 @@ export function pullListRows(
   })
 }
 
-/** 可勾选：内嵌书跟随的项拉取时一定跳过，不给选 */
+/** 可勾选：内嵌书跟随的项拉取时一定跳过、规则托管卡不能导入，都不给选 */
 export function isSelectable(row: PullListRow): boolean {
-  return row.state !== 'embedded'
+  return row.state !== 'embedded' && row.state !== 'unsupported'
 }
 
 /** 进度：已出结果的项数 / 总项数 */

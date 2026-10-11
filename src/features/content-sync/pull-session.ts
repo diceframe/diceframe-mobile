@@ -2,8 +2,8 @@
  * 拉取会话（M6）：按服务器项导出 → 逐项写入本机库，纯状态机，不含界面；网络与本机库都经
  * PullDeps 注入，测试用假服务端驱动。
  *
- * 「列出服务器上有哪些内容」放在 ServerItemSource 接口后面：服务端还没有能列全所有书
- * （含绑定到世界/对局的书）的接口，真实来源等服务端定下来再接；会话本身只接收要拉的 ref。
+ * 「列出服务器上有哪些内容」放在 ServerItemSource 接口后面（真实来源是 POST /api/content/list，
+ * 见 list-source.ts）；会话本身只接收要拉的 ref。
  *
  * 契约要点（diceframe/diceframe docs/content-sync/CONTRACT.md）：
  * - 导出每批 ≤50 项；批里有不存在的 id 整批 404 NOT_FOUND，二分找出缺失项；413 同样二分，
@@ -19,8 +19,9 @@
  *   超出条目数 / 单条大小限额的不导入。
  * - 一项一个事务；每次写入前确认连接仍是锁定的那台服务器，不是就立刻停下。按时间预算让出
  *   线程；取消在两项之间生效，已写入的项保持写入。
- * - 插件卡等锁定项：本机暂不标只读（导出不带插件来源），推送时由服务端 PLUGIN_CARD 拦下。
- *   导出 origin 将来若带 locked_reason，lockedReasonOf 读到即把拉下来的项标为只读。
+ * - 锁定项：导出 origin.locked_reason（#508）非空就把拉下来的项标为本机只读（插件卡 / 插件书）；
+ *   RULESET_CARD_UNSUPPORTED / RULESET_CARD 的卡与规则托管卡一样不导入。随推送者而定的锁定
+ *   （TRACKED_BY_OTHER_SOURCE 等）不在 locked_reason 里，交给推送预览。
  */
 import type { ContentExportItem, ContentKind, ContentStatusItem, ContentWarning } from '@/api/types'
 import { EMBEDDED_BOOK_SUFFIX, isCanonicalId } from '@/lib/local-library/ids'
@@ -66,12 +67,27 @@ export interface ServerItemRef {
 }
 
 /**
- * 列出服务器上某一类可拉取的内容（分页由实现内部处理）。
- * 真实实现待服务端的列举接口合入后接入。
+ * 列举结果附带的提示（不是错误）：
+ * - KIND_NOT_SUPPORTED：服务器不支持这一类（例如没启用 Lorebook），列表为空；
+ * - TRACKED_ONLY：旧服务端没有列举接口，只列出本机已跟随的项（只能刷新）。
  */
-export interface ServerItemSource {
-  list(kind: ContentKind): Promise<ServerItemRef[]>
+export type ServerListingNotice = 'KIND_NOT_SUPPORTED' | 'TRACKED_ONLY'
+
+export interface ServerListing {
+  items: ServerItemRef[]
+  notice?: ServerListingNotice
 }
+
+/** 列出服务器上某一类可拉取的内容（分页由实现内部处理） */
+export interface ServerItemSource {
+  list(kind: ContentKind): Promise<ServerListing>
+}
+
+/**
+ * 不能导入本机的锁定原因：规则托管卡（导出本身规则托管，或服务器上那张是规则托管）。
+ * 其余锁定原因（PLUGIN_CARD / PLUGIN_BOOK）照常导入，本机只读。
+ */
+export const UNSUPPORTED_LOCKS: ReadonlySet<string> = new Set(['RULESET_CARD_UNSUPPORTED', 'RULESET_CARD'])
 
 interface ExportRef {
   kind: ContentKind
@@ -139,12 +155,9 @@ export interface PullState {
   stopCode?: string
 }
 
-/**
- * 导出 origin 里的锁定原因（服务端尚未提供；字段名按提案 locked_reason）。
- * 有值 → 拉下来的项本机只读。
- */
+/** 导出 origin 里的锁定原因（#508）；有值 → 拉下来的项本机只读 */
 export function lockedReasonOf(origin: ContentExportItem['origin'] | null | undefined): string | undefined {
-  const value = isJsonObject(origin) ? (origin as Record<string, unknown>).locked_reason : undefined
+  const value = isJsonObject(origin) ? origin.locked_reason : undefined
   return typeof value === 'string' && value ? value : undefined
 }
 
@@ -315,7 +328,7 @@ export class PullSession {
     try {
       if (item.kind === 'character_template') {
         const { body } = readCardV3(item.document)
-        if (isRulesAwareCard(body)) {
+        if (isRulesAwareCard(body) || (lockedReason && UNSUPPORTED_LOCKS.has(lockedReason))) {
           return { ok: false, status: 'unsupported', code: RULESET_CARD_UNSUPPORTED, warnings: [...serverWarnings] }
         }
         const pushable = pushableCardDocument(item.document)

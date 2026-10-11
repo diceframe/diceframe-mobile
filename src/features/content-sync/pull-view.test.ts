@@ -17,7 +17,7 @@ function sequence() {
 
 /** 假列举来源：按 kind 过滤，带 state_token（与 /status 同值） */
 function fakeSource(refs: ServerItemRef[]): ServerItemSource {
-  return { list: async (kind) => refs.filter((ref) => ref.kind === kind) }
+  return { list: async (kind) => ({ items: refs.filter((ref) => ref.kind === kind) }) }
 }
 
 async function setup() {
@@ -50,13 +50,25 @@ describe('拉取选择列表', () => {
       { kind: 'lorebook', canonicalId: 'b_embedded', stateToken: 't1' },
       { kind: 'character_template', canonicalId: 'card_x', stateToken: 't1' },
     ])
-    const rows = pullListRows(await source.list('lorebook'), library, SRV)
+    const rows = pullListRows((await source.list('lorebook')).items, library, SRV)
     expect(rows.map((row) => [row.ref.canonicalId, row.state])).toEqual([
       ['b_new', 'new'], ['b_sync', 'in-sync'], ['b_server', 'server-changed'],
       ['b_local', 'local-changes'], ['b_both', 'both-changed'], ['b_embedded', 'embedded'],
     ])
     expect(rows.find((row) => row.state === 'embedded')!.localId).toBe(card.localId)
     expect(rows.filter(isSelectable).map((row) => row.ref.canonicalId)).not.toContain('b_embedded')
+  })
+
+  it('列举里 RULESET_CARD / RULESET_CARD_UNSUPPORTED 的卡显示为不支持且不可选；PLUGIN_CARD 照常可选', async () => {
+    const library = await setup()
+    const source = fakeSource([
+      { kind: 'character_template', canonicalId: 'c1', lockedReason: 'RULESET_CARD' },
+      { kind: 'character_template', canonicalId: 'c2', lockedReason: 'RULESET_CARD_UNSUPPORTED' },
+      { kind: 'character_template', canonicalId: 'c3', lockedReason: 'PLUGIN_CARD' },
+    ])
+    const rows = pullListRows((await source.list('character_template')).items, library, SRV)
+    expect(rows.map((row) => row.state)).toEqual(['unsupported', 'unsupported', 'new'])
+    expect(rows.filter(isSelectable).map((row) => row.ref.canonicalId)).toEqual(['c3'])
   })
 
   it('列举没带 state_token：只按本机 revision 判断', async () => {

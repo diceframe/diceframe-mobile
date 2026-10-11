@@ -23,6 +23,8 @@ import type {
   ContentExportItem,
   ContentExportResponse,
   ContentKind,
+  ContentListItem,
+  ContentListResponse,
   ContentPreviewResponse,
   ContentPushItem,
   ContentStatusItem,
@@ -42,7 +44,11 @@ export const CONTENT_SYNC_UNSUPPORTED = 'CONTENT_SYNC_UNSUPPORTED'
 export const OWNER_REQUIRED = 'OWNER_REQUIRED'
 export const SERVER_IDENTITY_UNAVAILABLE = 'SERVER_IDENTITY_UNAVAILABLE'
 export const PLAN_STALE = 'PLAN_STALE'
+export const KIND_NOT_SUPPORTED = 'KIND_NOT_SUPPORTED'
+export const CURSOR_INVALID = 'CURSOR_INVALID'
 
+/** 列举每页最多 500 项（服务端上限） */
+export const MAX_LIST_ITEMS = 500
 /** 状态查询每次最多 500 项（服务端上限） */
 export const MAX_STATUS_ITEMS = 500
 /** 退化状态查询（#494 服务端没有 /status）每批导出的项数，与导入上限一致 */
@@ -305,6 +311,42 @@ async function withRateLimitRetry<T>(request: () => Promise<T>): Promise<T> {
   }
 }
 
+/** POST /api/content/list 的一页（#508）；cursor 为 null 取第一页 */
+export function listContentPage(server: ContentServer, kind: ContentKind, cursor: string | null, limit = MAX_LIST_ITEMS): Promise<ContentListResponse> {
+  requireServer(server)
+  return contentRequest<ContentListResponse>(server, '/content/list', { kind, cursor, limit })
+}
+
+/**
+ * 列出服务器上某一类的全部内容（#508，按 canonical_id 的 keyset 分页）：
+ * - 只在 next_cursor 为 null 时结束——中途删了东西时某页可能很短甚至为空；
+ * - 400 CURSOR_INVALID：从头重来一次，再失败就抛出；
+ * - 429 按 retry_after 等待后重试（同其他内容请求）；
+ * - 每页都校验实例 id 与连接地址（contentRequest），中途换了服务器整个列举失败，不返回半份结果。
+ * KIND_NOT_SUPPORTED（服务器没开 Lorebook）与旧服务端的裸 404/405 原样抛出，由调用方决定怎么展示。
+ */
+export async function listContent(server: ContentServer, kind: ContentKind): Promise<ContentListItem[]> {
+  let restarted = false
+  for (;;) {
+    const items: ContentListItem[] = []
+    let cursor: string | null = null
+    try {
+      do {
+        const page: ContentListResponse = await withRateLimitRetry(() => listContentPage(server, kind, cursor))
+        items.push(...(page.items ?? []))
+        cursor = page.next_cursor ?? null
+      } while (cursor !== null)
+      return items
+    } catch (error) {
+      if (!restarted && error instanceof ApiError && error.code === CURSOR_INVALID) {
+        restarted = true
+        continue
+      }
+      throw error
+    }
+  }
+}
+
 function missingStatus(ref: ContentRef): ContentStatusItem {
   return { kind: ref.kind, canonical_id: ref.canonical_id, exists: false, state_token: '', provenance: null }
 }
@@ -382,6 +424,7 @@ const CONTENT_ERROR_KEYS: Record<string, TKey> = {
   CANCELLED: 'dfContentCancelled',
   // 拉取
   EMBEDDED_BOOK_LINKED: 'dfPullEmbeddedBookLinked',
+  CURSOR_INVALID: 'dfContentCursorInvalid',
   // 警告码
   PORTRAIT_NOT_PORTABLE: 'dfContentWarningPortraitNotPortable',
   BOOK_NOT_IMPORTED: 'dfContentWarningBookNotImported',

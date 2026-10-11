@@ -13,13 +13,22 @@ import type { TKey } from '@/i18n/keyset'
 import { useT } from '@/i18n/t'
 
 import { createPullSession, type PullContext } from './pull-runner'
-import { RULESET_CARD_UNSUPPORTED, type PullItemStatus, type PullOutcome, type PullSession, type PullState, type ServerItemSource } from './pull-session'
+import {
+  RULESET_CARD_UNSUPPORTED,
+  type PullItemStatus,
+  type PullOutcome,
+  type PullSession,
+  type PullState,
+  type ServerItemSource,
+  type ServerListingNotice,
+} from './pull-session'
 import { isSelectable, pullListRows, pullProgress, type PullListRow, type PullRowState } from './pull-view'
 import { openPushContext } from './push-runner'
 
 const ROW_KEYS: Record<PullRowState, TKey> = {
   'new': 'dfPullStateNew',
   'embedded': 'dfPullStateEmbedded',
+  'unsupported': 'dfPushStatusUnsupported',
   'in-sync': 'dfSyncInSync',
   'local-changes': 'dfSyncLocalChanges',
   'server-changed': 'dfSyncServerChanged',
@@ -44,7 +53,8 @@ const STATUS_KEYS: Record<PullItemStatus, TKey> = {
 
 /**
  * 从服务器拉取（M6）：列出服务器上的某类内容 → 勾选 → 逐项拉取，显示进度与每项结果，
- * 可在两项之间停止。列举来源由调用方经 ServerItemSource 注入（真实列举接口待服务端合入）。
+ * 可在两项之间停止。列举来源经 ServerItemSource 注入（运行时为 serverItemSource）。
+ * 服务器没启用 Lorebook 时书的列表显示为空并说明原因，不当作错误；旧服务端只能刷新已跟随的项。
  */
 export function PullSheet({ open, kind, source, onClose }: {
   open: boolean
@@ -55,6 +65,7 @@ export function PullSheet({ open, kind, source, onClose }: {
   const t = useT()
   const [context, setContext] = React.useState<PullContext | null>(null)
   const [rows, setRows] = React.useState<PullListRow[] | null>(null)
+  const [notice, setNotice] = React.useState<ServerListingNotice | undefined>(undefined)
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [session, setSession] = React.useState<PullSession | null>(null)
   const [state, setState] = React.useState<PullState | null>(null)
@@ -66,10 +77,11 @@ export function PullSheet({ open, kind, source, onClose }: {
     void (async () => {
       try {
         const opened = await openPushContext()
-        const refs = await source(opened).list(kind)
+        const listing = await source(opened).list(kind)
         if (cancelled) return
         setContext(opened)
-        setRows(pullListRows(refs, opened.library, opened.server.serverInstanceId))
+        setNotice(listing.notice)
+        setRows(pullListRows(listing.items, opened.library, opened.server.serverInstanceId))
       } catch (cause) {
         if (!cancelled) setError(contentErrorMessage(cause))
       }
@@ -103,7 +115,7 @@ export function PullSheet({ open, kind, source, onClose }: {
 
   function outcomeText(outcome: PullOutcome): string {
     if (outcome.status === 'kept-both') return t('dfPullKeptBothHint')
-    if (outcome.code === RULESET_CARD_UNSUPPORTED) return t('dfPullRulesetUnsupported')
+    if (outcome.code === RULESET_CARD_UNSUPPORTED || outcome.code === 'RULESET_CARD') return t('dfPullRulesetUnsupported')
     if (outcome.code === 'ENTRY_TOO_LARGE' && outcome.entryId) return t('dfPushEntryTooLarge', { entry: outcome.entryId })
     const key = contentErrorKey(outcome.code)
     return key ? t(key) : ''
@@ -121,8 +133,11 @@ export function PullSheet({ open, kind, source, onClose }: {
         {!session ? (
           <>
             <Text variant="small" className="text-muted-foreground">{t('dfPullSelectHint')}</Text>
+            {notice === 'TRACKED_ONLY' ? <Text variant="small" className="text-muted-foreground">{t('dfPullTrackedOnly')}</Text> : null}
             {!rows && !error ? <ActivityIndicator /> : null}
-            {rows && !rows.length ? <Text variant="muted">{t('dfPullNothing')}</Text> : null}
+            {notice === 'KIND_NOT_SUPPORTED'
+              ? <Text variant="muted">{t('dfPullNoLorebooks')}</Text>
+              : rows && !rows.length ? <Text variant="muted">{t('dfPullNothing')}</Text> : null}
             <ScrollView className="flex-1" contentContainerClassName="gap-1 pb-4">
               {rows?.map((row) => {
                 const enabled = isSelectable(row)
@@ -138,7 +153,7 @@ export function PullSheet({ open, kind, source, onClose }: {
                       <Text numberOfLines={1}>{row.ref.name || row.ref.canonicalId}</Text>
                     </View>
                     <Badge variant="outline"><Text className="text-[10px]">{t(ROW_KEYS[row.state])}</Text></Badge>
-                    {row.ref.lockedReason ? <Badge variant="secondary"><Text className="text-[10px]">{t('dfPullLocked')}</Text></Badge> : null}
+                    {row.ref.lockedReason && row.state !== 'unsupported' ? <Badge variant="secondary"><Text className="text-[10px]">{t('dfPullLocked')}</Text></Badge> : null}
                   </Pressable>
                 )
               })}

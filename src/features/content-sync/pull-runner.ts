@@ -1,15 +1,13 @@
 /**
- * 拉取的运行时装配：把真实的导出 / 状态 API 与本机库接进 PullSession。
- *
- * 「列出服务器上有哪些内容」只有 ServerItemSource 接口，这里不提供真实实现：服务端现有的
- * 书列表不含绑定到世界/对局的书，列举接口待服务端确定后再接。目前能用的来源只有
- * 本机已跟随的项（linkedItemRefs，重新拉取）。
+ * 拉取的运行时装配：把真实的列举 / 导出 / 状态 API 与本机库接进 PullSession。
+ * 列举走 POST /api/content/list（serverItemSource）；旧服务端没有它时退回本机已跟随的项。
  */
 import { randomUUID } from 'expo-crypto'
 
-import { assertContentServer, contentStatus, exportContent } from '@/api/content'
+import { assertContentServer, contentStatus, exportContent, listContent } from '@/api/content'
 import { createYielder } from '@/lib/local-library/yielder'
 
+import { contentListSource } from './list-source'
 import { PullSession, linkedItemRefs, type ServerItemRef, type ServerItemSource } from './pull-session'
 import type { PushContext } from './push-runner'
 
@@ -40,10 +38,15 @@ export function linkedItemSource(context: PullContext): ServerItemSource {
   return {
     list: async (kind) => {
       const refs = linkedItemRefs(library.listItems({ kind }), library.listLinks(server.serverInstanceId))
-      if (!refs.length) return refs
+      if (!refs.length) return { items: refs }
       const statuses = await contentStatus(server, refs.map((ref) => ({ kind: ref.kind, canonical_id: ref.canonicalId })))
       const tokens = new Map(statuses.filter((status) => status.exists).map((status) => [status.canonical_id, status.state_token]))
-      return refs.map((ref) => (tokens.has(ref.canonicalId) ? { ...ref, stateToken: tokens.get(ref.canonicalId) } : ref))
+      return { items: refs.map((ref) => (tokens.has(ref.canonicalId) ? { ...ref, stateToken: tokens.get(ref.canonicalId) } : ref)) }
     },
   }
+}
+
+/** 拉取界面用的来源：服务端列举（#508），旧服务端退回 linkedItemSource */
+export function serverItemSource(context: PullContext): ServerItemSource {
+  return contentListSource((kind) => listContent(context.server, kind), linkedItemSource(context))
 }

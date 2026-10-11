@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
 import { CharacterCardEditor } from '@/features/characters/CharacterCardEditor'
 import { PullSheet } from '@/features/content-sync/PullSheet'
-import { linkedItemSource } from '@/features/content-sync/pull-runner'
+import { serverItemSource } from '@/features/content-sync/pull-runner'
 import { PushSheet } from '@/features/content-sync/PushSheet'
 import { currentPushAccess } from '@/features/content-sync/push-runner'
 import type { PushAccess } from '@/features/content-sync/sync-state'
@@ -253,8 +253,7 @@ export default function CharactersScreen() {
         <PushSheet open onClose={() => { setPushOpen(false); void local.refresh() }} />
       ) : null}
       {pullOpen ? (
-        // 列举来源暂用本机已跟随的项（重新拉取）；服务端列举接口合入后换成真实来源
-        <PullSheet open kind="character_template" source={linkedItemSource} onClose={() => { setPullOpen(false); void local.refresh() }} />
+        <PullSheet open kind="character_template" source={serverItemSource} onClose={() => { setPullOpen(false); void local.refresh() }} />
       ) : null}
       {editor ? (
         // 内容长（规则/头像/技能/背景/金钱），固定 85% 高并交给 Sheet 内部滚动，保证底部按钮可达

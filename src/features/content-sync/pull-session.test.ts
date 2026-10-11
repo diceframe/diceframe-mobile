@@ -368,6 +368,20 @@ describe('拉取状态机（假服务端）', () => {
     expect(h.library.listItems()).toHaveLength(0)
   })
 
+  it('locked_reason（#508）：PLUGIN_BOOK 的书也本机只读；RULESET_CARD / RULESET_CARD_UNSUPPORTED 的卡不导入', async () => {
+    const h = await harness()
+    h.server.put('book_plugin', { kind: 'lorebook', document: fixtures.lorebook, lockedReason: 'PLUGIN_BOOK' })
+    h.server.put('card_ruleset', { kind: 'character_template', document: fixtures.cardFreeform, lockedReason: 'RULESET_CARD' })
+    h.server.put('card_ruleset_u', { kind: 'character_template', document: fixtures.cardFreeform, lockedReason: 'RULESET_CARD_UNSUPPORTED' })
+    const s = await h.pull([bookRef('book_plugin'), cardRef('card_ruleset'), cardRef('card_ruleset_u')])
+    const book = h.library.getItem(outcome(s, 'book_plugin').localId!)!
+    expect(book.readOnly).toBe(true)
+    expect(book.origin?.locked_reason).toBe('PLUGIN_BOOK')
+    expect(outcome(s, 'card_ruleset')).toMatchObject({ status: 'unsupported', code: RULESET_CARD_UNSUPPORTED })
+    expect(outcome(s, 'card_ruleset_u')).toMatchObject({ status: 'unsupported', code: RULESET_CARD_UNSUPPORTED })
+    expect(h.library.listItems()).toHaveLength(1)
+  })
+
   it('locked_reason：导出 origin 带它时拉下来的项本机只读；不带时可编辑（插件卡靠推送时的 PLUGIN_CARD）', async () => {
     const h = await harness()
     h.server.put('card_plugin', { kind: 'character_template', document: fixtures.cardFreeform, lockedReason: 'PLUGIN_CARD' })

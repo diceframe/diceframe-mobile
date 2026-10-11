@@ -17,7 +17,7 @@ import { Switch } from '@/components/ui/switch'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
 import { PullSheet } from '@/features/content-sync/PullSheet'
-import { linkedItemSource } from '@/features/content-sync/pull-runner'
+import { serverItemSource } from '@/features/content-sync/pull-runner'
 import { currentPushAccess } from '@/features/content-sync/push-runner'
 import type { PushAccess } from '@/features/content-sync/sync-state'
 import { useLocalLorebook, useLocalLorebooks, type LocalLorebookView } from '@/hooks/useLocalLorebooks'
@@ -185,8 +185,7 @@ export default function LocalLorebooksScreen() {
       />
 
       {pullOpen ? (
-        // 列举来源暂用本机已跟随的项（重新拉取）；服务端列举接口合入后换成真实来源
-        <PullSheet open kind="lorebook" source={linkedItemSource} onClose={() => { setPullOpen(false); void refresh() }} />
+        <PullSheet open kind="lorebook" source={serverItemSource} onClose={() => { setPullOpen(false); void refresh() }} />
       ) : null}
 
       <Sheet open={!!sheet} onClose={() => setSheet(null)} className="h-auto">
