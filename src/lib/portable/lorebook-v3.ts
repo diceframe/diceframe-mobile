@@ -7,8 +7,8 @@
  * - 每个条目必须有稳定的 `id`：服务端按它镜像条目（推送 update = 全量镜像，
  *   本机没有的条目会在服务端被删除）。新条目在本机生成 `entry-<uuid>`，之后不再改变；
  *   从服务器拉下来的条目沿用它导出的 id（数字 uid 也原样保留，比较时按字符串）。
- * - 编辑只改界面开放的字段（名称、关键词、内容、启用），其余字段——激活设置、
- *   `extensions.diceframe`、未知字段——一律原样保留，否则镜像推送会清掉服务端的设置。
+ * - 编辑只改界面开放的字段（名称、关键词、内容、启用、常驻、插入顺序、优先级），其余字段——
+ *   次要关键词、`extensions.diceframe`、未知字段——一律原样保留，否则镜像推送会清掉服务端的设置。
  */
 import { LOREBOOK_ENTRY_NOT_FOUND, LOREBOOK_V3_INVALID, PortableFormatError } from './errors'
 import { cloneJson, isJsonObject, type JsonObject } from './json'
@@ -36,12 +36,17 @@ export interface LorebookEntry extends JsonObject {
   enabled?: boolean
 }
 
-/** 界面可编辑的条目字段；其余字段编辑时原样保留 */
+/** 界面可编辑的条目字段（服务端 schema 接受的同名字段）；其余字段编辑时原样保留 */
 export interface LorebookEntryEdit {
   name?: string
   keys?: string[]
   content?: string
   enabled?: boolean
+  constant?: boolean
+  /** 整数（schema: integer） */
+  insertion_order?: number
+  /** 整数（schema: integer） */
+  priority?: number
 }
 
 /**
@@ -172,6 +177,9 @@ function editableFields(edit: LorebookEntryEdit): LorebookEntryEdit {
   if (edit.content !== undefined) fields.content = edit.content
   if (edit.enabled !== undefined) fields.enabled = edit.enabled
   if (edit.keys !== undefined) fields.keys = edit.keys.map((key) => key.trim()).filter(Boolean)
+  if (edit.constant !== undefined) fields.constant = edit.constant
+  if (edit.insertion_order !== undefined) fields.insertion_order = Math.trunc(edit.insertion_order)
+  if (edit.priority !== undefined) fields.priority = Math.trunc(edit.priority)
   return fields
 }
 
