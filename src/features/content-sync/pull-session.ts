@@ -59,11 +59,18 @@ export interface ServerItemRef {
   canonicalId: string
   /** 列表展示用 */
   name?: string
+  /** 列举时服务器副本的 state_token（与 /status 同值）；有它才能在选择列表里显示同步状态 */
+  stateToken?: string
+  /** 服务端声明的锁定原因（如插件卡）；拉下来会是只读 */
+  lockedReason?: string
 }
 
-/** 列出服务器上可拉取的内容。真实实现待服务端提供列举接口后接入 */
+/**
+ * 列出服务器上某一类可拉取的内容（分页由实现内部处理）。
+ * 真实实现待服务端的列举接口合入后接入。
+ */
 export interface ServerItemSource {
-  list(): Promise<ServerItemRef[]>
+  list(kind: ContentKind): Promise<ServerItemRef[]>
 }
 
 interface ExportRef {

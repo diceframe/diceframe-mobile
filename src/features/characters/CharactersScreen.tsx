@@ -16,6 +16,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
 import { CharacterCardEditor } from '@/features/characters/CharacterCardEditor'
+import { PullSheet } from '@/features/content-sync/PullSheet'
+import { linkedItemSource } from '@/features/content-sync/pull-runner'
 import { PushSheet } from '@/features/content-sync/PushSheet'
 import { currentPushAccess } from '@/features/content-sync/push-runner'
 import type { PushAccess } from '@/features/content-sync/sync-state'
@@ -116,6 +118,7 @@ export default function CharactersScreen() {
   // 推送入口只给房主（或没设访问密码的服务器，推送前再警告）；分享/席位凭证的玩家看不到
   const [access, setAccess] = React.useState<PushAccess>('denied')
   const [pushOpen, setPushOpen] = React.useState(false)
+  const [pullOpen, setPullOpen] = React.useState(false)
 
   React.useEffect(() => {
     if (!localAvailable) return
@@ -188,7 +191,10 @@ export default function CharactersScreen() {
     <View className="min-h-0 flex-1">
       {local.error ? <ErrorBanner message={local.error} onRetry={() => void local.refresh()} /> : null}
       {access !== 'denied' ? (
-        <Button variant="outline" className="mb-3" onPress={() => setPushOpen(true)}><Text>{t('dfPushOpen')}</Text></Button>
+        <View className="mb-3 flex-row gap-2">
+          <Button variant="outline" className="flex-1" onPress={() => setPullOpen(true)}><Text>{t('dfPullOpen')}</Text></Button>
+          <Button variant="outline" className="flex-1" onPress={() => setPushOpen(true)}><Text>{t('dfPushOpen')}</Text></Button>
+        </View>
       ) : null}
       <FlatList
         data={local.cards ?? []}
@@ -245,6 +251,10 @@ export default function CharactersScreen() {
       ) : serverList}
       {pushOpen ? (
         <PushSheet open onClose={() => { setPushOpen(false); void local.refresh() }} />
+      ) : null}
+      {pullOpen ? (
+        // 列举来源暂用本机已跟随的项（重新拉取）；服务端列举接口合入后换成真实来源
+        <PullSheet open kind="character_template" source={linkedItemSource} onClose={() => { setPullOpen(false); void local.refresh() }} />
       ) : null}
       {editor ? (
         // 内容长（规则/头像/技能/背景/金钱），固定 85% 高并交给 Sheet 内部滚动，保证底部按钮可达

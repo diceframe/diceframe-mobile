@@ -16,6 +16,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
+import { PullSheet } from '@/features/content-sync/PullSheet'
+import { linkedItemSource } from '@/features/content-sync/pull-runner'
+import { currentPushAccess } from '@/features/content-sync/push-runner'
+import type { PushAccess } from '@/features/content-sync/sync-state'
 import { useLocalLorebook, useLocalLorebooks, type LocalLorebookView } from '@/hooks/useLocalLorebooks'
 import { useT } from '@/i18n/t'
 import { confirmDestructive } from '@/lib/confirm'
@@ -45,6 +49,19 @@ export default function LocalLorebooksScreen() {
   const [name, setName] = React.useState('')
   const [description, setDescription] = React.useState('')
   const [actionError, setActionError] = React.useState('')
+  // 拉取只给房主（与推送同一判定）
+  const [access, setAccess] = React.useState<PushAccess>('denied')
+  const [pullOpen, setPullOpen] = React.useState(false)
+  const localAvailable = books !== null
+
+  React.useEffect(() => {
+    if (!localAvailable) return
+    let cancelled = false
+    currentPushAccess()
+      .then((value) => { if (!cancelled) setAccess(value) })
+      .catch(() => { if (!cancelled) setAccess('denied') })
+    return () => { cancelled = true }
+  }, [localAvailable])
 
   const opened = openId ? books?.find((book) => book.localId === openId) ?? null : null
 
@@ -112,6 +129,9 @@ export default function LocalLorebooksScreen() {
           <Button size="sm" variant="outline" onPress={() => { setActionError(''); void refresh() }}><Text>{t('dfCommonRetry')}</Text></Button>
         </View>
       ) : null}
+      {access !== 'denied' && localAvailable ? (
+        <Button variant="outline" className="mb-3" onPress={() => setPullOpen(true)}><Text>{t('dfPullOpen')}</Text></Button>
+      ) : null}
       <FlatList
         data={books ?? []}
         keyExtractor={(item) => item.localId}
@@ -163,6 +183,11 @@ export default function LocalLorebooksScreen() {
           </View>
         )}
       />
+
+      {pullOpen ? (
+        // 列举来源暂用本机已跟随的项（重新拉取）；服务端列举接口合入后换成真实来源
+        <PullSheet open kind="lorebook" source={linkedItemSource} onClose={() => { setPullOpen(false); void refresh() }} />
+      ) : null}
 
       <Sheet open={!!sheet} onClose={() => setSheet(null)} className="h-auto">
         <View className="gap-4 pt-1">

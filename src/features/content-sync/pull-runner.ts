@@ -31,9 +31,19 @@ export function createPullSession(context: PullContext, refs: readonly ServerIte
   }, refs)
 }
 
-/** 本机已跟随这台服务器的项（重新拉取）；不依赖服务端列举 */
+/**
+ * 本机已跟随这台服务器的项（重新拉取）；不依赖服务端列举。服务器上的 state_token 经 /status
+ * 查（服务器上已删的不带 token，拉取时会被标记）。
+ */
 export function linkedItemSource(context: PullContext): ServerItemSource {
+  const { library, server } = context
   return {
-    list: async () => linkedItemRefs(context.library.listItems(), context.library.listLinks(context.server.serverInstanceId)),
+    list: async (kind) => {
+      const refs = linkedItemRefs(library.listItems({ kind }), library.listLinks(server.serverInstanceId))
+      if (!refs.length) return refs
+      const statuses = await contentStatus(server, refs.map((ref) => ({ kind: ref.kind, canonical_id: ref.canonicalId })))
+      const tokens = new Map(statuses.filter((status) => status.exists).map((status) => [status.canonical_id, status.state_token]))
+      return refs.map((ref) => (tokens.has(ref.canonicalId) ? { ...ref, stateToken: tokens.get(ref.canonicalId) } : ref))
+    },
   }
 }

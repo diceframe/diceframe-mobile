@@ -380,6 +380,8 @@ const CONTENT_ERROR_KEYS: Record<string, TKey> = {
   LOCAL_ITEM_READ_ONLY: 'dfContentLocalReadOnly',
   LOREBOOK_V3_INVALID: 'dfContentLorebookInvalid',
   CANCELLED: 'dfContentCancelled',
+  // 拉取
+  EMBEDDED_BOOK_LINKED: 'dfPullEmbeddedBookLinked',
   // 警告码
   PORTRAIT_NOT_PORTABLE: 'dfContentWarningPortraitNotPortable',
   BOOK_NOT_IMPORTED: 'dfContentWarningBookNotImported',
