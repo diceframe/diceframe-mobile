@@ -44,6 +44,8 @@ export const serverLinks = sqliteTable('server_links', {
   syncedRevision: integer('synced_revision').notNull().default(0),
   syncedDigest: text('synced_digest').notNull().default(''),
   baseUrlHint: text('base_url_hint').notNull().default(''),
+  /** 服务器上的副本已被删除时记下的时间（拉取 / 状态查询发现）；本机项保留不删，再次同步成功时清空 */
+  remoteDeletedAt: text('remote_deleted_at'),
   updatedAt: text('updated_at').notNull(),
 }, (table) => [
   primaryKey({ columns: [table.serverInstanceId, table.localId] }),

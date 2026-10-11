@@ -1,0 +1,1 @@
+ALTER TABLE `server_links` ADD `remote_deleted_at` text;

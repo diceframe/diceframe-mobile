@@ -434,7 +434,7 @@ describe('推送入口与同步状态', () => {
     }
     expect(pushCandidateOf(item, null, 'srv-1').canonicalHint).toBe('card_x')
     expect(pushCandidateOf(item, null, 'srv-2').canonicalHint).toBeUndefined()
-    expect(pushCandidateOf(item, { serverInstanceId: 'srv-1', localId: 'card-a', canonicalId: 'c', stateToken: '', syncedRevision: 1, syncedDigest: '', baseUrlHint: '', updatedAt: '' }, 'srv-1').canonicalHint).toBeUndefined()
+    expect(pushCandidateOf(item, { serverInstanceId: 'srv-1', localId: 'card-a', canonicalId: 'c', stateToken: '', syncedRevision: 1, syncedDigest: '', baseUrlHint: '', remoteDeletedAt: null, updatedAt: '' }, 'srv-1').canonicalHint).toBeUndefined()
   })
 })
 
