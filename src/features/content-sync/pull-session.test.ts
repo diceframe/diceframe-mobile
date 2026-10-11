@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
-import { ContentSyncError, SERVER_MISMATCH } from '@/api/content'
+import { ContentSyncError, SERVER_MISMATCH, contentErrorKey } from '@/api/content'
 import type { ContentExportItem, ContentKind, ContentPlanItem, ContentPushItem, ContentStatusItem } from '@/api/types'
 import { migrateLibrary } from '@/lib/local-library/migrate'
 import { LocalLibraryRepository } from '@/lib/local-library/repository'
@@ -15,6 +15,7 @@ import {
   CANCELLED,
   EMBEDDED_BOOK_HELD_STANDALONE,
   EMBEDDED_BOOK_LINKED,
+  LOCKED_WITH_LOCAL_EDITS,
   PullSession,
   RULESET_CARD_UNSUPPORTED,
   linkedItemRefs,
@@ -570,5 +571,26 @@ describe('#7 评审：其余修复', () => {
     const unlocked = h.library.getItem(localId)!
     expect(unlocked.readOnly).toBe(false)
     expect(unlocked.origin?.locked_reason).toBeUndefined()
+  })
+})
+
+describe('#7 复验后续：锁定时还有未推送的本机改动', () => {
+  it('setPulledLock 让带未推送改动的项变只读：结果附一行提示（只能复制保留）；没有改动时不提示', async () => {
+    const h = await harness()
+    h.server.put('card_edited', { kind: 'character_template', document: fixtures.cardFreeform })
+    h.server.put('card_clean', { kind: 'character_template', document: fixtures.cardFreeform })
+    const first = await h.pull([cardRef('card_edited'), cardRef('card_clean')])
+    const edited = outcome(first, 'card_edited').localId!
+    h.library.updateDocument(edited, { document: writeCardV3({ ...freeformBody, race: 'Unpushed' }) })
+    h.server.copies.get('card_edited')!.lockedReason = 'PLUGIN_CARD'
+    h.server.copies.get('card_clean')!.lockedReason = 'PLUGIN_CARD'
+    const s = await h.pull([cardRef('card_edited'), cardRef('card_clean')])
+    expect(outcome(s, 'card_edited')).toMatchObject({ status: 'unchanged' })
+    expect(outcome(s, 'card_edited').warnings.map((warning) => warning.code)).toEqual([LOCKED_WITH_LOCAL_EDITS])
+    expect(outcome(s, 'card_clean').warnings).toEqual([])
+    const item = h.library.getItem(edited)!
+    expect(item.readOnly).toBe(true)
+    expect(readCardV3(item.document).body.race).toBe('Unpushed')
+    expect(contentErrorKey(LOCKED_WITH_LOCAL_EDITS)).toBe('dfPullLockedWithLocalEdits')
   })
 })

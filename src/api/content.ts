@@ -438,6 +438,7 @@ const CONTENT_ERROR_KEYS: Record<string, TKey> = {
   CURSOR_INVALID: 'dfContentCursorInvalid',
   LIST_PAGING_STUCK: 'dfContentListPagingStuck',
   EMBEDDED_BOOK_HELD_STANDALONE: 'dfPullEmbeddedBookHeldStandalone',
+  LOCKED_WITH_LOCAL_EDITS: 'dfPullLockedWithLocalEdits',
   // 警告码
   PORTRAIT_NOT_PORTABLE: 'dfContentWarningPortraitNotPortable',
   BOOK_NOT_IMPORTED: 'dfContentWarningBookNotImported',

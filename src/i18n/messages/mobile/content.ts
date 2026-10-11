@@ -3,6 +3,7 @@
  */
 export const content = {
   zh: {
+    dfPullLockedWithLocalEdits: '服务器上的这一项现在已锁定，本机副本变为只读；要保留本机没推送的改动，请复制一份。',
     dfContentListPagingStuck: '服务器的内容列表一直翻不完（重复返回同一页），已停止。请稍后重试。',
     dfPullEmbeddedBookHeldStandalone: '这张卡的内嵌设定在本机已由另一本书跟随：卡已导入，但内嵌设定的同步状态不单独记录。',
     // 拉取
@@ -116,6 +117,7 @@ export const content = {
     dfContentPairingReplaced: '已替换本设备之前的配对，旧的配对令牌已失效。',
   },
   en: {
+    dfPullLockedWithLocalEdits: 'This item is now locked on the server, so the copy on this device is read-only. To keep your unpushed edits, make a copy.',
     dfContentListPagingStuck: 'The server content list kept returning the same page, so listing was stopped. Please try again later.',
     dfPullEmbeddedBookHeldStandalone: 'The embedded book of this card is already followed by another item on this device. The card was pulled, but its embedded book is not tracked separately.',
     // 拉取
@@ -229,6 +231,7 @@ export const content = {
     dfContentPairingReplaced: 'This device’s previous pairing was replaced; the old pairing token no longer works.',
   },
   ja: {
+    dfPullLockedWithLocalEdits: 'この項目はサーバーでロックされたため、端末のコピーは読み取り専用になりました。未プッシュの変更を残すにはコピーを作成してください。',
     dfContentListPagingStuck: 'サーバーの一覧が同じページを返し続けたため、取得を停止しました。しばらくしてから再試行してください。',
     dfPullEmbeddedBookHeldStandalone: 'このカードの内蔵ブックは端末上の別の項目がすでに追従しています。カードは取得しましたが、内蔵ブックは個別に追跡しません。',
     // 拉取
@@ -342,6 +345,7 @@ export const content = {
     dfContentPairingReplaced: '本端末の以前のペアリングを置き換えました。古いペアリングトークンは無効です。',
   },
   de: {
+    dfPullLockedWithLocalEdits: 'Dieser Eintrag ist auf dem Server jetzt gesperrt, die Kopie auf diesem Gerät ist schreibgeschützt. Um nicht übertragene Änderungen zu behalten, erstelle eine Kopie.',
     dfContentListPagingStuck: 'Die Inhaltsliste des Servers lieferte immer wieder dieselbe Seite, daher wurde abgebrochen. Bitte später erneut versuchen.',
     dfPullEmbeddedBookHeldStandalone: 'Das eingebettete Buch dieser Karte wird auf diesem Gerät bereits von einem anderen Eintrag verfolgt. Die Karte wurde geholt, ihr eingebettetes Buch wird aber nicht separat verfolgt.',
     // 拉取

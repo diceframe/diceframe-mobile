@@ -54,6 +54,8 @@ export const CANCELLED = 'CANCELLED'
 export const RULESET_CARD_UNSUPPORTED = 'RULESET_CARD_UNSUPPORTED'
 /** 这本书在本机已作为某张卡的内嵌书跟随，不另存一份独立书 */
 export const EMBEDDED_BOOK_LINKED = 'EMBEDDED_BOOK_LINKED'
+/** 警告：服务器副本刚被锁定，本机项变为只读，但还有没推送的本机改动——只能复制一份来保留 */
+export const LOCKED_WITH_LOCAL_EDITS = 'LOCKED_WITH_LOCAL_EDITS'
 /** 警告：卡的内嵌书在本机已由另一项跟随，卡照常导入，只是不记内嵌书映射 */
 export const EMBEDDED_BOOK_HELD_STANDALONE = 'EMBEDDED_BOOK_HELD_STANDALONE'
 
@@ -417,11 +419,16 @@ export class PullSession {
       if (this.serverUnchanged(link, prepared)) {
         // 文档没变但锁定状态变了（例如服务器上装/卸了插件）：只更新只读与来源里的锁定原因
         const lockedReason = prepared.input.origin.locked_reason
+        let warnings = prepared.warnings
         if (current.readOnly !== !!lockedReason || current.origin?.locked_reason !== lockedReason) {
           this.deps.assertServer()
           library.setPulledLock(current.localId, lockedReason)
+          // 刚变只读、但还有没推送的改动：这些改动推不上去了，只能复制一份来保留
+          if (lockedReason && !current.readOnly && current.revision > link.syncedRevision) {
+            warnings = mergeWarnings(warnings, [{ code: LOCKED_WITH_LOCAL_EDITS }])
+          }
         }
-        this.setOutcome(key, { name, status: 'unchanged', localId: current.localId, warnings: prepared.warnings })
+        this.setOutcome(key, { name, status: 'unchanged', localId: current.localId, warnings })
         return
       }
       mode = current.revision > link.syncedRevision ? 'keep-both' : 'update'
