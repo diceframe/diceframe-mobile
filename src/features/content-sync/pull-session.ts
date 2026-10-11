@@ -24,6 +24,7 @@
  */
 import type { ContentExportItem, ContentKind, ContentStatusItem, ContentWarning } from '@/api/types'
 import { EMBEDDED_BOOK_SUFFIX, isCanonicalId } from '@/lib/local-library/ids'
+import { lorebookDocumentWith } from '@/lib/local-library/lorebook-library'
 import type { LocalItem, LocalItemOrigin, PullImport, ServerLink } from '@/lib/local-library/repository'
 import {
   CARD_FORMAT,
@@ -40,8 +41,6 @@ import {
   ensureEntryIds,
   lorebookSummary,
   readLorebookV3,
-  writeLorebookV3,
-  type LorebookBook,
 } from '@/lib/portable/lorebook-v3'
 
 /** 每批导出项数（服务端上限） */
@@ -174,14 +173,6 @@ function mergeWarnings(...lists: (readonly ContentWarning[] | undefined)[]): Con
     merged.push(warning)
   }
   return merged
-}
-
-/** 书文档换成补齐 id 的 book；`{spec, data: {lorebook}}` 外形里的其他字段原样保留 */
-function lorebookDocumentWith(document: unknown, book: LorebookBook): unknown {
-  if (isJsonObject(document) && isJsonObject(document.data) && isJsonObject(document.data.lorebook)) {
-    return { ...document, data: { ...document.data, lorebook: book } }
-  }
-  return writeLorebookV3(book)
 }
 
 export class PullSession {
