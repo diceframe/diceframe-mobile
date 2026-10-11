@@ -3,6 +3,7 @@
  */
 export const content = {
   zh: {
+    dfPushBookRevisionNote: 'Lorebook 显示「服务器有改动」也可能只是服务器上的修订号变了（例如调整了绑定或启用状态），内容不一定变化。',
     dfPushOpen: '推送到服务器',
     dfPushTitle: '推送到服务器',
     dfPushSelectHint: '选择要推送的角色卡和 Lorebook。规则托管（如 D&D）的卡不能推送。',
@@ -90,6 +91,7 @@ export const content = {
     dfContentPairingReplaced: '已替换本设备之前的配对，旧的配对令牌已失效。',
   },
   en: {
+    dfPushBookRevisionNote: 'For a lorebook, \u201cchanged on server\u201d can also mean only its server revision moved (for example a binding or enabled toggle), not its content.',
     dfPushOpen: 'Push to server',
     dfPushTitle: 'Push to server',
     dfPushSelectHint: 'Choose the characters and lorebooks to push. Rules-managed cards (such as D&D) cannot be pushed.',
@@ -177,6 +179,7 @@ export const content = {
     dfContentPairingReplaced: 'This device’s previous pairing was replaced; the old pairing token no longer works.',
   },
   ja: {
+    dfPushBookRevisionNote: 'ロアブックの「サーバーで変更あり」は、サーバー側のリビジョンだけが進んだ場合（紐付けや有効化の変更など）にも表示され、内容が変わったとは限りません。',
     dfPushOpen: 'サーバーへ送信',
     dfPushTitle: 'サーバーへ送信',
     dfPushSelectHint: '送信するキャラクターとロアブックを選んでください。ルール管理（D&D など）のカードは送信できません。',
@@ -264,6 +267,7 @@ export const content = {
     dfContentPairingReplaced: '本端末の以前のペアリングを置き換えました。古いペアリングトークンは無効です。',
   },
   de: {
+    dfPushBookRevisionNote: 'Bei einem Lorebook kann \u201eAuf dem Server geändert\u201c auch nur eine neue Server-Revision bedeuten (z. B. geänderte Bindung oder Aktivierung), nicht unbedingt neuen Inhalt.',
     dfPushOpen: 'An Server senden',
     dfPushTitle: 'An Server senden',
     dfPushSelectHint: 'Wähle die Charaktere und Lorebooks zum Senden. Regelverwaltete Karten (z. B. D&D) können nicht gesendet werden.',

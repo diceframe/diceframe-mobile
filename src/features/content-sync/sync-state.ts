@@ -2,7 +2,8 @@
  * 推送入口的纯判定：谁能推送、每个本机项相对当前服务器的同步状态、推送候选的快照。
  */
 import type { OwnerAccessStatus } from '@/api/client'
-import type { ContentStatusItem } from '@/api/types'
+import type { ContentKind, ContentStatusItem } from '@/api/types'
+import { EMBEDDED_BOOK_SUFFIX } from '@/lib/local-library/ids'
 import type { LocalItem, ServerLink } from '@/lib/local-library/repository'
 
 import type { PushCandidate } from './push-prepare'
@@ -70,4 +71,47 @@ export function pushCandidateOf(item: LocalItem, link: ServerLink | null, server
     document: item.document,
     ...(hint ? { canonicalHint: hint } : {}),
   }
+}
+
+type LinkLike = Pick<ServerLink, 'localId' | 'canonicalId' | 'syncedRevision' | 'stateToken'>
+type SummaryLike = { localId: string; kind: ContentKind; revision: number }
+type StatusLike = Pick<ContentStatusItem, 'exists' | 'state_token'>
+
+/** /status 要查的对象：每个有映射的本机项，以及卡片内嵌书（`<卡片 id>.book`）的映射 */
+export function statusRefsFor(summaries: readonly SummaryLike[], links: readonly LinkLike[]): { kind: ContentKind; canonical_id: string }[] {
+  const byLocal = new Map(links.map((link) => [link.localId, link]))
+  const refs: { kind: ContentKind; canonical_id: string }[] = []
+  for (const summary of summaries) {
+    const link = byLocal.get(summary.localId)
+    if (link) refs.push({ kind: summary.kind, canonical_id: link.canonicalId })
+    const bookLink = summary.kind === 'character_template' ? byLocal.get(`${summary.localId}${EMBEDDED_BOOK_SUFFIX}`) : undefined
+    if (bookLink) refs.push({ kind: 'lorebook', canonical_id: bookLink.canonicalId })
+  }
+  return refs
+}
+
+/**
+ * 每个本机项的同步状态；卡片内嵌书在服务器上被改过或被删，也算卡片「服务器有改动」
+ * （推送时这本书会一起镜像，用户需要知道）。没查到状态的对象只按本机 revision 判断。
+ */
+export function pushListStates(
+  summaries: readonly SummaryLike[],
+  links: readonly LinkLike[],
+  statuses: ReadonlyMap<string, StatusLike>,
+): Record<string, LocalSyncState> {
+  const byLocal = new Map(links.map((link) => [link.localId, link]))
+  const states: Record<string, LocalSyncState> = {}
+  for (const summary of summaries) {
+    const link = byLocal.get(summary.localId) ?? null
+    let state = localSyncState(summary, link, link ? statuses.get(link.canonicalId) ?? null : null)
+    const bookLink = summary.kind === 'character_template' ? byLocal.get(`${summary.localId}${EMBEDDED_BOOK_SUFFIX}`) : undefined
+    const bookStatus = bookLink ? statuses.get(bookLink.canonicalId) : undefined
+    const bookChanged = !!bookLink && !!bookStatus && (!bookStatus.exists || bookStatus.state_token !== bookLink.stateToken)
+    if (bookChanged) {
+      if (state === 'in-sync') state = 'server-changed'
+      else if (state === 'local-changes') state = 'both-changed'
+    }
+    states[summary.localId] = state
+  }
+  return states
 }

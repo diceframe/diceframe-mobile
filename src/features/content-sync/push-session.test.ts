@@ -16,7 +16,7 @@ import { canonicalJson } from '@/lib/portable/json'
 
 import { RULESET_CARD_UNSUPPORTED, batchPush, preparePush, type PushCandidate } from './push-prepare'
 import { CANCELLED, PushSession, type MappingWrite, type PushDeps } from './push-session'
-import { localSyncState, pushAccess, pushCandidateOf } from './sync-state'
+import { localSyncState, pushAccess, pushCandidateOf, pushListStates, statusRefsFor } from './sync-state'
 
 const SOURCE = { kind: 'device' as const, id: 'install-1' }
 
@@ -36,6 +36,10 @@ class FakeServer {
   copies = new Map<string, { canonical: string; token: string; digest: string }>()
   unsupported = new Set<string>()
   conflictOnCommit = new Set<string>()
+  /** 服务器上已变成规则托管的卡：unchanged 也只允许 duplicate / skip（LOCKED_RULESET_CARD） */
+  locked = new Set<string>()
+  /** 提交时意外失败的项（500 IMPORT_FAILED，之后的项 not_attempted） */
+  failOnCommit = new Set<string>()
   previews = 0
   commits = 0
   private counter = 0
@@ -58,7 +62,7 @@ class FakeServer {
       if (!copy) return { client_ref: ref, kind, action: 'create' as const, allowed: [], existing: null }
       const existing = { canonical_id: copy.canonical, state_token: copy.token, server_modified: false }
       return copy.digest === digest
-        ? { client_ref: ref, kind, action: 'unchanged' as const, allowed: ['update', 'duplicate', 'skip'] as ContentDecision[], existing }
+        ? { client_ref: ref, kind, action: 'unchanged' as const, allowed: (this.locked.has(ref) ? ['duplicate', 'skip'] : ['update', 'duplicate', 'skip']) as ContentDecision[], existing, ...(this.locked.has(ref) ? { reason: 'RULESET_CARD' } : {}) }
         : { client_ref: ref, kind, action: 'update' as const, allowed: ['update', 'duplicate', 'skip'] as ContentDecision[], existing }
     }))
     return { ok: true, plan_digest: `sha256:${canonicalJson(planItems).length}:${canonicalJson(planItems)}`, items: planItems }
@@ -76,11 +80,27 @@ class FakeServer {
     for (const row of fresh.items) {
       if (row.action === 'unsupported') throw new ApiError('unsupported', 400, row.reason)
       if (row.existing && !decisions[row.client_ref]) throw new ApiError('decision', 400, 'DECISION_REQUIRED')
+      if (row.existing && !row.allowed.includes(decisions[row.client_ref])) {
+        const error = new ApiError('decision not allowed', 400, 'DECISION_NOT_ALLOWED')
+        error.body = { ok: false, error_code: 'DECISION_NOT_ALLOWED', client_ref: row.client_ref }
+        throw error
+      }
     }
     const results: ContentCommitRow[] = []
     let failed = false
+    let aborted = false
     for (const item of items) {
       for (const { ref, kind, digest: draft } of this.rowsFor(item)) {
+        if (aborted) {
+          results.push({ client_ref: ref, kind, status: 'not_attempted' })
+          continue
+        }
+        if (this.failOnCommit.has(ref)) {
+          failed = true
+          aborted = true
+          results.push({ client_ref: ref, kind, status: 'error', error_code: 'IMPORT_FAILED' })
+          continue
+        }
         if (this.conflictOnCommit.has(ref)) {
           failed = true
           results.push({ client_ref: ref, kind, status: 'error', error_code: 'CARD_IDENTITY_CONFLICT' })
@@ -107,6 +127,7 @@ class FakeServer {
         }
       }
     }
+    if (aborted) throw new CommitPartialError('IMPORT_FAILED', 500, results)
     if (failed) throw new CommitPartialError('CARD_IDENTITY_CONFLICT', 409, results)
     return { ok: true, items: results }
   }
@@ -438,5 +459,107 @@ describe('契约：推送请求里的文档满足服务端发布的 schema', () 
         expect(body(readCardV3(item.document).body)).toBe(true)
       }
     }
+  })
+})
+
+describe('#6 评审修复', () => {
+  it('unchanged 但只允许 duplicate / skip（服务端已变成规则托管）：不自动答 update，必须由用户选', async () => {
+    const h = harness()
+    const seed = h.session([card('card-a')])
+    await seed.start()
+    await seed.commit()
+    h.server.locked.add('card-a')
+    const s = h.session([card('card-a')])
+    await s.start()
+    const row = s.getState().plan!.rows[0]
+    expect(row.action).toBe('unchanged')
+    expect(row.decision).toBeUndefined()
+    expect(s.undecided().map((r) => r.clientRef)).toEqual(['card-a'])
+    s.setDecision('card-a', 'skip')
+    await s.commit()
+    expect(outcomeOf(s, 'card-a')).toMatchObject({ status: 'skipped' })
+  })
+
+  it('提交 400 DECISION_*（带 client_ref）：重新预览、回到评审，不把那一项丢掉', async () => {
+    const h = harness()
+    const seed = h.session([card('card-a'), card('card-b')])
+    await seed.start()
+    await seed.commit()
+    const edited = writeCardV3({ ...(fixtures.cardFreeform.data.extensions.diceframe as unknown as CardBody), race: 'Z' })
+    const s = h.session([card('card-a', edited, 2), card('card-b', edited, 2)])
+    await s.start()
+    s.setDecision('card-a', 'update')
+    s.setDecision('card-b', 'update')
+    // 预览之后服务端把 card-a 锁成只能 duplicate / skip，但计划摘要不变（模拟 digest 未覆盖的决策约束变化）
+    const commit = h.deps.commit
+    h.deps.commit = vi.fn(async (...args: Parameters<PushDeps['commit']>) => {
+      const error = new ApiError('decision not allowed', 400, 'DECISION_NOT_ALLOWED')
+      error.body = { ok: false, error_code: 'DECISION_NOT_ALLOWED', client_ref: 'card-a' }
+      h.deps.commit = commit
+      throw error
+    })
+    await s.commit()
+    const state = s.getState()
+    expect(state.phase).toBe('review')
+    expect(state.plan!.rows.map((r) => r.clientRef)).toEqual(['card-a', 'card-b'])
+    expect(outcomeOf(s, 'card-a')!.status).toBe('pending')
+  })
+
+  it('跳过的行不写映射', async () => {
+    const h = harness()
+    const seed = h.session([card('card-a')])
+    await seed.start()
+    await seed.commit()
+    const before = h.writes.length
+    const edited = writeCardV3({ ...(fixtures.cardFreeform.data.extensions.diceframe as unknown as CardBody), race: 'Y' })
+    const s = h.session([card('card-a', edited, 2)])
+    await s.start()
+    s.setDecision('card-a', 'skip')
+    await s.commit()
+    expect(outcomeOf(s, 'card-a')).toMatchObject({ status: 'skipped' })
+    expect(h.writes.length).toBe(before)
+  })
+
+  it('500 IMPORT_FAILED 且有 not_attempted：写完成功的映射后暂停，不自动预览下一批', async () => {
+    const h = harness()
+    h.server.failOnCommit.add('card-1')
+    const candidates = Array.from({ length: 52 }, (_, i) => card(`card-${i}`))
+    const s = h.session(candidates)
+    await s.start()
+    await s.commit()
+    const state = s.getState()
+    expect(state.phase).toBe('paused')
+    expect(h.writes.map((w) => w.clientRef)).toEqual(['card-0'])
+    expect(h.server.previews).toBe(1)
+    expect(state.retryable).toContain('card-1')
+    expect(state.retryable).toContain('card-2')
+    expect(outcomeOf(s, 'card-2')).toMatchObject({ status: 'not_attempted' })
+  })
+})
+
+describe('#6 评审修复：内嵌书的状态并入卡片', () => {
+  it('/status 也查 <卡片>.book 的映射；书在服务器上被改或被删，卡片显示服务器有改动', () => {
+    const summaries = [
+      { localId: 'card-a', kind: 'character_template' as const, revision: 2 },
+      { localId: 'book-1', kind: 'lorebook' as const, revision: 1 },
+    ]
+    const links = [
+      { localId: 'card-a', canonicalId: 'c1', syncedRevision: 2, stateToken: 't1' },
+      { localId: 'card-a.book', canonicalId: 'b1', syncedRevision: 2, stateToken: 'bt1' },
+      { localId: 'book-1', canonicalId: 'b2', syncedRevision: 1, stateToken: 'x' },
+    ]
+    expect(statusRefsFor(summaries, links)).toEqual([
+      { kind: 'character_template', canonical_id: 'c1' },
+      { kind: 'lorebook', canonical_id: 'b1' },
+      { kind: 'lorebook', canonical_id: 'b2' },
+    ])
+    const statuses = (book: { exists: boolean; state_token: string }) => new Map([
+      ['c1', { exists: true, state_token: 't1' }],
+      ['b1', book],
+      ['b2', { exists: true, state_token: 'x' }],
+    ])
+    expect(pushListStates(summaries, links, statuses({ exists: true, state_token: 'bt1' }))).toEqual({ 'card-a': 'in-sync', 'book-1': 'in-sync' })
+    expect(pushListStates(summaries, links, statuses({ exists: true, state_token: 'bt2' }))['card-a']).toBe('server-changed')
+    expect(pushListStates(summaries, links, statuses({ exists: false, state_token: '' }))['card-a']).toBe('server-changed')
   })
 })

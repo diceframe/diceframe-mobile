@@ -133,8 +133,17 @@ function ownerOf(clientRef: string): string {
   return clientRef.endsWith(EMBEDDED_BOOK_SUFFIX) ? clientRef.slice(0, -EMBEDDED_BOOK_SUFFIX.length) : clientRef
 }
 
-function needsDecision(row: Pick<PlanRow, 'existing' | 'action'>): boolean {
-  return !!row.existing && row.action !== 'unchanged' && row.action !== 'unsupported'
+/**
+ * 是否需要用户决策：有 existing 的项都要答；unchanged 只有在允许 update 时才自动答 update
+ * （服务端接受且不写）。服务端也可能对 unchanged 只给 duplicate / skip——例如跟随的卡在
+ * 服务器上已变成规则托管（LOCKED_RULESET_CARD）——这时必须由用户选。
+ */
+function autoUpdates(row: Pick<PlanRow, 'existing' | 'action' | 'allowed'>): boolean {
+  return !!row.existing && row.action === 'unchanged' && row.allowed.includes('update')
+}
+
+function needsDecision(row: Pick<PlanRow, 'existing' | 'action' | 'allowed'>): boolean {
+  return !!row.existing && row.action !== 'unsupported' && !autoUpdates(row)
 }
 
 function planSignature(item: ContentPlanItem): string {
@@ -318,6 +327,8 @@ export class PushSession {
     const body = (error as { body?: Record<string, unknown> } | null)?.body
     const clientRef = typeof body?.client_ref === 'string' ? ownerOf(body.client_ref) : ''
     if (!clientRef || (status !== 413 && status !== 400)) return false
+    // 决策类错误不是「这一项推不了」，交给重新评审
+    if (codeOf(error).startsWith('DECISION_')) return false
     if (!this.current.some((entry) => entry.candidate.localId === clientRef)) return false
     this.current = this.current.filter((entry) => entry.candidate.localId !== clientRef)
     this.setOutcome(clientRef, { status: 'rejected', code: codeOf(error) })
@@ -339,9 +350,10 @@ export class PushSession {
         reason: item.reason || undefined,
         existing: item.existing ?? null,
         warnings: item.warnings ?? [],
-        changed: !!previous && !sameAsBefore && needsDecision({ existing: item.existing ?? null, action: item.action }),
+        changed: !!previous && !sameAsBefore
+          && needsDecision({ existing: item.existing ?? null, action: item.action, allowed: item.allowed ?? [] }),
       }
-      if (item.action === 'unchanged' && item.existing) base.decision = 'update'
+      if (autoUpdates(base)) base.decision = 'update'
       else if (sameAsBefore && old?.decision) base.decision = old.decision
       return base
     })
@@ -370,11 +382,22 @@ export class PushSession {
       this.update({ phase: 'review', plan: this.toPlan(stalePreview, this.state.plan), stale: true })
       return
     }
+    // 决策被服务端拒绝（DECISION_REQUIRED / DECISION_NOT_ALLOWED）：允许的答案在预览后变了，
+    // 重新预览、回到评审让用户重选；绝不把那一项悄悄丢掉
+    if (code.startsWith('DECISION_')) {
+      await this.previewCurrent()
+      this.update({ stale: true })
+      return
+    }
     const rows = (error as { rows?: ContentCommitRow[] } | null)?.rows
     if (Array.isArray(rows)) {
       if (!(await this.recordRows(rows))) return
+      // 身份冲突可重新预览；意外失败（IMPORT_FAILED）后服务端停在那里，之后的项 not_attempted：
+      // 暂停交给用户决定重试还是继续，不自动去预览下一批
       const retryable = rows
-        .filter((row) => row.status === 'error' && IDENTITY_CONFLICT_CODES.has(row.error_code ?? ''))
+        .filter((row) => (row.status === 'error'
+          && (IDENTITY_CONFLICT_CODES.has(row.error_code ?? '') || row.error_code === 'IMPORT_FAILED'))
+          || row.status === 'not_attempted')
         .map((row) => ownerOf(row.client_ref))
       if (retryable.length) {
         this.update({ phase: 'paused', plan: null, retryable: [...new Set(retryable)] })

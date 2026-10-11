@@ -156,6 +156,9 @@ export function PushSheet({ open, onClose }: { open: boolean; onClose: () => voi
                 </Pressable>
               ))}
             </ScrollView>
+            {list?.some((item) => item.summary.kind === 'lorebook' && (item.syncState === 'server-changed' || item.syncState === 'both-changed')) ? (
+              <Text variant="small" className="text-muted-foreground">{t('dfPushBookRevisionNote')}</Text>
+            ) : null}
             <View className="flex-row gap-2 pb-4">
               <Button variant="outline" className="flex-1" disabled={!list?.length}
                 onPress={() => setSelected(new Set(list?.map((item) => item.summary.localId)))}>

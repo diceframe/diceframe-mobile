@@ -20,7 +20,7 @@ import { localLibrary, resolveInstallId } from '@/stores/local-library'
 
 import { batchPush, preparePush } from './push-prepare'
 import { PushSession } from './push-session'
-import { localSyncState, pushAccess, pushCandidateOf, type LocalSyncState, type PushAccess } from './sync-state'
+import { pushAccess, pushCandidateOf, pushListStates, statusRefsFor, type LocalSyncState, type PushAccess } from './sync-state'
 
 /** 推送入口是否可见（不做任何内容同步请求，只看凭据与 /api/me） */
 export async function currentPushAccess(): Promise<PushAccess> {
@@ -59,25 +59,16 @@ export interface PushListItem {
 export async function loadPushList(context: PushContext): Promise<PushListItem[]> {
   const { library, server } = context
   const summaries = library.listItems()
-  const links = new Map(library.listLinks(server.serverInstanceId).map((link) => [link.localId, link]))
-  const refs = summaries
-    .map((summary) => links.get(summary.localId))
-    .filter((link): link is NonNullable<typeof link> => !!link)
-    .map((link) => ({
-      kind: summaries.find((summary) => summary.localId === link.localId)!.kind,
-      canonical_id: link.canonicalId,
-    }))
+  const links = library.listLinks(server.serverInstanceId)
+  const refs = statusRefsFor(summaries, links)
   let statuses: ContentStatusItem[] = []
   try {
     statuses = refs.length ? await contentStatus(server, refs) : []
   } catch {
     statuses = []
   }
-  const byCanonical = new Map(statuses.map((status) => [status.canonical_id, status]))
-  return summaries.map((summary) => {
-    const link = links.get(summary.localId) ?? null
-    return { summary, syncState: localSyncState(summary, link, link ? byCanonical.get(link.canonicalId) ?? null : null) }
-  })
+  const states = pushListStates(summaries, links, new Map(statuses.map((status) => [status.canonical_id, status])))
+  return summaries.map((summary) => ({ summary, syncState: states[summary.localId] }))
 }
 
 /** 为选中的本机项建推送会话（文档按此刻快照） */
