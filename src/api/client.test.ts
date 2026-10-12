@@ -71,9 +71,9 @@ describe('shareQuery', () => {
     expect(shareQuery()!.has('user')).toBe(false)
     // 玩家身份与房主身份独立：玩家模式不以房主身份发请求，也就不靠 ?user= 指名
     configureApiClient({ token: 'owner' })
-    expect(shareQuery()!.has('user')).toBe(false)
+    expect(shareQuery('/games/abc')!.has('user')).toBe(false)
     configureApiClient({ share: { game: 'abc', user: 'u1', delegate: '1' } })
-    expect(shareQuery()!.get('user')).toBe('u1')
+    expect(shareQuery('/games/abc')!.get('user')).toBe('u1')
   })
 })
 
