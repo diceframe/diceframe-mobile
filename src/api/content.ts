@@ -450,6 +450,17 @@ export function contentErrorKey(code: string | undefined): TKey | null {
 }
 
 /**
+ * 原因 / 错误码的展示文案：认识的码给对应文案；不认识的码不再显示空白——有 fallback 时显示
+ * 「fallback（码）」，没有时直接显示码本身；没有码返回空串。
+ */
+export function contentCodeText(code: string | undefined, fallback?: TKey): string {
+  if (!code) return fallback ? getT()(fallback) : ''
+  const key = contentErrorKey(code)
+  if (key) return getT()(key)
+  return fallback ? `${getT()(fallback)}（${code}）` : code
+}
+
+/**
  * 配对兑换时 install id 被拒的提示（与推送时的同名错误码文案不同）：
  * 配对时的 409 INSTALL_ID_IN_USE 说明服务端没有 #495 的接管，只能去 Web 吊销旧设备。
  */

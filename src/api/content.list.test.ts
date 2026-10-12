@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { configureApiClient } from './client'
-import { CURSOR_INVALID, LIST_PAGING_STUCK, MAX_LIST_PAGES, SERVER_MISMATCH, contentErrorKey, listContent, type ContentServer } from './content'
+import { CURSOR_INVALID, LIST_PAGING_STUCK, MAX_LIST_PAGES, SERVER_MISMATCH, contentCodeText, contentErrorKey, listContent, type ContentServer } from './content'
 import type { ContentListItem } from './types'
 import { contentListSource } from '@/features/content-sync/list-source'
 import type { ServerItemSource } from '@/features/content-sync/pull-session'
@@ -161,5 +161,16 @@ describe('列举来源（contentListSource）', () => {
     expect(await rejectionOf(real().list('lorebook'))).toMatchObject({ code: 'NOT_FOUND' })
     fetchMock.mockResolvedValueOnce(json({ ok: false, error_code: 'SERVER_IDENTITY_UNAVAILABLE' }, 503))
     expect(await rejectionOf(real().list('lorebook'))).toMatchObject({ code: 'SERVER_IDENTITY_UNAVAILABLE' })
+  })
+})
+
+describe('原因码展示（不认识的码不再显示空白）', () => {
+  it('认识的码给文案；不认识的码显示码本身或「兜底（码）」；没有码给空串或兜底', () => {
+    expect(contentCodeText('KIND_NOT_SUPPORTED')).toBe(contentCodeText('KIND_NOT_SUPPORTED', 'dfErrorsUnexpected'))
+    expect(contentCodeText('KIND_NOT_SUPPORTED')).not.toBe('KIND_NOT_SUPPORTED')
+    expect(contentCodeText('SOMETHING_NEW')).toBe('SOMETHING_NEW')
+    expect(contentCodeText('SOMETHING_NEW', 'dfErrorsUnexpected')).toContain('SOMETHING_NEW')
+    expect(contentCodeText(undefined)).toBe('')
+    expect(contentCodeText(undefined, 'dfErrorsUnexpected')).not.toBe('')
   })
 })

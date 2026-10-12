@@ -2,7 +2,7 @@ import * as React from 'react'
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native'
 import { CheckSquare, Square } from 'lucide-react-native'
 
-import { contentErrorKey, contentErrorMessage } from '@/api/content'
+import { contentCodeText, contentErrorKey, contentErrorMessage } from '@/api/content'
 import type { ContentKind } from '@/api/types'
 import { Sheet } from '@/components/patterns/sheet'
 import { Badge } from '@/components/ui/badge'
@@ -70,6 +70,8 @@ export function PullSheet({ open, kind, source, onClose }: {
   const [session, setSession] = React.useState<PullSession | null>(null)
   const [state, setState] = React.useState<PullState | null>(null)
   const [error, setError] = React.useState('')
+  // 打开 / 列举失败后重试：换一个值重新跑加载
+  const [loadAttempt, setLoadAttempt] = React.useState(0)
 
   React.useEffect(() => {
     if (!open) return
@@ -87,7 +89,7 @@ export function PullSheet({ open, kind, source, onClose }: {
       }
     })()
     return () => { cancelled = true }
-  }, [open, kind, source])
+  }, [open, kind, source, loadAttempt])
 
   React.useEffect(() => session?.subscribe(setState), [session])
 
@@ -117,8 +119,7 @@ export function PullSheet({ open, kind, source, onClose }: {
     if (outcome.status === 'kept-both') return t('dfPullKeptBothHint')
     if (outcome.code === RULESET_CARD_UNSUPPORTED || outcome.code === 'RULESET_CARD') return t('dfPullRulesetUnsupported')
     if (outcome.code === 'ENTRY_TOO_LARGE' && outcome.entryId) return t('dfPushEntryTooLarge', { entry: outcome.entryId })
-    const key = contentErrorKey(outcome.code)
-    return key ? t(key) : ''
+    return contentCodeText(outcome.code)
   }
 
   const selectable = rows?.filter(isSelectable) ?? []
@@ -128,7 +129,16 @@ export function PullSheet({ open, kind, source, onClose }: {
     <Sheet open={open} onClose={close} className="h-[85%]" scrollable={false}>
       <View className="min-h-0 flex-1 gap-3 pt-1">
         <Text variant="h3">{t('dfPullTitle')}</Text>
-        {error ? <Text className="text-destructive">{error}</Text> : null}
+        {error ? (
+          <View className="gap-2">
+            <Text className="text-destructive">{error}</Text>
+            {!session ? (
+              <Button variant="outline" onPress={() => { setError(''); setLoadAttempt((attempt) => attempt + 1) }}>
+                <Text>{t('dfCommonRetry')}</Text>
+              </Button>
+            ) : null}
+          </View>
+        ) : null}
 
         {!session ? (
           <>
@@ -180,7 +190,7 @@ export function PullSheet({ open, kind, source, onClose }: {
               </View>
             ) : null}
             {state.phase === 'stopped' && state.stopCode ? (
-              <Text className="text-destructive">{t(contentErrorKey(state.stopCode) ?? 'dfPullStopped')}</Text>
+              <Text className="text-destructive">{contentCodeText(state.stopCode, 'dfPullStopped')}</Text>
             ) : null}
             <ScrollView className="flex-1" contentContainerClassName="gap-2 pb-4">
               {state.outcomes.map((outcome) => (
