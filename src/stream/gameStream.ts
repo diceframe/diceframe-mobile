@@ -9,6 +9,11 @@
  * 事件语义（对齐 gameSse.ts / routes/sse.py）：
  * baseline=仅确认基线；narration_delta/narration_reset=流式叙事；其余=触发完整刷新。
  * 服务端无心跳，空闲时连接完全静默——react-native-sse 的 timeout 保持默认 0（不启用空闲断开）。
+ *
+ * 撤销（diceframe/diceframe#512）：席位凭证被 GM 重新签发、房间密码改了或玩家入口关闭时，
+ * 服务端用命名事件 `event: revoked`（data 为 `{error_code, error, needs_room_password?}`）结束这条流。
+ * 收到后不再重连、不再轮询，交给 onRevoked 走既有的席位失效 / 房间密码流程。
+ * 不发这个事件的服务端：一切照旧（断开后按原策略重连）。
  */
 import EventSource from 'react-native-sse'
 
@@ -25,12 +30,37 @@ export interface GameSsePayload {
 
 export type StreamStatus = 'idle' | 'connecting' | 'live' | 'degraded'
 
+/** 服务端撤销这条流的原因（`event: revoked` 的 data） */
+export interface SseRevocation {
+  /** SEAT_TOKEN_INVALID / ROOM_TOKEN_INVALID / PLAYER_ACCESS_CLOSED；解析不出时为空串 */
+  errorCode: string
+  error: string
+  needsRoomPassword: boolean
+}
+
+export function parseRevocation(data: string | null | undefined): SseRevocation {
+  let payload: Record<string, unknown> = {}
+  try {
+    const parsed: unknown = data ? JSON.parse(data) : {}
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) payload = parsed as Record<string, unknown>
+  } catch {
+    payload = {}
+  }
+  return {
+    errorCode: typeof payload.error_code === 'string' ? payload.error_code : '',
+    error: typeof payload.error === 'string' ? payload.error : '',
+    needsRoomPassword: payload.needs_room_password === true,
+  }
+}
+
 export interface GameStreamHandlers {
   /** effect 为 refresh 时由调用方做完整 REST 刷新 */
   onEvent: (effect: GameSseEffect, payload: GameSsePayload, cursor: string) => void
   onStatusChange: (status: StreamStatus) => void
   /** 票据/连接失败等无法恢复的错误（已自动降级，供 UI 提示） */
   onError: (message: string) => void
+  /** 服务端撤销了这条流：流已停止，不会再重连 */
+  onRevoked?: (revocation: SseRevocation) => void
 }
 
 /** 只限制票据与首次建连，live 后不按静默时长断开（服务端无心跳）。 */
@@ -59,7 +89,7 @@ export function createGameStream(
   handlers: GameStreamHandlers,
 ): GameStream {
   let stopped = true
-  let source: EventSource | null = null
+  let source: EventSource<'revoked'> | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let pollTimer: ReturnType<typeof setInterval> | null = null
   let consecutiveFailures = 0
@@ -154,7 +184,7 @@ export function createGameStream(
     if (!isCurrent()) return
     ticketController = null
 
-    const es = new EventSource(buildPlaySseUrl(gameKey, ticket, getCursor()), {
+    const es = new EventSource<'revoked'>(buildPlaySseUrl(gameKey, ticket, getCursor()), {
       method: 'GET',
       pollingInterval: RECONNECT_DELAY_MS,
     })
@@ -179,6 +209,17 @@ export function createGameStream(
         payload = null
       }
       handlers.onEvent(gameSseEffect(payload), payload ?? {}, cursor)
+    })
+
+    es.addEventListener('revoked', (event) => {
+      if (!isCurrent()) return
+      // 先整体停下（之后的 error/close 都不再触发重连），再交给调用方处理
+      stopped = true
+      clearTimers()
+      stopPollFallback()
+      closeConnection()
+      setStatus('idle')
+      handlers.onRevoked?.(parseRevocation((event as { data?: string | null }).data))
     })
 
     es.addEventListener('error', () => {

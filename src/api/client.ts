@@ -416,6 +416,18 @@ function noteRejectedCredential(path: string, error: ApiError): void {
   if (kind) context.onShareCredentialRejected?.({ kind, baseUrl, game })
 }
 
+/**
+ * 请求之外得知分享凭证失效（对局 SSE 收到 `event: revoked`）：与请求被拒同一套处理——
+ * 先从内存槽位移除，再交给路由层清持久化、回加入页。
+ */
+export function reportShareCredentialRejected(kind: ShareCredentialRejection['kind'], game: string): void {
+  const baseUrl = context.baseUrl
+  context.credentials = kind === 'seat'
+    ? withoutSeatToken(context.credentials, baseUrl, game)
+    : withoutRoomToken(context.credentials, baseUrl, game)
+  context.onShareCredentialRejected?.({ kind, baseUrl, game })
+}
+
 function handleUnauthorized(response: Response, isPlayerShare: boolean): void {
   // 玩家分享请求的 401 属于身份/房间密码问题，在当前页面报错即可；
   // Owner 模式下交给路由层跳登录。加入流程中（含匿名探测）一律由加入页就地报错。

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { requestSseTicket } from '@/api/games'
-import { createGameStream, type GameStream } from './gameStream'
+import { createGameStream, parseRevocation, type GameStream } from './gameStream'
 
 const { sources, MockEventSource } = vi.hoisted(() => {
   type Listener = (event: { data?: string; lastEventId?: string }) => void
@@ -19,7 +19,7 @@ const { sources, MockEventSource } = vi.hoisted(() => {
 vi.mock('react-native-sse', () => ({ default: MockEventSource }))
 vi.mock('@/api/games', () => ({ requestSseTicket: vi.fn() }))
 
-const handlers = { onEvent: vi.fn(), onStatusChange: vi.fn(), onError: vi.fn() }
+const handlers = { onEvent: vi.fn(), onStatusChange: vi.fn(), onError: vi.fn(), onRevoked: vi.fn() }
 let stream: GameStream
 let cursor: string
 function deferred<T>() {
@@ -125,5 +125,46 @@ describe('锁屏后的实时连接恢复', () => {
     oldClose({})
     await vi.advanceTimersByTimeAsync(5000)
     expect(requestSseTicket).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('服务端撤销这条流（diceframe/diceframe#512 event: revoked）', () => {
+  it('收到 revoked：交出原因、停止，之后的 error / close 不再重连也不轮询', async () => {
+    stream.start()
+    await settle()
+    sources[0].emit('open')
+    const close = sources[0].listeners.get('close')!
+    sources[0].emit('revoked', { data: JSON.stringify({ error_code: 'SEAT_TOKEN_INVALID', error: '席位凭证已失效' }) })
+    expect(handlers.onRevoked).toHaveBeenCalledWith({ errorCode: 'SEAT_TOKEN_INVALID', error: '席位凭证已失效', needsRoomPassword: false })
+    expect(sources[0].close).toHaveBeenCalled()
+    expect(handlers.onStatusChange).toHaveBeenLastCalledWith('idle')
+    close({})
+    await vi.advanceTimersByTimeAsync(120000)
+    expect(requestSseTicket).toHaveBeenCalledOnce()
+    expect(handlers.onEvent).not.toHaveBeenCalled()
+  })
+
+  it('停止后可以重新 start（例如回前台）', async () => {
+    stream.start()
+    await settle()
+    sources[0].emit('revoked', { data: '{"error_code":"PLAYER_ACCESS_CLOSED"}' })
+    stream.start()
+    await settle()
+    expect(requestSseTicket).toHaveBeenCalledTimes(2)
+  })
+
+  it('不发 revoked 的服务端：断开照旧重连', async () => {
+    stream.start()
+    await settle()
+    sources[0].emit('close')
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(requestSseTicket).toHaveBeenCalledTimes(2)
+    expect(handlers.onRevoked).not.toHaveBeenCalled()
+  })
+
+  it('data 解析不出时原因为空，房间类标记照读', () => {
+    expect(parseRevocation('not json')).toEqual({ errorCode: '', error: '', needsRoomPassword: false })
+    expect(parseRevocation('{"error_code":"ROOM_TOKEN_INVALID","needs_room_password":true}'))
+      .toEqual({ errorCode: 'ROOM_TOKEN_INVALID', error: '', needsRoomPassword: true })
   })
 })

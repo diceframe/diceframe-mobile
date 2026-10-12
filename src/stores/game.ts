@@ -19,6 +19,7 @@ import {
   errorMessage,
   fetchAppConfig,
   hasSeatToken,
+  reportShareCredentialRejected,
   retryOnRateLimit,
 } from '@/api/client'
 import { askKpQuestion, canAskKpQuestion, fetchTableTalk, isTableTalkUnsupported, type KpQuestionVisibility } from '@/api/table-talk'
@@ -85,6 +86,7 @@ import {
   type GameSseEffect,
   type GameSsePayload,
   type GameStream,
+  type SseRevocation,
   type StreamStatus,
 } from '@/stream/gameStream'
 import { hasNewRound } from '@/lib/game-state'
@@ -342,6 +344,23 @@ export const useGameStore = create<GameStore>((set, get) => {
         },
         onError: (message) => {
           if (isCurrent(gameKey, version) && !suspended && message) set({ error: message })
+        },
+        // 服务端撤销了这条流（#512 `event: revoked`）：流已停止、不再重连。凭证类原因走与请求被拒
+        // 相同的路由（席位失效 / 重输房间密码）；玩家入口关闭只在对局页提示，不跳转。
+        onRevoked: (revocation: SseRevocation) => {
+          if (!isCurrent(gameKey, version) || suspended) return
+          set({ streamStatus: 'idle' })
+          const share = currentShare()
+          const player = !get().isGm && share?.game === gameKey
+          if (player && revocation.errorCode === 'SEAT_TOKEN_INVALID') {
+            reportShareCredentialRejected('seat', gameKey)
+            return
+          }
+          if (player && (revocation.errorCode === 'ROOM_TOKEN_INVALID' || revocation.needsRoomPassword)) {
+            reportShareCredentialRejected('room', gameKey)
+            return
+          }
+          set({ error: errorMessage(new ApiError(revocation.error || 'revoked', 403, revocation.errorCode || undefined)) })
         },
       },
     )
