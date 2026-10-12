@@ -12,7 +12,13 @@
  * - 429 响应携带 retry_after（abuse-guard 限流）。
  * - 玩家分享链接鉴权：query 参数 game/name/share/delegate 声明分享模式；席位身份走
  *   `X-Seat-Token` 请求头，房间密码令牌走 `X-Room-Token` 请求头（见 lib/seat-credentials）。
- *   `?user=` 只在 Owner 预览或尚未持有席位凭证时下发（无访问密码 / 旧服务端的回退）。
+ *   `?user=` 只在 Owner 代操作或尚未持有席位凭证时下发（无访问密码 / 旧服务端的回退）。
+ * - 玩家模式（有分享身份、且不是 delegate 代操作）一律不带 Owner 的 Authorization：
+ *   GM 身份与玩家身份互相独立，同一设备登录了房主也按普通玩家（席位凭证 + 房间令牌）
+ *   加入和游玩；带着房主凭据会被服务端当成「房主预览」，不能行动、不发席位凭证。
+ * - 加入流程的临时分享身份（joinShare）独立于 settings 注入的 share：加入途中写
+ *   settings（房间令牌、席位凭证、服务器地址）会重新同步 share，但不能把加入页的
+ *   分享上下文抹掉；加入完成或离开加入页时由加入页结束它。
  */
 
 import { getRandomValues } from 'expo-crypto'
@@ -98,18 +104,47 @@ interface ApiContext {
   sessionToken: string | null
   /** 分享凭证槽位（席位凭证 / 房间令牌），键 = credentialKey(baseUrl, gameKey) */
   credentials: CredentialSlots
+  /**
+   * 加入流程的临时分享身份（加入页解析邀请链接后设置，进入对局或离开加入页时清除）。
+   * settings 同步只改 share、不碰它；有它时以它为准。
+   */
+  joinShare: ShareIdentity | null
   onUnauthorized?: () => void
   onShareCredentialRejected?: (rejection: ShareCredentialRejection) => void
 }
 
-const context: ApiContext = { baseUrl: '', token: null, share: null, sessionToken: null, credentials: {} }
+const context: ApiContext = { baseUrl: '', token: null, share: null, sessionToken: null, credentials: {}, joinShare: null }
 
 export function configureApiClient(patch: Partial<ApiContext>): void {
   Object.assign(context, patch)
 }
 
+/** 当前生效的分享身份：加入流程中以加入页的临时身份为准 */
+function activeShare(): ShareIdentity | null {
+  return context.joinShare ?? context.share
+}
+
 export function currentShare(): ShareIdentity | null {
-  return context.share
+  return activeShare()
+}
+
+/** 加入页：开始 / 结束加入流程的临时分享身份（不受 settings 同步影响） */
+export function setJoinShare(share: ShareIdentity | null): void {
+  context.joinShare = share
+}
+
+/**
+ * 玩家模式：有分享身份且不是 delegate 代操作。此时请求按普通玩家发出，不带 Owner 凭据
+ * （席位凭证 + 房间令牌证明身份）。delegate 是 Owner 代 P2P 访客操作，仍以 Owner 身份发出。
+ */
+function playerMode(): boolean {
+  const share = activeShare()
+  return !!share && !isDelegateFlag(share.delegate)
+}
+
+/** 本次请求是否以 Owner 身份发出（有房主凭据、且不在玩家模式） */
+export function ownerAuthActive(): boolean {
+  return !!context.token && !playerMode()
 }
 
 export function currentBaseUrl(): string {
@@ -177,7 +212,7 @@ export { normalizeBaseUrl }
  * 席位凭证上线前的旧服务端仍按它识别玩家。
  */
 function sendsShareUser(share: ShareIdentity): boolean {
-  return !!context.token || !hasSeatToken(share.game)
+  return ownerAuthActive() || !hasSeatToken(share.game)
 }
 
 /** 分享模式下由身份统一接管的 query 字段：业务 query 与 path 里的同名值一律丢弃 */
@@ -185,7 +220,7 @@ const SHARE_QUERY_KEYS = ['game', 'user', 'name', 'share', 'delegate', 'room_tok
 
 /** 玩家模式下需要拼到 /games/... 请求上的 query 参数（对齐 Web shareQuery） */
 export function shareQuery(): URLSearchParams | null {
-  const share = context.share
+  const share = activeShare()
   if (!share) return null
   const q = new URLSearchParams()
   q.set('game', share.game)
@@ -242,9 +277,7 @@ function isRawBody(body: unknown): body is RawBody {
  * 它们以 GM 身份执行，预览席位靠 `?user=` 指名。
  */
 function applySeatTokenHeader(headers: Headers, path: string): void {
-  if (headers.has(SEAT_TOKEN_HEADER) || context.token) return
-  const share = context.share
-  if (!share || isDelegateFlag(share.delegate)) return
+  if (headers.has(SEAT_TOKEN_HEADER) || !playerMode()) return
   const token = readCredential(context.credentials, context.baseUrl, gameKeyOfApiPath(path)).seat
   if (token) headers.set(SEAT_TOKEN_HEADER, token)
 }
@@ -288,7 +321,8 @@ function buildHeaders(init: RequestInit, mode: RequestMode, path: string): Heade
     headers.delete(SEAT_TOKEN_HEADER)
     headers.delete(ROOM_TOKEN_HEADER)
   } else {
-    if (context.token) headers.set('Authorization', `Bearer ${context.token}`)
+    // shareless（内容同步）只对房主开放、从不带分享上下文：有房主凭据就带，不受玩家模式影响
+    if (context.token && (mode === 'shareless' || ownerAuthActive())) headers.set('Authorization', `Bearer ${context.token}`)
     // Web 浏览器会静默丢弃 JS 设置的 Cookie 头，交给服务端 Set-Cookie +
     // cookie jar 自动管理；不引入 react-native 依赖以保证 node 测试环境可用
     if (typeof document === 'undefined' && !headers.has('Cookie')) {
@@ -343,7 +377,7 @@ function errorFrom(data: Record<string, unknown>, status: number, response?: Res
  * Owner 请求不走这里：它从不隐式携带席位凭证，也不受房间密码约束。
  */
 function noteRejectedCredential(path: string, error: ApiError): void {
-  if (context.token) return
+  if (ownerAuthActive()) return
   const game = gameKeyOfApiPath(path)
   if (!game) return
   const baseUrl = context.baseUrl
@@ -351,7 +385,7 @@ function noteRejectedCredential(path: string, error: ApiError): void {
   if (error.status === 401 && error.code === 'SEAT_TOKEN_INVALID') {
     kind = 'seat'
     context.credentials = withoutSeatToken(context.credentials, baseUrl, game)
-  } else if (error.needsRoomPassword && context.share) {
+  } else if (error.needsRoomPassword && activeShare()) {
     kind = 'room'
     context.credentials = withoutRoomToken(context.credentials, baseUrl, game)
   }
@@ -360,8 +394,8 @@ function noteRejectedCredential(path: string, error: ApiError): void {
 
 function handleUnauthorized(response: Response, isPlayerShare: boolean): void {
   // 玩家分享请求的 401 属于身份/房间密码问题，在当前页面报错即可；
-  // Owner 模式下交给路由层跳登录。
-  if (response.status === 401 && !isPlayerShare && context.onUnauthorized) {
+  // Owner 模式下交给路由层跳登录。加入流程中（含匿名探测）一律由加入页就地报错。
+  if (response.status === 401 && !isPlayerShare && !context.joinShare && context.onUnauthorized) {
     context.onUnauthorized()
   }
 }
@@ -435,7 +469,7 @@ export async function api<T = unknown>(
   const response = await send(path, init, mode)
   const data = (await readJson(response)) as T & Record<string, unknown>
   // shareless（内容同步）的 401 是「需要房主」，由调用方提示，不触发全局跳登录页
-  if (mode !== 'shareless') handleUnauthorized(response, mode === 'owner' ? !!context.share : false)
+  if (mode !== 'shareless') handleUnauthorized(response, mode === 'owner' ? !!activeShare() : false)
   if (!response.ok) throw failure(path, response, data, mode)
   return data
 }
@@ -447,7 +481,7 @@ export async function apiBlob(
 ): Promise<Response> {
   const mode = requestModeOf(path, options)
   const response = await send(path, init, mode)
-  if (mode !== 'shareless') handleUnauthorized(response, mode === 'owner' ? !!context.share : false)
+  if (mode !== 'shareless') handleUnauthorized(response, mode === 'owner' ? !!activeShare() : false)
   if (!response.ok) throw failure(path, response, await readJson(response), mode)
   return response
 }

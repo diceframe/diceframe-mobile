@@ -62,14 +62,17 @@ describe('shareQuery', () => {
     expect(q.has('room_token')).toBe(false)
   })
 
-  it('持有本局席位凭证的玩家不再在 URL 里暴露 uid；Owner 预览仍指名席位', () => {
+  it('持有本局席位凭证的玩家不在 URL 里暴露 uid（设备上登录了房主也一样）；Owner 代操作仍指名席位', () => {
     configureApiClient({
       baseUrl: 'http://h',
       share: { game: 'abc', user: 'u1' },
       credentials: { [credentialKey('http://h', 'abc')]: { seat: 'S' } },
     })
     expect(shareQuery()!.has('user')).toBe(false)
+    // 玩家身份与房主身份独立：玩家模式不以房主身份发请求，也就不靠 ?user= 指名
     configureApiClient({ token: 'owner' })
+    expect(shareQuery()!.has('user')).toBe(false)
+    configureApiClient({ share: { game: 'abc', user: 'u1', delegate: '1' } })
     expect(shareQuery()!.get('user')).toBe('u1')
   })
 })
@@ -412,9 +415,9 @@ describe('席位凭证 / 房间令牌请求头注入', () => {
     expect(new URL(fetchMock.mock.calls[0][0]).searchParams.get('user')).toBe('u1')
   })
 
-  it('Owner/GM 模式与 delegate 代操作从不隐式携带席位凭证', async () => {
+  it('Owner/GM 模式与 delegate 代操作从不隐式携带席位凭证；delegate 仍以房主身份发出', async () => {
     const credentials = slots({ [credentialKey('http://h', 'abc')]: { seat: 'seat-abc' } })
-    configureApiClient({ baseUrl: 'http://h', token: 'owner', share: { game: 'abc', user: 'u1' }, credentials })
+    configureApiClient({ baseUrl: 'http://h', token: 'owner', share: null, credentials })
     await api('/games/abc/log')
     expect(sentHeaders(0).get('X-Seat-Token')).toBeNull()
     expect(sentHeaders(0).get('Authorization')).toBe('Bearer owner')
@@ -423,9 +426,22 @@ describe('席位凭证 / 房间令牌请求头注入', () => {
     await api('/games/abc/log')
     expect(sentHeaders(1).get('X-Seat-Token')).toBeNull()
 
-    configureApiClient({ share: { game: 'abc', user: 'u1', delegate: '1' } })
+    configureApiClient({ token: 'owner', share: { game: 'abc', user: 'u1', delegate: '1' } })
     await api('/games/abc/log')
     expect(sentHeaders(2).get('X-Seat-Token')).toBeNull()
+    expect(sentHeaders(2).get('Authorization')).toBe('Bearer owner')
+  })
+
+  it('设备上登录了房主、以玩家身份游玩：不带房主凭据，带席位凭证与房间令牌（GM / 玩家身份独立）', async () => {
+    const credentials = slots({ [credentialKey('http://h', 'abc')]: { seat: 'seat-abc', room: 'room-abc' } })
+    configureApiClient({ baseUrl: 'http://h', token: 'owner', share: { game: 'abc', user: 'u1' }, credentials })
+    await api('/games/abc/log')
+    expect(sentHeaders(0).get('Authorization')).toBeNull()
+    expect(sentHeaders(0).get('X-Seat-Token')).toBe('seat-abc')
+    expect(sentHeaders(0).get('X-Room-Token')).toBe('room-abc')
+    const url = new URL(fetchMock.mock.calls[0][0])
+    expect(url.searchParams.get('share')).toBe('1')
+    expect(url.searchParams.has('user')).toBe(false)
   })
 
   it('调用方显式给的席位凭证优先（GM 接管链接找回席位）', async () => {

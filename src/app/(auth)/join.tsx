@@ -17,6 +17,7 @@ import {
   hasRoomToken,
   normalizeBaseUrl,
   retryOnRateLimit,
+  setJoinShare,
 } from '@/api/client'
 import { fetchCharacterCards, fetchGameDetail, joinGame, verifyRoomPassword } from '@/api/games'
 import type { CharacterCard, CharacterPortrait, GameDetail } from '@/api/types'
@@ -28,7 +29,7 @@ import {
 } from '@/lib/join-form'
 import { QrScannerSheet } from '@/features/scan/QrScannerSheet'
 import { seatUidOf } from '@/lib/player-identity'
-import { parseJoinNotice, readCredential, withSeatToken, type JoinNotice } from '@/lib/seat-credentials'
+import { isDelegateFlag, parseJoinNotice, readCredential, withSeatToken, type JoinNotice } from '@/lib/seat-credentials'
 import {
   joinLinkAutoParseAllowed,
   parseShareLink,
@@ -99,6 +100,8 @@ export default function JoinScreen() {
     return () => {
       mountedRef.current = false
       if (pendingClientRestoreRef.current) configureApiClient(pendingClientRestoreRef.current)
+      // 离开加入页（返回、或进入对局后被替换）：结束加入流程的临时分享身份
+      setJoinShare(null)
       if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current)
     }
   }, [])
@@ -174,11 +177,14 @@ export default function JoinScreen() {
         baseUrl: targetBaseUrl,
         token: null,
         sessionToken: generateSessionToken(),
-        share: shareOf(publicLink),
         credentials: seat
           ? withSeatToken(current.shareCredentials, targetBaseUrl, result.game, seat)
           : current.shareCredentials,
       })
+      // 加入流程的分享身份单独挂在 client 上：之后写 settings（服务器地址、房间令牌、
+      // 席位凭证）会重新同步 share，但不会抹掉它——否则详情与 POST /players 会以
+      // 非分享请求发出，有访问密码的服务器直接 401。
+      setJoinShare(shareOf(publicLink))
       // 双向版本兼容：先于对局详情探测，不兼容直接拦在链接解析这一步
       // （拿不到版本号按服务器过旧拦下；探测失败按 joinGame 的既有错误路径走）
       const probe = await fetchServerCompat()
@@ -194,12 +200,14 @@ export default function JoinScreen() {
       }
       setBaseUrl(targetBaseUrl)
       if (seat) storeSeatToken(targetBaseUrl, result.game, seat)
-      configureApiClient({ share: shareOf(publicLink) })
       pendingClientRestoreRef.current = null
       setMode(seat ? 'resume' : 'create')
       await gate(publicLink, gameDetail, !!seat)
     } catch (e) {
-      if (pendingClientRestoreRef.current) configureApiClient(pendingClientRestoreRef.current)
+      if (pendingClientRestoreRef.current) {
+        configureApiClient(pendingClientRestoreRef.current)
+        setJoinShare(null)
+      }
       pendingClientRestoreRef.current = null
       if (mountedRef.current) {
         setError(e instanceof ServerCompatBlocked ? serverCompatErrorText(e.status, e.config) : errorMessage(e))
@@ -210,12 +218,14 @@ export default function JoinScreen() {
   }
 
   /**
-   * 房间密码门槛：服务端只在持有本局房间令牌后才放行其余请求（Owner 不受限）。
+   * 房间密码门槛：服务端只在持有本局房间令牌后才放行其余请求。
    * 先要密码，再决定找回/新建——否则回访成员也只会被游玩页弹回来。
+   * 同一设备登录了房主也一样：玩家身份与房主身份独立，加入请求不带房主凭据；
+   * 只有 delegate 代操作链接以房主身份发出，不受房间密码约束。
    */
   async function gate(p: PublicShareLink, gameDetail: GameDetail, seatLink: boolean) {
-    const owner = !!useSettingsStore.getState().token
-    if (gameDetail.has_room_password && !owner && !hasRoomToken(p.game)) {
+    const ownerDelegate = !!useSettingsStore.getState().token && isDelegateFlag(p.delegate)
+    if (gameDetail.has_room_password && !ownerDelegate && !hasRoomToken(p.game)) {
       if (noticeRef.current === 'room') setError(t('roomAccessExpired'))
       setStep('room')
       return
@@ -252,6 +262,8 @@ export default function JoinScreen() {
       server: p.baseUrl,
       worldName: gameDetail?.world_name,
     })
+    // 身份已写入 settings 并成为当前注入：加入流程的临时身份到此结束
+    setJoinShare(null)
     setStep('done')
     router.replace({ pathname: '/play/[gameKey]', params: { gameKey: p.game } })
   }
