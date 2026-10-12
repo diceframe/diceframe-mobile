@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildShareLink,
   joinLinkAutoParseAllowed,
+  linkToParse,
   parseShareLink,
   redactShareLink,
   serverSwitchTarget,
@@ -138,5 +139,22 @@ describe('深链自动解析只在同一后端上发生', () => {
     // 从未连接过任何服务器时没有可丢失的登录态，不打扰
     expect(serverSwitchTarget('https://evil.example/#/join?game=g', '')).toBeNull()
     expect(serverSwitchTarget('garbage', 'http://h:18000')).toBeNull()
+  })
+})
+
+describe('实机：深链带来的接管链接点「解析链接」时丢了席位凭证', () => {
+  const takeover = 'http://127.0.0.1:18100/#/join?game=g&share=1&seat=SEAT-TOKEN'
+
+  it('输入框还是深链预填的（已剥掉 seat=）：用原始链接解析，席位凭证保留', () => {
+    const prefilled = redactShareLink(takeover)
+    expect(prefilled).not.toContain('seat=')
+    expect(linkToParse(prefilled, takeover)).toBe(takeover)
+    expect(linkToParse(` ${prefilled} `, takeover)).toBe(takeover)
+    expect(parseShareLink(linkToParse(prefilled, takeover))?.seat).toBe('SEAT-TOKEN')
+  })
+
+  it('用户改过输入框、或没有深链：用输入框的内容', () => {
+    expect(linkToParse('http://other/#/join?game=x&share=1', takeover)).toBe('http://other/#/join?game=x&share=1')
+    expect(linkToParse('http://h/#/join?game=x&share=1', '')).toBe('http://h/#/join?game=x&share=1')
   })
 })

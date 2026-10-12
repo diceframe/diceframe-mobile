@@ -33,6 +33,7 @@ import { seatUidOf } from '@/lib/player-identity'
 import { isDelegateFlag, parseJoinNotice, readCredential, withSeatToken, type JoinNotice } from '@/lib/seat-credentials'
 import {
   joinLinkAutoParseAllowed,
+  linkToParse,
   parseShareLink,
   redactShareLink,
   serverSwitchTarget,
@@ -167,8 +168,9 @@ export default function JoinScreen() {
 
   async function parse(rawLink?: string) {
     setError('')
-    // 扫码结果要立刻可用：setState 是异步的，这一轮还读不到新值，所以直接传入
-    const input = rawLink ?? link
+    // 扫码结果要立刻可用：setState 是异步的，这一轮还读不到新值，所以直接传入。
+    // 输入框还是深链预填的（已剥掉 seat=）时用原始深链解析，接管链接的席位凭证才不会丢
+    const input = rawLink ?? linkToParse(link, incomingLink)
     setLink(redactShareLink(input))
     const result = parseShareLink(input)
     if (!result) {
