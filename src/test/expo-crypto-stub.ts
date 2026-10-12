@@ -7,3 +7,7 @@ export function getRandomValues<T extends Uint8Array<ArrayBuffer>>(typedArray: T
   globalThis.crypto.getRandomValues(typedArray)
   return typedArray
 }
+
+export function randomUUID(): string {
+  return globalThis.crypto.randomUUID()
+}

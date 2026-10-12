@@ -35,6 +35,7 @@ vi.mock('react-native', () => ({
   Appearance: {
     getColorScheme: () => 'dark',
   },
+  Platform: { OS: 'android' },
 }))
 
 describe('settings store 登录/登出状态机（回归：退出登录后必须能重新进入）', () => {
@@ -269,7 +270,9 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     expect(useSettingsStore.getState()).toMatchObject({ ...defaults, hydrated: true })
     expect(currentShare()).toBeNull()
     expect(currentToken()).toBeNull()
-    expect(JSON.parse((await AsyncStorage.getItem('diceframe-settings'))!)).toEqual({ version: 3, state: defaults })
+    // install id 只是本机库 meta 的缓存：水合时不生成，旧数据里没有就保持空串
+    expect(useSettingsStore.getState().installId).toBe('')
+    expect(JSON.parse((await AsyncStorage.getItem('diceframe-settings'))!)).toEqual({ version: 3, state: { ...defaults, installId: '' } })
   })
 
   it('v3 重新登录后的设置正常持久化，后续启动不再清空', async () => {
@@ -447,4 +450,31 @@ describe('settings store 分享凭证（席位凭证 / 房间令牌）', () => {
     expect(new URL(url).searchParams.has('room_token')).toBe(false)
     expect(new Headers(init.headers).get('X-Room-Token')).toBe('legacy-room')
   })
+})
+
+describe('settings store install id 缓存', () => {
+  it('水合时从不生成 install id：缓存只由本机库 meta 经 resolveInstallId 回写', async () => {
+    useSettingsStore.setState({ ...useSettingsStore.getInitialState() })
+    await AsyncStorage.setItem('diceframe-settings', JSON.stringify({ version: 3, state: { baseUrl: '' } }))
+    await useSettingsStore.persist.rehydrate()
+    expect(useSettingsStore.getState().installId).toBe('')
+  })
+
+  it('已缓存的值原样恢复（即使不合法也不在这里修正，修正是 meta 的事）', async () => {
+    useSettingsStore.setState({ ...useSettingsStore.getInitialState() })
+    await AsyncStorage.setItem('diceframe-settings', JSON.stringify({ version: 3, state: { installId: 'cached-id' } }))
+    await useSettingsStore.persist.rehydrate()
+    expect(useSettingsStore.getState().installId).toBe('cached-id')
+  })
+})
+
+describe('评审修复：settings 里的 install id 缓存', () => {
+  it('settings 结构升级（migrate）保留已有的 install id', async () => {
+    useSettingsStore.setState({ ...useSettingsStore.getInitialState() })
+    const migrate = useSettingsStore.persist.getOptions().migrate!
+    const migrated = await migrate({ installId: 'kept-install-id', token: 'old' }, 2) as { installId: string; token: unknown }
+    expect(migrated.installId).toBe('kept-install-id')
+    expect(migrated.token).toBeNull()
+  })
+
 })

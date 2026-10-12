@@ -42,6 +42,7 @@ interface PersistedSettings {
   shares: IdentitySlots
   activeShareGame: string | null
   shareCredentials: CredentialSlots
+  installId: string
   ttsRate: number
   ttsEngine: TtsEngine
   ttsAuto: boolean
@@ -61,6 +62,7 @@ function defaultSettings(): PersistedSettings {
     shares: {},
     activeShareGame: null,
     shareCredentials: {},
+    installId: '',
     ttsRate: 1,
     ttsEngine: 'server',
     ttsAuto: true,
@@ -94,6 +96,13 @@ interface SettingsState {
    * 不随 clearShares 清空：换服务器再换回来时凭证仍属于原服务器，且只会发给原服务器。
    */
   shareCredentials: CredentialSlots
+  /**
+   * 本安装的 install id（内容同步契约的 device source id）的**缓存**，只由
+   * stores/local-library 的 resolveInstallId 从本机库 meta 表回写，这里从不生成。
+   * 任何使用方（推送、配对上报 install_id）都必须经 resolveInstallId 取，不得直接读本字段
+   * （eslint no-restricted-syntax 兜底）。不是凭证（服务端设备列表会公开显示它）。
+   */
+  installId: string
   /** TTS 播放速率（对齐 Web localStorage trpg_tts_rate） */
   ttsRate: number
   /** 朗读引擎；server 引擎不可用时对局页会整体隐藏朗读入口 */
@@ -319,6 +328,7 @@ export const useSettingsStore = create<SettingsState>()(
         shares: state.shares,
         activeShareGame: state.activeShareGame,
         shareCredentials: state.shareCredentials,
+        installId: state.installId,
         ttsRate: state.ttsRate,
         ttsEngine: state.ttsEngine,
         ttsAuto: state.ttsAuto,
@@ -326,7 +336,11 @@ export const useSettingsStore = create<SettingsState>()(
         themeMode: state.themeMode,
         language: state.language,
       }),
-      migrate: () => defaultSettings(),
+      // 结构升级照旧重置设置，但保留 install id 缓存（双保险；权威值在本机库里）
+      migrate: (persisted) => {
+        const installId = (persisted as { installId?: unknown } | null)?.installId
+        return { ...defaultSettings(), installId: typeof installId === 'string' ? installId : '' }
+      },
       onRehydrateStorage: () => (state) => {
         if (state) {
           const adopted = adoptLegacyRoomTokens(state.shares ?? {}, state.shareCredentials ?? {}, state.baseUrl)
