@@ -179,3 +179,10 @@ describe('M7 后续：次要关键词（secondary_keys）与关键词同样编�
     expect(saved).toEqual({ ...expected, secondary_keys: ['a', 'b'] })
   })
 })
+
+describe('#9 评审：次要关键词兼容 Tavern 别名 keysecondary', () => {
+  it('没有 secondary_keys 时回退读 keysecondary；两者都有以 secondary_keys 为准', () => {
+    expect(entryFormOf({ id: 'e', keys: ['k'], keysecondary: ['a', 'b'], content: '' }).secondaryKeysText).toBe('a, b')
+    expect(entryFormOf({ id: 'e', keys: ['k'], secondary_keys: ['x'], keysecondary: ['a'], content: '' }).secondaryKeysText).toBe('x')
+  })
+})

@@ -40,7 +40,8 @@ export function entryFormOf(entry: LorebookEntry | null): EntryForm {
   return {
     name: typeof entry?.name === 'string' ? entry.name : '',
     keysText: keysTextOf(entry?.keys),
-    secondaryKeysText: keysTextOf(entry?.secondary_keys),
+    // 没有 secondary_keys 时回退 Tavern 的别名 keysecondary（否则这类条目显示为空）
+    secondaryKeysText: keysTextOf(entry && 'secondary_keys' in entry ? entry.secondary_keys : entry?.keysecondary),
     content: typeof entry?.content === 'string' ? entry.content : '',
     enabled: entry ? entry.enabled !== false : true,
     constant: entry?.constant === true,

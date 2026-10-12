@@ -615,3 +615,31 @@ describe('M7 后续：保留两份后两份可区分', () => {
     expect(readLorebookV3(mine.document).entries[0].content).toBe('mine')
   })
 })
+
+describe('#9 评审：保留两份改名的边界', () => {
+  async function keepBoth(h: Awaited<ReturnType<typeof harness>>, serverName: string, before?: (localId: string) => void) {
+    h.server.put('card_1', { kind: 'character_template', document: writeCardV3({ ...freeformBody, character_name: 'X' }) })
+    const localId = outcome(await h.pull([cardRef('card_1')]), 'card_1').localId!
+    before?.(localId)
+    h.library.updateDocument(localId, { document: writeCardV3({ ...freeformBody, character_name: 'X', race: 'Mine' }), name: 'X' })
+    h.server.put('card_1', { kind: 'character_template', document: writeCardV3({ ...freeformBody, character_name: serverName }) })
+    expect(outcome(await h.pull([cardRef('card_1')]), 'card_1').status).toBe('kept-both')
+    return localId
+  }
+
+  it('改过的那份仍跟随另一台服务器：不改名（改名会加 revision，推到那台时把它的副本也改名）', async () => {
+    const h = await harness()
+    const localId = await keepBoth(h, 'X', (id) => {
+      h.library.recordSync('srv-other-0123456789', [{ localId: id, canonicalId: 'card_elsewhere', stateToken: 't', syncedRevision: 1 }])
+    })
+    const mine = h.library.getItem(localId)!
+    expect(mine.name).toBe('X')
+    expect(h.library.getLink('srv-other-0123456789', localId)).not.toBeNull()
+  })
+
+  it('副本名避开正在写入的服务器版本的名字（服务器上那份已经叫「X (copy)」）', async () => {
+    const h = await harness()
+    const localId = await keepBoth(h, 'X (copy)')
+    expect(h.library.getItem(localId)!.name).toBe('X (copy 2)')
+  })
+})
