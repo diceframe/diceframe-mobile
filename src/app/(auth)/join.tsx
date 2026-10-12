@@ -39,6 +39,7 @@ import {
 } from '@/lib/share-link'
 import { confirmDestructive } from '@/lib/confirm'
 import { joinLinkFromParams } from '@/lib/join-deep-link'
+import { cardsFailureNeedsRoomGate } from '@/lib/join-room-gate'
 import { ServerCompatBlocked, fetchServerCompat, serverCompatErrorText } from '@/lib/server-compat'
 import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
 import { useT } from '@/i18n/t'
@@ -137,7 +138,14 @@ export default function JoinScreen() {
     setCardsLoading(true)
     fetchCharacterCards(parsed.game)
       .then((result) => setCards(result.cards ?? []))
-      .catch(() => setCards([]))
+      .catch((cause: unknown) => {
+        setCards([])
+        // 房间访问失效（改了房间密码 / 令牌过期）不是「没有可选的卡」：回房间密码步骤
+        if (mountedRef.current && cardsFailureNeedsRoomGate(cause, !!detail?.has_room_password, hasRoomToken(parsed.game))) {
+          cardsRequestedRef.current = false
+          showRoomGate()
+        }
+      })
       .finally(() => setCardsLoading(false))
   }, [step, mode, parsed])
 
@@ -283,10 +291,14 @@ export default function JoinScreen() {
   /** 加入过程中房间令牌被拒（过期/改密）：回到房间密码步骤重新输入 */
   function backToRoomGate(e: unknown): boolean {
     if (!(e instanceof ApiError) || !e.needsRoomPassword) return false
+    showRoomGate()
+    return true
+  }
+
+  function showRoomGate() {
     setRoomPassword('')
     setStep('room')
     setBanner({ kind: 'room', text: t('roomAccessExpired') })
-    return true
   }
 
   function startRoomCooldown(seconds: number) {
