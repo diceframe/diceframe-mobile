@@ -6,15 +6,16 @@ import { Sheet } from '@/components/patterns/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
 import { errorMessage, fetchAppConfig } from '@/api/client'
-import { exportGame, fetchBotBindToken } from '@/api/games'
+import { exportGame, fetchBotBindToken, issueSeatToken } from '@/api/games'
 import type { CommandResponse, GameDetail, HealthResponse, Player } from '@/api/types'
-import { toastNotice } from '@/components/patterns/toast'
+import { toastError, toastNotice } from '@/components/patterns/toast'
 import { GmSheet } from '@/features/play/GmSheet'
 import { HealthPanel } from '@/features/play/HealthPanel'
 import { MultiplayerPanel } from '@/features/play/MultiplayerPanel'
 import { useT } from '@/i18n/t'
 import { confirmDestructive } from '@/lib/confirm'
 import { awayControlPolicy } from '@/lib/player-control'
+import { resolveTakeoverToken } from '@/lib/seat-credentials'
 import { buildShareLink } from '@/lib/share-link'
 import { shareExportBlob } from '@/lib/share-export'
 import { useGameStore } from '@/stores/game'
@@ -39,6 +40,12 @@ async function copyToClipboard(text: string): Promise<void> {
 }
 
 type GmPanelTab = 'controls' | 'players' | 'health'
+
+/**
+ * 本次运行里 GM 已拿到的接管凭证（只在内存，不落盘）：再次复制同一席位的链接时
+ * 交给服务端复核并原样复用，不会因为多点一次就把玩家踢下线。键 = 后端 + 局 + 席位。
+ */
+const takeoverTokens = new Map<string, string>()
 
 interface GmPanelSheetProps {
   open: boolean
@@ -219,15 +226,41 @@ export function GmPanelSheet({
     }
   }
 
+  /**
+   * 单个玩家的接管链接：带该席位的凭证（POST players/{uid}/seat-token），不再带公开 uid——
+   * 新服务端只认凭证，旧的 uid 链接已经无效。
+   */
   async function handleCopyLink(uid: string) {
     if (!gameKey) return
+    const settings = useSettingsStore.getState()
+    const cacheKey = `${settings.baseUrl}\u0000${gameKey}\u0000${uid}`
+    let token: string | null
     try {
-      const settings = useSettingsStore.getState()
+      token = await resolveTakeoverToken(takeoverTokens.get(cacheKey) ?? '', {
+        issue: (options) => issueSeatToken(gameKey, uid, options),
+        confirmRotate: (stale) => {
+          takeoverTokens.delete(cacheKey)
+          if (stale) toastNotice(t('seatLinkStale'))
+          return confirmDestructive({
+            title: t('seatLinkReissueTitle'),
+            message: t('seatLinkReissueContent'),
+            confirmText: t('seatLinkReissueConfirm'),
+            cancelText: t('dfCommonCancel'),
+          })
+        },
+      })
+    } catch (error) {
+      toastError(errorMessage(error))
+      return
+    }
+    if (!token) return
+    takeoverTokens.set(cacheKey, token)
+    try {
       const config = await fetchAppConfig()
       const link = buildShareLink(
         gameKey,
         config.public_base_url || settings.baseUrl,
-        uid,
+        token,
         settings.baseUrl,
       )
       await copyToClipboard(link)

@@ -2,16 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 import {
+  api,
   buildPlaySseUrl,
   configureApiClient,
   currentSessionToken,
   currentShare,
   currentToken,
+  hasRoomToken,
+  hasSeatToken,
   normalizeBaseUrl,
   shareQuery,
 } from '@/api/client'
+import { credentialKey } from '@/lib/seat-credentials'
 import { readThemeToken, resolveTheme } from '@/lib/theme'
-import { activeIdentityOf, useSettingsStore } from './settings'
+import { activeIdentityOf, adoptLegacyRoomTokens, useSettingsStore } from './settings'
 
 // settings store 依赖 AsyncStorage（RN 模块），单测里换成内存实现。
 // vitest 会把 vi.mock 提升到文件顶部，实际先于上面的 import 执行。
@@ -169,20 +173,22 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     store.setBaseUrl('http://a:18000')
     store.setToken('owner-token')
     const sessionToken = currentSessionToken()
-    const first = { game: 'a', user: 'u-a', name: 'Aria', delegate: 'd-a', roomToken: 'r-a' }
-    const second = { game: 'b', user: 'u-b', roomToken: 'r-b' }
+    const first = { game: 'a', user: 'u-a', name: 'Aria', delegate: 'd-a' }
+    const second = { game: 'b', user: 'u-b' }
     store.upsertShare(first)
     store.upsertShare(second)
     expect(activeIdentityOf(useSettingsStore.getState())).toEqual(second)
-    expect(Object.fromEntries(shareQuery()!)).toEqual({ game: 'b', user: 'u-b', share: '1', room_token: 'r-b' })
+    // 房主已登录：分享身份只作用于那一局的请求
+    expect(shareQuery('/games')).toBeNull()
+    expect(Object.fromEntries(shareQuery('/games/b')!)).toEqual({ game: 'b', user: 'u-b', share: '1' })
 
     store.activateShare('a')
     expect(currentShare()).toEqual(first)
-    expect(Object.fromEntries(shareQuery()!)).toEqual({
-      game: 'a', user: 'u-a', name: 'Aria', share: '1', delegate: 'd-a', room_token: 'r-a',
+    expect(Object.fromEntries(shareQuery('/games/a')!)).toEqual({
+      game: 'a', user: 'u-a', name: 'Aria', share: '1', delegate: 'd-a',
     })
     store.upsertShare({ game: 'a', user: 'rebound-user' })
-    expect(Object.fromEntries(shareQuery()!)).toEqual({ game: 'a', user: 'rebound-user', share: '1' })
+    expect(Object.fromEntries(shareQuery('/games/a')!)).toEqual({ game: 'a', user: 'rebound-user', share: '1' })
     expect(useSettingsStore.getState().shares.b).toEqual(second)
     expect(currentToken()).toBe('owner-token')
     expect(currentSessionToken()).toBe(sessionToken)
@@ -202,7 +208,7 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
 
   it('移除其他局不影响当前注入；移除当前局清空注入且不自动切到剩余身份', () => {
     const store = useSettingsStore.getState()
-    const current = { game: 'a', user: 'u-a', roomToken: 'r-a' }
+    const current = { game: 'a', user: 'u-a' }
     const remaining = { game: 'b', user: 'u-b' }
     store.upsertShare(current)
     store.upsertShare(remaining)
@@ -212,7 +218,7 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     store.removeShare('missing')
     expect(useSettingsStore.getState().activeShareGame).toBe('a')
     expect(currentShare()).toEqual(current)
-    expect(shareQuery()?.get('room_token')).toBe('r-a')
+    expect(shareQuery()?.get('user')).toBe('u-a')
 
     store.removeShare('a')
     expect(useSettingsStore.getState().shares).toEqual({ b: remaining })
@@ -252,6 +258,7 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
       token: null,
       shares: {},
       activeShareGame: null,
+      shareCredentials: {},
       ttsRate: 1,
       ttsEngine: 'server',
       ttsAuto: true,
@@ -270,9 +277,11 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     store.setBaseUrl('http://new:18000')
     store.setToken('new-password')
     store.rememberServerPassword('http://new:18000', 'new-password')
-    const identity = { game: 'new-game', user: 'new-user', name: 'Aria', delegate: 'delegate-a', roomToken: 'room-a' }
+    const identity = { game: 'new-game', user: 'new-user', name: 'Aria', delegate: 'delegate-a' }
     store.upsertShare(identity)
-    store.upsertShare({ game: 'other-game', user: 'other-user', roomToken: 'room-b' })
+    store.upsertShare({ game: 'other-game', user: 'other-user' })
+    store.storeSeatToken('http://new:18000', 'new-game', 'seat-a')
+    store.storeRoomToken('http://new:18000', 'new-game', 'room-a')
     store.activateShare('new-game')
     store.setThemeMode('light')
     store.setLanguage('en')
@@ -284,7 +293,7 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     // 模拟后续两次启动，API 内存态清空后应从 v3 槽位恢复完整身份与服务器会话。
     for (let startup = 0; startup < 2; startup += 1) {
       useSettingsStore.setState({ ...useSettingsStore.getInitialState() })
-      configureApiClient({ baseUrl: '', token: null, share: null, sessionToken: null })
+      configureApiClient({ baseUrl: '', token: null, share: null, sessionToken: null, credentials: {} })
       await AsyncStorage.setItem('diceframe-settings', saved!)
       await useSettingsStore.persist.rehydrate()
       expect(currentToken()).toBe('new-password')
@@ -293,7 +302,7 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
         serverPasswords: { 'http://new:18000': 'new-password' },
         shares: {
           'new-game': identity,
-          'other-game': { game: 'other-game', user: 'other-user', roomToken: 'room-b' },
+          'other-game': { game: 'other-game', user: 'other-user' },
         },
         activeShareGame: 'new-game',
         hydrated: true,
@@ -303,13 +312,139 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
       expect(activeIdentityOf(useSettingsStore.getState())).toEqual(identity)
       expect(currentShare()).toEqual(identity)
       expect(currentSessionToken()).toBe(sessionToken)
+      // 分享凭证随设置落盘并在启动时注入 client（仍按后端 + 局分槽）
+      expect(hasSeatToken('new-game')).toBe(true)
+      expect(hasRoomToken('new-game')).toBe(true)
+      expect(hasSeatToken('other-game')).toBe(false)
       const sseUrl = new URL(buildPlaySseUrl('new-game', 'ticket'))
       expect(sseUrl.origin).toBe('http://new:18000')
+      // 玩家模式（delegate 值不是代操作开关）：持席位凭证不再用 ?user= 指名，房主登录也一样；
+      // 房间令牌只走请求头，不进 URL
       expect(Object.fromEntries(sseUrl.searchParams)).toEqual({
-        game: 'new-game', user: 'new-user', name: 'Aria', share: '1',
-        delegate: 'delegate-a', room_token: 'room-a', ticket: 'ticket',
+        game: 'new-game', name: 'Aria', share: '1',
+        delegate: 'delegate-a', ticket: 'ticket',
       })
       expect(await AsyncStorage.getItem('diceframe-settings')).toBe(saved)
     }
+  })
+})
+
+describe('settings store 分享凭证（席位凭证 / 房间令牌）', () => {
+  beforeEach(async () => {
+    useSettingsStore.setState({ ...useSettingsStore.getInitialState() })
+    configureApiClient({ baseUrl: '', token: null, share: null, sessionToken: null, credentials: {} })
+  })
+
+  it('凭证按后端地址分槽：换服务器后看不到原服务器的凭证，换回来仍在', () => {
+    const store = useSettingsStore.getState()
+    store.setBaseUrl('http://a:18000/')
+    store.storeSeatToken('http://a:18000', 'g', ' seat-a ')
+    store.storeRoomToken('http://a:18000', 'g', 'room-a')
+    expect(hasSeatToken('g')).toBe(true)
+    expect(useSettingsStore.getState().shareCredentials).toEqual({
+      [credentialKey('http://a:18000', 'g')]: { seat: 'seat-a', room: 'room-a' },
+    })
+
+    store.setBaseUrl('http://b:18000')
+    expect(hasSeatToken('g')).toBe(false)
+    expect(hasRoomToken('g')).toBe(false)
+
+    store.setBaseUrl('http://a:18000')
+    expect(hasSeatToken('g')).toBe(true)
+  })
+
+  it('空凭证不覆盖已有凭证；clearShares 不清凭证，removeShare 丢掉该局席位凭证', () => {
+    const store = useSettingsStore.getState()
+    store.setBaseUrl('http://a:18000')
+    store.storeSeatToken('http://a:18000', 'g', 'seat-a')
+    store.storeSeatToken('http://a:18000', 'g', undefined)
+    store.storeSeatToken('http://a:18000', 'g', '')
+    expect(hasSeatToken('g')).toBe(true)
+
+    store.upsertShare({ game: 'g', user: 'u' })
+    store.clearShares()
+    expect(hasSeatToken('g')).toBe(true)
+
+    store.upsertShare({ game: 'g', user: 'u' })
+    store.storeRoomToken('http://a:18000', 'g', 'room-a')
+    store.removeShare('g')
+    expect(hasSeatToken('g')).toBe(false)
+    expect(hasRoomToken('g')).toBe(true)
+  })
+
+  it('席位凭证被拒：清该局凭证与身份并清注入，不动其他局', () => {
+    const store = useSettingsStore.getState()
+    store.setBaseUrl('http://a:18000')
+    store.upsertShare({ game: 'other', user: 'u-o' })
+    store.upsertShare({ game: 'g', user: 'u' })
+    store.storeSeatToken('http://a:18000', 'g', 'seat-g')
+    store.storeSeatToken('http://a:18000', 'other', 'seat-o')
+
+    store.rejectSeatToken('http://a:18000', 'g')
+    const state = useSettingsStore.getState()
+    expect(state.shares).toEqual({ other: { game: 'other', user: 'u-o' } })
+    expect(state.activeShareGame).toBeNull()
+    expect(currentShare()).toBeNull()
+    expect(hasSeatToken('g')).toBe(false)
+    expect(hasSeatToken('other')).toBe(true)
+  })
+
+  it('别的后端发来的席位拒绝只清那台后端的凭证，不动当前服务器的身份', () => {
+    const store = useSettingsStore.getState()
+    store.setBaseUrl('http://a:18000')
+    store.upsertShare({ game: 'g', user: 'u' })
+    store.storeSeatToken('http://a:18000', 'g', 'seat-a')
+    store.storeSeatToken('http://b:18000', 'g', 'seat-b')
+
+    store.rejectSeatToken('http://b:18000', 'g')
+    expect(useSettingsStore.getState().shares.g).toEqual({ game: 'g', user: 'u' })
+    expect(hasSeatToken('g')).toBe(true)
+    expect(useSettingsStore.getState().shareCredentials[credentialKey('http://b:18000', 'g')]).toBeUndefined()
+  })
+
+  it('房间令牌被拒只清令牌，身份保留', () => {
+    const store = useSettingsStore.getState()
+    store.setBaseUrl('http://a:18000')
+    store.upsertShare({ game: 'g', user: 'u' })
+    store.storeRoomToken('http://a:18000', 'g', 'room')
+    store.rejectRoomToken('http://a:18000', 'g')
+    expect(hasRoomToken('g')).toBe(false)
+    expect(currentShare()).toEqual({ game: 'g', user: 'u' })
+  })
+
+  it('旧版身份里的 roomToken 挪进凭证表并从身份中抹掉', () => {
+    const legacy = {
+      a: { game: 'a', user: 'u-a', roomToken: 'room-a' },
+      b: { game: 'b', user: 'u-b' },
+    }
+    const adopted = adoptLegacyRoomTokens(legacy, {}, 'http://A:18000/')
+    expect(adopted.shares).toEqual({ a: { game: 'a', user: 'u-a' }, b: legacy.b })
+    expect(adopted.credentials).toEqual({ [credentialKey('http://a:18000', 'a')]: { room: 'room-a' } })
+
+    const clean = { b: { game: 'b', user: 'u-b' } }
+    const untouched = adoptLegacyRoomTokens(clean, {}, 'http://a:18000')
+    expect(untouched.shares).toBe(clean)
+  })
+
+  it('启动时迁移旧 roomToken：之后只以请求头发送，不再拼进 URL', async () => {
+    await AsyncStorage.setItem('diceframe-settings', JSON.stringify({
+      version: 3,
+      state: {
+        baseUrl: 'http://a:18000',
+        serverSessionTokens: { 'http://a:18000': 'f'.repeat(32) },
+        shares: { g: { game: 'g', user: 'u', roomToken: 'legacy-room' } },
+        activeShareGame: 'g',
+      },
+    }))
+    await useSettingsStore.persist.rehydrate()
+    expect(useSettingsStore.getState().shares.g).toEqual({ game: 'g', user: 'u' })
+    expect(hasRoomToken('g')).toBe(true)
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+    await api('/games/g/log')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(new URL(url).searchParams.has('room_token')).toBe(false)
+    expect(new Headers(init.headers).get('X-Room-Token')).toBe('legacy-room')
   })
 })

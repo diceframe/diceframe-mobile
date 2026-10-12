@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, configureApiClient } from './client'
+import { credentialKey } from '@/lib/seat-credentials'
 import { askKpQuestion, canAskKpQuestion, fetchTableTalk, isTableTalkUnsupported, parseTableTalkResponse } from './table-talk'
 
 const exchange = {
@@ -18,7 +19,8 @@ beforeEach(() => {
   fetchMock.mockReset()
   configureApiClient({
     baseUrl: 'https://table.example', token: null, sessionToken: 'session',
-    share: { game: 'game/a', user: 'u1', roomToken: 'room', delegate: '1' },
+    share: { game: 'game/a', user: 'u1', delegate: '1' },
+    credentials: { [credentialKey('https://table.example', 'game/a')]: { room: 'room' } },
     onUnauthorized: undefined,
   })
 })
@@ -36,7 +38,8 @@ describe('桌外问答 API 契约', () => {
     const parsed = new URL(url)
     expect(parsed.pathname).toBe('/api/games/game%2Fa/kp-question')
     expect(parsed.searchParams.get('user')).toBe('u1')
-    expect(parsed.searchParams.get('room_token')).toBe('room')
+    expect(parsed.searchParams.has('room_token')).toBe(false)
+    expect(new Headers(init.headers).get('X-Room-Token')).toBe('room')
     expect(parsed.searchParams.get('delegate')).toBe('1')
     expect(init.method).toBe('POST')
     expect(init.headers.get('Cookie')).toBe('trpg_session=session')

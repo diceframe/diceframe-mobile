@@ -42,7 +42,7 @@ function deferred<T>() {
 }
 async function settle() {
   // 微任务队列包含 fetch.text、Promise.all 与 connect 的续段。
-  for (let index = 0; index < 25; index += 1) await Promise.resolve()
+  for (let index = 0; index < 100; index += 1) await Promise.resolve()
 }
 
 beforeEach(() => {

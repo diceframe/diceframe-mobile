@@ -95,6 +95,19 @@ Expo Web 页面与后端不同源，浏览器会按 CORS 拦截 API/SSE 请求�
 - **最低服务器版本 2.6.1**（`src/lib/version-compat.ts` 的 `APP_MIN_SERVER_VERSION`）：
   席位控制、货币 V2、扫码登录的配对端点都只在 2.6.1+ 存在。移动端不做跨版本降级——
   低于它、或压根不下发 `server_version` 的服务器，在登录/切换/加入时直接提示升级服务器
+- **分享链接玩家鉴权（服务端 main ≥ 92f91d6e）**：玩家席位只凭 `X-Seat-Token` 请求头认，
+  房间密码换到的令牌只走 `X-Room-Token` 请求头；两者按「后端地址 + gameKey」分槽保存在本机
+  （`src/lib/seat-credentials.ts`），只发给签发它的那台服务器上的那一局。GM 接管链接形如
+  `#/join?game=…&seat=<凭证>`，只带 uid 的旧接管链接已失效。服务端版本号仍是 2.6.1，
+  无法据此区分新旧：旧服务端上没有席位凭证时仍回退 `?user=`；但旧服务端的房间令牌只认
+  query，带房间密码的局需要把服务端升级到上述版本
+- **网络暴露面**：局域网明文 HTTP 是核心场景，但访问密码、设备令牌、会话 Cookie 与
+  席位凭证都在请求头里明文传输。服务器一旦暴露到局域网之外（公网、隧道、反代），务必
+  使用 HTTPS，并在 App 里直接填写最终的 https 地址：客户端会拒收跨源重定向（含
+  http→https 的跳转），以免凭证被带到别的主机。
+- **本机存储**：上述凭证与服务器密码本保存在 AsyncStorage（应用私有目录，非加密）；
+  `app.json` 已设 `android.allowBackup: false`，不随云备份 / adb backup 带离设备。
+  迁到 expo-secure-store 留作后续（见 PR #1 讨论）。
 - **类型契约**：`src/api/types.ts` 是主仓库 `frontend-v2/src/api/types.ts` 的 v1 子集副本，
   后端字段变更时两处同步
 - v1 不含：创建向导、AI 服务商设置、世界书/记忆/规则编辑、角色卡库、P2P 直连、

@@ -17,6 +17,13 @@ import {
 } from '@/lib/player-identity'
 import type { LocalePreference } from '@/lib/locale'
 import { updateRecentServers } from '@/lib/recent-servers'
+import {
+  withRoomToken,
+  withSeatToken,
+  withoutRoomToken,
+  withoutSeatToken,
+  type CredentialSlots,
+} from '@/lib/seat-credentials'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
 export type ResolvedTheme = 'light' | 'dark'
@@ -34,6 +41,7 @@ interface PersistedSettings {
   token: string | null
   shares: IdentitySlots
   activeShareGame: string | null
+  shareCredentials: CredentialSlots
   ttsRate: number
   ttsEngine: TtsEngine
   ttsAuto: boolean
@@ -52,6 +60,7 @@ function defaultSettings(): PersistedSettings {
     token: null,
     shares: {},
     activeShareGame: null,
+    shareCredentials: {},
     ttsRate: 1,
     ttsEngine: 'server',
     ttsAuto: true,
@@ -80,6 +89,11 @@ interface SettingsState {
   shares: IdentitySlots
   /** 当前注入 api client 的身份对应的 gameKey；null 表示纯 Owner/大厅请求 */
   activeShareGame: string | null
+  /**
+   * 分享凭证（席位凭证 / 房间令牌），按「后端地址 + gameKey」分槽（lib/seat-credentials）。
+   * 不随 clearShares 清空：换服务器再换回来时凭证仍属于原服务器，且只会发给原服务器。
+   */
+  shareCredentials: CredentialSlots
   /** TTS 播放速率（对齐 Web localStorage trpg_tts_rate） */
   ttsRate: number
   /** 朗读引擎；server 引擎不可用时对局页会整体隐藏朗读入口 */
@@ -111,6 +125,14 @@ interface SettingsState {
   activateShare: (gameKey: string | null) => void
   /** 清空全部玩家身份（换服务器/Owner 登录时旧身份一律作废） */
   clearShares: () => void
+  /** 保存席位凭证（POST /players 新建席位、GM 接管链接 seat=、claim 换得）；空值忽略 */
+  storeSeatToken: (baseUrl: string, gameKey: string, token: unknown) => void
+  /** 保存房间令牌（verify-room-password 换得）；空值忽略 */
+  storeRoomToken: (baseUrl: string, gameKey: string, token: unknown) => void
+  /** 服务端拒绝席位凭证（SEAT_TOKEN_INVALID）：清凭证与该局身份，只影响这台后端上的这一局 */
+  rejectSeatToken: (baseUrl: string, gameKey: string) => void
+  /** 服务端拒绝房间令牌（needs_room_password）：只清令牌，身份保留，重输房间密码即可继续 */
+  rejectRoomToken: (baseUrl: string, gameKey: string) => void
   setTtsRate: (rate: number) => void
   setTtsEngine: (engine: TtsEngine) => void
   setTtsAuto: (enabled: boolean) => void
@@ -128,7 +150,7 @@ export function activeIdentityOf(
 }
 
 function syncApiClient(
-  state: Pick<SettingsState, 'baseUrl' | 'serverSessionTokens' | 'token' | 'shares' | 'activeShareGame'>,
+  state: Pick<SettingsState, 'baseUrl' | 'serverSessionTokens' | 'token' | 'shares' | 'activeShareGame' | 'shareCredentials'>,
 ): void {
   const baseUrl = normalizeBaseUrl(state.baseUrl)
   configureApiClient({
@@ -136,7 +158,31 @@ function syncApiClient(
     sessionToken: baseUrl ? state.serverSessionTokens[baseUrl] ?? null : null,
     token: state.token,
     share: activeIdentityOf(state),
+    credentials: state.shareCredentials ?? {},
   })
+}
+
+/**
+ * 旧版本把房间令牌放在身份槽位的 roomToken 字段并拼进 URL。新契约只认请求头：
+ * 把它挪进按后端分槽的凭证表（服务端升级时会保留旧令牌的有效期），并从身份里抹掉，
+ * 明文不再留在会展示/遍历的身份数据里。纯函数，便于单测。
+ */
+export function adoptLegacyRoomTokens(
+  shares: IdentitySlots,
+  credentials: CredentialSlots,
+  baseUrl: string,
+): { shares: IdentitySlots; credentials: CredentialSlots } {
+  let nextShares = shares
+  let nextCredentials = credentials
+  const server = normalizeBaseUrl(baseUrl)
+  for (const [gameKey, identity] of Object.entries(shares)) {
+    const legacy = identity as PlayerIdentity & { roomToken?: unknown }
+    if (!('roomToken' in legacy)) continue
+    const { roomToken, ...rest } = legacy
+    nextCredentials = withRoomToken(nextCredentials, server, gameKey, roomToken)
+    nextShares = { ...nextShares, [gameKey]: rest }
+  }
+  return { shares: nextShares, credentials: nextCredentials }
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -202,7 +248,9 @@ export const useSettingsStore = create<SettingsState>()(
         const shares = removeIdentity(get().shares, gameKey)
         // 被移除的正是当前注入身份时必须同步清注入，否则后续请求还带旧 share query
         const clearing = get().activeShareGame === gameKey
-        set(clearing ? { shares, activeShareGame: null } : { shares })
+        // 离开/被踢 = 放弃这一局的席位：席位凭证一并丢掉，免得下次加入被自动认回旧席位
+        const shareCredentials = withoutSeatToken(get().shareCredentials, get().baseUrl, gameKey)
+        set(clearing ? { shares, shareCredentials, activeShareGame: null } : { shares, shareCredentials })
         syncApiClient(get())
       },
       activateShare: (gameKey) => {
@@ -214,6 +262,38 @@ export const useSettingsStore = create<SettingsState>()(
       },
       clearShares: () => {
         set({ shares: {}, activeShareGame: null })
+        syncApiClient(get())
+      },
+      storeSeatToken: (baseUrl, gameKey, token) => {
+        const shareCredentials = withSeatToken(get().shareCredentials, normalizeBaseUrl(baseUrl), gameKey, token)
+        if (shareCredentials === get().shareCredentials) return
+        set({ shareCredentials })
+        syncApiClient(get())
+      },
+      storeRoomToken: (baseUrl, gameKey, token) => {
+        const shareCredentials = withRoomToken(get().shareCredentials, normalizeBaseUrl(baseUrl), gameKey, token)
+        if (shareCredentials === get().shareCredentials) return
+        set({ shareCredentials })
+        syncApiClient(get())
+      },
+      rejectSeatToken: (baseUrl, gameKey) => {
+        const target = normalizeBaseUrl(baseUrl)
+        const shareCredentials = withoutSeatToken(get().shareCredentials, target, gameKey)
+        // 身份槽位只属于当前服务器（换服务器时 clearShares），别的后端发来的拒绝不动它
+        if (target !== get().baseUrl) {
+          set({ shareCredentials })
+          syncApiClient(get())
+          return
+        }
+        const shares = removeIdentity(get().shares, gameKey)
+        const clearing = get().activeShareGame === gameKey
+        set(clearing ? { shares, shareCredentials, activeShareGame: null } : { shares, shareCredentials })
+        syncApiClient(get())
+      },
+      rejectRoomToken: (baseUrl, gameKey) => {
+        const shareCredentials = withoutRoomToken(get().shareCredentials, normalizeBaseUrl(baseUrl), gameKey)
+        if (shareCredentials === get().shareCredentials) return
+        set({ shareCredentials })
         syncApiClient(get())
       },
       setTtsRate: (rate) => set({ ttsRate: rate }),
@@ -238,6 +318,7 @@ export const useSettingsStore = create<SettingsState>()(
         token: state.token,
         shares: state.shares,
         activeShareGame: state.activeShareGame,
+        shareCredentials: state.shareCredentials,
         ttsRate: state.ttsRate,
         ttsEngine: state.ttsEngine,
         ttsAuto: state.ttsAuto,
@@ -248,7 +329,11 @@ export const useSettingsStore = create<SettingsState>()(
       migrate: () => defaultSettings(),
       onRehydrateStorage: () => (state) => {
         if (state) {
-          syncApiClient(state)
+          const adopted = adoptLegacyRoomTokens(state.shares ?? {}, state.shareCredentials ?? {}, state.baseUrl)
+          if (adopted.shares !== state.shares || adopted.credentials !== state.shareCredentials) {
+            useSettingsStore.setState({ shares: adopted.shares, shareCredentials: adopted.credentials })
+          }
+          syncApiClient(useSettingsStore.getState())
           state.markHydrated()
         }
       },

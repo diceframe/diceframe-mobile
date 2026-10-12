@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
+import type { GameDetail } from '@/api/types'
 import {
+  isStoredPlayerMember,
   listIdentities,
   removeIdentity,
   resolveActiveIdentity,
   resolveStartupRoute,
+  seatUidOf,
   upsertIdentity,
   type IdentitySlots,
   type PlayerIdentity,
@@ -82,5 +85,41 @@ describe('启动分流判定', () => {
 
   it('零身份 → Owner 路径', () => {
     expect(resolveStartupRoute({ baseUrl: 'http://x', identities: [] })).toBe('owner')
+  })
+})
+
+describe('成员资格以 detail.viewer 为准', () => {
+  const player = (user_id: string) => ({ user_id, character_name: user_id }) as never
+
+  it('viewer 是本席位才算成员；大厅视图（outsider）与 GM 视角都不算', () => {
+    expect(isStoredPlayerMember({ viewer: { kind: 'seat', uid: 'u1' } }, 'u1')).toBe(true)
+    expect(isStoredPlayerMember({ viewer: { kind: 'seat', uid: 'u2' } }, 'u1')).toBe(false)
+    expect(isStoredPlayerMember({ viewer: { kind: 'outsider' } }, 'u1')).toBe(false)
+    expect(isStoredPlayerMember({ viewer: { kind: 'gm', uid: 'u1' } }, 'u1')).toBe(false)
+    expect(isStoredPlayerMember({ viewer: { kind: 'seat', uid: 'u1' } }, '')).toBe(false)
+  })
+
+  it('有 viewer 时不看名单（名单可能是旧缓存）', () => {
+    const detail = {
+      viewer: { kind: 'outsider' },
+      multiplayer: { ready_players: [player('u1')] },
+    } as Partial<GameDetail>
+    expect(isStoredPlayerMember(detail, 'u1')).toBe(false)
+  })
+
+  it('没有 viewer 的旧服务端回退到 multiplayer 名单', () => {
+    const detail = {
+      multiplayer: { ready_players: [player('a')], waiting_players: [player('b')], away_players: [player('c')] },
+    } as Partial<GameDetail>
+    for (const uid of ['a', 'b', 'c']) expect(isStoredPlayerMember(detail, uid)).toBe(true)
+    expect(isStoredPlayerMember(detail, 'd')).toBe(false)
+    expect(isStoredPlayerMember({}, 'a')).toBe(false)
+  })
+
+  it('seatUidOf 只认 seat 视角', () => {
+    expect(seatUidOf({ viewer: { kind: 'seat', uid: 'u1' } })).toBe('u1')
+    expect(seatUidOf({ viewer: { kind: 'outsider' } })).toBe('')
+    expect(seatUidOf({ viewer: { kind: 'gm', uid: 'gm' } })).toBe('')
+    expect(seatUidOf(null)).toBe('')
   })
 })

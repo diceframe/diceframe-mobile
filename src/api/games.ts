@@ -37,6 +37,7 @@ import type {
 import { contentLanguage, getT } from '@/i18n/t'
 import { UserFacingError } from '@/lib/user-facing-error'
 import { worldContentLocale } from '@/lib/world-language'
+import { SEAT_TOKEN_HEADER } from '@/lib/seat-credentials'
 import { api, apiBlob, ApiError, errorCodeOf } from './client'
 
 function gamePath(gameKey: string, suffix = ''): string {
@@ -47,8 +48,8 @@ export function fetchGames(): Promise<GamesResponse> {
   return api<GamesResponse>('/games')
 }
 
-export function fetchGameDetail(gameKey: string): Promise<GameDetail> {
-  return api<GameDetail>(gamePath(gameKey))
+export function fetchGameDetail(gameKey: string, signal?: AbortSignal): Promise<GameDetail> {
+  return api<GameDetail>(gamePath(gameKey), signal ? { signal } : {})
 }
 
 export function fetchCharacters(gameKey: string): Promise<CharacterListResponse> {
@@ -127,17 +128,63 @@ export function resolveLuck(
   })
 }
 
-/** POST /players：join_as_new=false 找回既有身份；true 以 sheet 新建 */
+/**
+ * POST /players：join_as_new=true 以 sheet 新建席位（响应里一次性返回 seat_token）；
+ * join_as_new=false 找回既有席位——服务端要求该席位的凭证，所以显式带上
+ * X-Seat-Token（对齐 Web resumeSeat：GM 已登录时打开接管链接也得生效）。
+ */
 export function joinGame(
   gameKey: string,
-  payload: { user_id: string; join_as_new: false } | ({ join_as_new: true } & Partial<CharacterSheet> & JsonObject),
+  payload: { join_as_new: false } | ({ join_as_new: true } & Partial<CharacterSheet> & JsonObject),
+  options: { seatToken?: string } = {},
 ): Promise<PlayerCreateResponse> {
   return api<PlayerCreateResponse>(gamePath(gameKey, '/players'), {
     method: 'POST',
+    headers: options.seatToken ? { [SEAT_TOKEN_HEADER]: options.seatToken } : undefined,
     body: JSON.stringify(payload),
   })
 }
 
+/**
+ * POST /seat-token/claim：会话已绑定某个非 GM 席位、但席位还没有凭证时，领取它的
+ * 第一枚凭证（席位凭证上线前加入的玩家一次性迁移）。服务端从不借此轮换已有凭证：
+ * 409 SEAT_TOKEN_EXISTS / 403 SEAT_NOT_BOUND 都意味着只能靠 GM 的接管链接回来。
+ */
+export async function claimSeatToken(gameKey: string, signal?: AbortSignal): Promise<string> {
+  const result = await api<{ seat_token?: string }>(gamePath(gameKey, '/seat-token/claim'), {
+    method: 'POST',
+    body: '{}',
+    signal,
+  })
+  if (!result.seat_token) throw new Error('claim did not return a seat token')
+  return result.seat_token
+}
+
+/**
+ * POST /players/{uid}/seat-token（GM/Owner）：签发接管链接用的席位凭证。
+ * rotate=false 时已有凭证（或仍有设备绑定）会 409 SEAT_TOKEN_EXISTS，避免一次误触就把
+ * 玩家踢下线；check 传入本机已持有的旧链接凭证，仍有效则原样返回、不轮换。
+ */
+export async function issueSeatToken(
+  gameKey: string,
+  userId: string,
+  options: { rotate: boolean; check?: string },
+): Promise<string> {
+  const body = options.check ? { rotate: options.rotate, check: options.check } : { rotate: options.rotate }
+  const result = await api<{ seat_token?: string }>(
+    gamePath(gameKey, `/players/${encodeURIComponent(userId)}/seat-token`),
+    { method: 'POST', body: JSON.stringify(body) },
+  )
+  if (!result.seat_token) throw new Error('seat token was not issued')
+  return result.seat_token
+}
+
+/**
+ * POST verify-room-password：换取本玩家的房间令牌（默认 30 天，GM 改密即吊销）。
+ * 令牌只能走 X-Room-Token 请求头（由调用方存进凭证槽位，client 统一注入）。
+ * 失败语义：403 room_password_wrong；409 room_password_changed（校验期间 GM 改了密码，
+ * 重输即可）；429 + retry_after（按 IP + 对局限流）。
+ */
 export async function verifyRoomPassword(gameKey: string, password: string): Promise<string> {
   const result = await api<{ room_token?: string }>(gamePath(gameKey, '/verify-room-password'), {
     method: 'POST',
@@ -467,11 +514,18 @@ export function fetchCharacterCards(gameKey: string): Promise<CharacterCardsResp
   return api<CharacterCardsResponse>(gamePath(gameKey, '/character-cards'))
 }
 
-export async function selectCharacterCard(gameKey: string, userId: string, card: CharacterCard): Promise<void> {
-  const result = await api<{ ok?: boolean; error?: string }>(gamePath(gameKey, `/character/${encodeURIComponent(userId)}`), {
-    method: 'PUT',
-    body: JSON.stringify(card),
-  })
+/**
+ * 采用卡库角色卡（POST /character/{uid}/adopt-card，只传 card_id）。
+ * 服务端从卡库按 id 取卡并以完整权限应用（经典规则与规则托管局都走这里）；
+ * 玩家不能再把整张卡 PUT 上去改 HP/金币/属性（经典规则会 403 FIELD_REQUIRES_GM）。
+ */
+export async function adoptCharacterCard(gameKey: string, userId: string, card: CharacterCard): Promise<void> {
+  const cardId = String(card.card_id || card.id || '')
+  if (!cardId) throw new UserFacingError('dfErrorsInvalidInput')
+  const result = await api<{ ok?: boolean; error?: string }>(
+    gamePath(gameKey, `/character/${encodeURIComponent(userId)}/adopt-card`),
+    { method: 'POST', body: JSON.stringify({ card_id: cardId }) },
+  )
   if (result.ok === false) throw new Error(result.error ?? '应用角色卡失败')
 }
 

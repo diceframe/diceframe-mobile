@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, configureApiClient } from './client'
+import { credentialKey } from '@/lib/seat-credentials'
 import { setLuckTimeout, setNarrativePerspective } from './game-settings'
 import type { NarrativePerspective } from '@/lib/game-settings'
 
@@ -20,7 +21,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  configureApiClient({ baseUrl: '', token: null, sessionToken: null, share: null })
+  configureApiClient({ baseUrl: '', token: null, sessionToken: null, share: null, credentials: {} })
 })
 
 function respond(payload: unknown, status = 200) {
@@ -53,13 +54,17 @@ describe('独立对局设置 API', () => {
     expect(new Headers(init?.headers).get('X-TRPG-Confirm')).toBe('true')
   })
 
-  it('保留分享身份与房间令牌查询参数', async () => {
-    configureApiClient({ share: { game: 'room', user: 'gm', roomToken: 'room-token' } })
+  it('保留分享身份查询参数，房间令牌只走请求头', async () => {
+    configureApiClient({
+      share: { game: 'room', user: 'gm' },
+      credentials: { [credentialKey('http://game-settings.test', 'room')]: { room: 'room-token' } },
+    })
     respond({ ok: true })
     await setLuckTimeout('room', 0)
     const url = new URL(String(fetchMock.mock.calls[0][0]))
     expect(url.searchParams.get('user')).toBe('gm')
-    expect(url.searchParams.get('room_token')).toBe('room-token')
+    expect(url.searchParams.has('room_token')).toBe(false)
+    expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get('X-Room-Token')).toBe('room-token')
     expect(url.searchParams.get('share')).toBe('1')
   })
 

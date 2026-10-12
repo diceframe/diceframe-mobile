@@ -64,6 +64,11 @@ import {
 } from '@/lib/economy-prompts'
 import { appLayoutForWidth } from '@/lib/layout'
 import { levelUpAttributes, levelUpPoints } from '@/lib/level-up'
+import { isStoredPlayerMember } from '@/lib/player-identity'
+import { createPlayShareScope } from '@/lib/play-share-scope'
+import { joinBounceKey, shouldBounceToJoin } from '@/lib/join-bounce'
+import { joinLinkParams } from '@/lib/join-deep-link'
+import { buildShareLink } from '@/lib/share-link'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import {
   selectCanAskKp,
@@ -84,6 +89,12 @@ function stateLabelOf(state: string | undefined, t: T): string {
 }
 
 /** 对局屏主体：路由只做薄壳，界面实现在 features/play（与 WorldsScreen 等同一模式） */
+const playShareScope = createPlayShareScope({
+  activeShareGame: () => useSettingsStore.getState().activeShareGame,
+  ownerLoggedIn: () => !!useSettingsStore.getState().token,
+  activate: (gameKey) => useSettingsStore.getState().activateShare(gameKey),
+})
+
 export default function GameScreen() {
   const t = useT()
   const router = useRouter()
@@ -118,6 +129,7 @@ export default function GameScreen() {
   const tableTalkCount = useGameStore((s) => s.tableTalk.length)
   const tableTalkError = useGameStore((s) => s.tableTalkError)
   const identityRevision = useGameStore((s) => s.tableTalkRevision)
+  const seatCredentialLost = useGameStore((s) => s.seatCredentialLost)
 
   const [draft, setDraft] = React.useState('')
   const [characterOpen, setCharacterOpen] = React.useState(false)
@@ -200,8 +212,14 @@ export default function GameScreen() {
   const busy = actionBusy || gmBusy
 
   React.useEffect(() => {
-    if (gameKey) useGameStore.getState().enter(gameKey)
-    return () => useGameStore.getState().leave()
+    if (!gameKey) return () => useGameStore.getState().leave()
+    // 先理顺注入的玩家身份（别的局的身份不能带进这一局），enter 据此判定玩家 / GM
+    playShareScope.enter(gameKey)
+    useGameStore.getState().enter(gameKey)
+    return () => {
+      useGameStore.getState().leave()
+      playShareScope.leave(gameKey)
+    }
   }, [gameKey])
 
   React.useEffect(() => {
@@ -228,20 +246,26 @@ export default function GameScreen() {
     }
   }, [gameKey])
 
-  // 玩家身份失效（被踢/存档重置）时只清该局的身份槽位、回加入页重新加入；
-  // 多局身份各自独立，不能连坐其他局的保存身份
+  // 玩家身份失效（被踢/存档重置/本设备没有席位凭证）时只清该局的身份槽位、带着本局
+  // 邀请链接回加入页；多局身份各自独立，不能连坐其他局的保存身份。
+  // 成员资格以 detail.viewer 为准（isStoredPlayerMember），旧服务端回退到名单。
   React.useEffect(() => {
-    if (isGm || !userId || !detail?.multiplayer) return
-    const members = [
-      ...(detail.multiplayer.ready_players ?? []),
-      ...(detail.multiplayer.waiting_players ?? []),
-      ...(detail.multiplayer.away_players ?? []),
-    ]
-    if (!members.some((player) => player.user_id === userId)) {
-      useSettingsStore.getState().removeShare(gameKey)
-      router.replace({ pathname: '/join' })
-    }
-  }, [isGm, userId, detail, router])
+    if (isGm || !userId || !gameKey) return
+    const removed = !!detail && (!!detail.viewer || !!detail.multiplayer) && !isStoredPlayerMember(detail, userId)
+    if (!seatCredentialLost && !removed) return
+    const settings = useSettingsStore.getState()
+    const baseUrl = settings.baseUrl
+    settings.removeShare(gameKey)
+    // 同一局同一原因刚跳过一次（多个在途请求各报一次）：不重复挂载加入页
+    if (!shouldBounceToJoin(joinBounceKey(baseUrl, gameKey, seatCredentialLost ? 'seat-missing' : 'removed'))) return
+    router.replace({
+      pathname: '/join',
+      params: {
+        ...joinLinkParams(buildShareLink(gameKey, baseUrl, undefined, baseUrl)),
+        ...(seatCredentialLost ? { notice: 'seat' } : {}),
+      },
+    })
+  }, [isGm, userId, detail, seatCredentialLost, gameKey, router])
 
   async function sendVoice(text: string) {
     // 录音/编辑期间对局可能已经变化，发送时重新检查当前状态。
