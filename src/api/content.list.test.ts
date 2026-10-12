@@ -137,8 +137,8 @@ describe('列举来源（contentListSource）', () => {
   it('列举项 → 拉取 ref：带 state_token 与 locked_reason', async () => {
     fetchMock.mockResolvedValueOnce(page([item('a', { locked_reason: 'PLUGIN_BOOK' }), item('b')], null))
     expect(await real().list('lorebook')).toEqual({ items: [
-      { kind: 'lorebook', canonicalId: 'a', name: 'a', stateToken: 't-a', lockedReason: 'PLUGIN_BOOK' },
-      { kind: 'lorebook', canonicalId: 'b', name: 'b', stateToken: 't-b' },
+      { kind: 'lorebook', canonicalId: 'a', name: 'a', stateToken: 't-a', provenance: null, lockedReason: 'PLUGIN_BOOK' },
+      { kind: 'lorebook', canonicalId: 'b', name: 'b', stateToken: 't-b', provenance: null },
     ] })
   })
 

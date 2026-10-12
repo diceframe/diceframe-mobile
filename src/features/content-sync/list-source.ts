@@ -22,6 +22,7 @@ export function listItemRef(item: ContentListItem): ServerItemRef {
     canonicalId: item.canonical_id,
     name: item.name,
     stateToken: item.state_token,
+    provenance: item.provenance ?? null,
     ...(item.locked_reason ? { lockedReason: item.locked_reason } : {}),
   }
 }

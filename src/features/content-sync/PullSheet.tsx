@@ -22,7 +22,7 @@ import {
   type ServerItemSource,
   type ServerListingNotice,
 } from './pull-session'
-import { isSelectable, pullListRows, pullProgress, type PullListRow, type PullRowState } from './pull-view'
+import { isSelectable, pullListRows, pullProgress, syncedByOtherSource, type PullListRow, type PullRowState } from './pull-view'
 import { openPushContext } from './push-runner'
 
 const ROW_KEYS: Record<PullRowState, TKey> = {
@@ -151,6 +151,9 @@ export function PullSheet({ open, kind, source, onClose }: {
                     <Icon as={selected.has(row.ref.canonicalId) ? CheckSquare : Square} size={18} />
                     <View className="min-w-0 flex-1">
                       <Text numberOfLines={1}>{row.ref.name || row.ref.canonicalId}</Text>
+                      {context && syncedByOtherSource(row.ref, context.deviceSourceId) ? (
+                        <Text variant="small" className="text-muted-foreground" numberOfLines={2}>{t('dfPullOtherSourceHint')}</Text>
+                      ) : null}
                     </View>
                     <Badge variant="outline"><Text className="text-[10px]">{t(ROW_KEYS[row.state])}</Text></Badge>
                     {row.ref.lockedReason && row.state !== 'unsupported' ? <Badge variant="secondary"><Text className="text-[10px]">{t('dfPullLocked')}</Text></Badge> : null}

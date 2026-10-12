@@ -6,7 +6,7 @@ import { fixtures } from '@/lib/portable/__fixtures__/content-sync'
 import { openTestLibraryDb } from '@/test/library-db'
 
 import type { ServerItemRef, ServerItemSource } from './pull-session'
-import { isSelectable, pullListRows, pullProgress } from './pull-view'
+import { isSelectable, pullListRows, pullProgress, syncedByOtherSource } from './pull-view'
 
 const SRV = 'srv-0123456789abcdef'
 
@@ -80,5 +80,15 @@ describe('拉取选择列表', () => {
 
   it('进度按已出结果的项计', () => {
     expect(pullProgress([{ status: 'created' }, { status: 'pending' }, { status: 'unchanged' }])).toEqual({ done: 2, total: 3 })
+  })
+})
+
+describe('由其他来源跟随的服务器项（按 provenance 推导）', () => {
+  it('来源是别的设备或别的导入来源：提示；来源就是本安装、或没有来源：不提示', () => {
+    expect(syncedByOtherSource({ provenance: { source_kind: 'device', source_id: 'other-install', link: 'tracked' } }, 'me')).toBe(true)
+    expect(syncedByOtherSource({ provenance: { source_kind: 'sillytavern', source_id: 'st-1', link: 'detached' } }, 'me')).toBe(true)
+    expect(syncedByOtherSource({ provenance: { source_kind: 'device', source_id: 'me', link: 'tracked' } }, 'me')).toBe(false)
+    expect(syncedByOtherSource({ provenance: null }, 'me')).toBe(false)
+    expect(syncedByOtherSource({}, 'me')).toBe(false)
   })
 })
