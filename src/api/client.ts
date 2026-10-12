@@ -400,13 +400,15 @@ function errorFrom(data: Record<string, unknown>, status: number, response?: Res
  * 先从内存槽位移除，避免后续请求继续带着失效凭证，再交给路由层清持久化/回加入页。
  * Owner 请求不走这里：它从不隐式携带席位凭证，也不受房间密码约束。
  */
-function noteRejectedCredential(path: string, error: ApiError): void {
+function noteRejectedCredential(path: string, error: ApiError, explicitSeat: boolean): void {
   if (ownerAuthFor(path)) return
   const game = gameKeyOfApiPath(path)
   if (!game) return
   const baseUrl = context.baseUrl
   let kind: ShareCredentialRejection['kind'] | null = null
-  if (error.status === 401 && error.code === 'SEAT_TOKEN_INVALID') {
+  // 调用方显式带的席位凭证（接管链接里的）被拒，说明的是那枚凭证无效，与本机保存的无关：
+  // 不能因此清掉本机原有的席位凭证（否则一条带垃圾凭证的链接就能让玩家丢掉自己的席位）
+  if (error.status === 401 && error.code === 'SEAT_TOKEN_INVALID' && !explicitSeat) {
     kind = 'seat'
     context.credentials = withoutSeatToken(context.credentials, baseUrl, game)
   } else if (error.needsRoomPassword && shareScopedFor(path)) {
@@ -490,9 +492,9 @@ async function send(path: string, init: ApiRequestInit, mode: RequestMode): Prom
   return guardedFetch(url, { ...requestInit, headers: buildHeaders(requestInit, mode, path) })
 }
 
-function failure(path: string, response: Response, data: Record<string, unknown>, mode: RequestMode): ApiError {
+function failure(path: string, response: Response, data: Record<string, unknown>, mode: RequestMode, explicitSeat: boolean): ApiError {
   const error = errorFrom(data, response.status, response)
-  if (mode === 'owner') noteRejectedCredential(path, error)
+  if (mode === 'owner') noteRejectedCredential(path, error, explicitSeat)
   return error
 }
 
@@ -506,7 +508,7 @@ export async function api<T = unknown>(
   const data = (await readJson(response)) as T & Record<string, unknown>
   // shareless（内容同步）的 401 是「需要房主」，由调用方提示，不触发全局跳登录页
   if (mode !== 'shareless') handleUnauthorized(response, mode === 'owner' ? !!shareScopedFor(path) : false)
-  if (!response.ok) throw failure(path, response, data, mode)
+  if (!response.ok) throw failure(path, response, data, mode, new Headers(init.headers).has(SEAT_TOKEN_HEADER))
   return data
 }
 
@@ -518,7 +520,7 @@ export async function apiBlob(
   const mode = requestModeOf(path, options)
   const response = await send(path, init, mode)
   if (mode !== 'shareless') handleUnauthorized(response, mode === 'owner' ? !!shareScopedFor(path) : false)
-  if (!response.ok) throw failure(path, response, await readJson(response), mode)
+  if (!response.ok) throw failure(path, response, await readJson(response), mode, new Headers(init.headers).has(SEAT_TOKEN_HEADER))
   return response
 }
 

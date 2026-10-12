@@ -19,7 +19,7 @@ import {
   retryOnRateLimit,
   setJoinShare,
 } from '@/api/client'
-import { fetchCharacterCards, fetchGameDetail, joinGame, verifyRoomPassword } from '@/api/games'
+import { fetchCharacterCards, fetchGameDetail, fetchGameDetailAsSeat, joinGame, verifyRoomPassword } from '@/api/games'
 import type { CharacterCard, CharacterPortrait, GameDetail } from '@/api/types'
 import { JoinCharacterForm } from '@/features/join/JoinCharacterForm'
 import { loadLocalJoinCards } from '@/hooks/useLocalCards'
@@ -29,7 +29,8 @@ import {
   joinFormReady,
 } from '@/lib/join-form'
 import { QrScannerSheet } from '@/features/scan/QrScannerSheet'
-import { seatUidOf } from '@/lib/player-identity'
+import { seatCharacterNameOf, seatUidOf } from '@/lib/player-identity'
+import { runTakeover, seatHandlingOnParse } from '@/lib/join-takeover'
 import { isDelegateFlag, parseJoinNotice, readCredential, withSeatToken, type JoinNotice } from '@/lib/seat-credentials'
 import {
   joinLinkAutoParseAllowed,
@@ -97,6 +98,10 @@ export default function JoinScreen() {
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
   const [banner, setBanner] = React.useState<JoinBanner | null>(null)
+  // 深链带来、尚未写入本机的席位凭证（只在用户确认找回后使用，见 lib/join-takeover）
+  const pendingSeatRef = React.useRef('')
+  // 找回步骤展示：要接管的角色、以及本机这一局现有席位的角色（不同才显示）
+  const [takeover, setTakeover] = React.useState<{ target: string; current: string } | null>(null)
   // seat 类横幅下，新建角色表单默认收起，用户明确选择后才展开
   const [createAnyway, setCreateAnyway] = React.useState(false)
   const keyboardHeight = useKeyboardHeight()
@@ -178,6 +183,10 @@ export default function JoinScreen() {
       return
     }
     const { seat, ...publicLink } = result
+    // 深链预填（凭证对用户不可见）的席位凭证不在这里写入：等用户在找回步骤看清并确认
+    const seatHandling = seatHandlingOnParse({ rawLink, fieldText: link, incomingLink, seat: seat ?? '' })
+    pendingSeatRef.current = seatHandling === 'defer' ? seat ?? '' : ''
+    setTakeover(null)
     // 切到另一台服务器会登出房主、清掉本机玩家身份：先让用户看清目标主机并确认
     const switchTarget = serverSwitchTarget(input, useSettingsStore.getState().baseUrl)
     if (switchTarget) {
@@ -206,7 +215,7 @@ export default function JoinScreen() {
         baseUrl: targetBaseUrl,
         token: null,
         sessionToken: generateSessionToken(),
-        credentials: seat
+        credentials: seat && seatHandling === 'store'
           ? withSeatToken(current.shareCredentials, targetBaseUrl, result.game, seat)
           : current.shareCredentials,
       })
@@ -228,8 +237,9 @@ export default function JoinScreen() {
         clearShares()
       }
       setBaseUrl(targetBaseUrl)
-      if (seat) storeSeatToken(targetBaseUrl, result.game, seat)
+      if (seat && seatHandling === 'store') storeSeatToken(targetBaseUrl, result.game, seat)
       pendingClientRestoreRef.current = null
+      if (seatHandling === 'defer' && seat) void loadTakeoverPreview(result.game, seat)
       setMode(seat ? 'resume' : 'create')
       await gate(publicLink, gameDetail, !!seat)
     } catch (e) {
@@ -358,8 +368,54 @@ export default function JoinScreen() {
   }
 
   /** GM 接管链接：凭席位凭证找回已有席位（服务端顺带把本机会话改绑到该席位） */
+  /** 找回步骤：凭链接里的凭证看要接管哪个角色；本机已有不同席位时也取它的角色名 */
+  async function loadTakeoverPreview(game: string, pendingSeat: string) {
+    const stored = readCredential(useSettingsStore.getState().shareCredentials, useSettingsStore.getState().baseUrl, game).seat
+    const nameOf = (token: string) => fetchGameDetailAsSeat(game, token).then(seatCharacterNameOf).catch(() => '')
+    const [target, current] = await Promise.all([
+      nameOf(pendingSeat),
+      stored && stored !== pendingSeat ? nameOf(stored) : Promise.resolve(''),
+    ])
+    if (mountedRef.current && pendingSeatRef.current === pendingSeat) setTakeover({ target, current })
+  }
+
+  /** 深链带来的接管：确认（必要时确认替换本机现有席位）后才找回并写入凭证 */
+  async function confirmTakeover(p: PublicShareLink) {
+    const baseUrl = useSettingsStore.getState().baseUrl
+    const storedSeat = readCredential(useSettingsStore.getState().shareCredentials, baseUrl, p.game).seat ?? ''
+    setBusy(true)
+    setError('')
+    try {
+      const result = await runTakeover({
+        pendingSeat: pendingSeatRef.current,
+        storedSeat,
+        confirmReplace: () => confirmDestructive({
+          title: t('dfJoinTakeoverReplaceTitle'),
+          message: t('dfJoinTakeoverReplaceMessage', { name: takeover?.current || t('dfCharacterUnnamed') }),
+          confirmText: t('dfJoinTakeoverReplaceConfirm'),
+          cancelText: t('dfCommonCancel'),
+        }),
+        join: (seatToken) => retryOnRateLimit(() => joinGame(p.game, { join_as_new: false }, { seatToken })),
+        store: (seatToken) => storeSeatToken(baseUrl, p.game, seatToken),
+      })
+      if (result === 'cancelled') return
+      if (!result.user_id) throw new Error(result.error || t('dfJoinFailed'))
+      pendingSeatRef.current = ''
+      enterAs(p, result.user_id, detail)
+    } catch (e) {
+      if (backToRoomGate(e)) return
+      setError(errorMessage(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function resume() {
     if (!parsed) return
+    if (pendingSeatRef.current) {
+      await confirmTakeover(parsed)
+      return
+    }
     const baseUrl = useSettingsStore.getState().baseUrl
     const seatToken = readCredential(useSettingsStore.getState().shareCredentials, baseUrl, parsed.game).seat
     if (!seatToken) {
@@ -378,8 +434,11 @@ export default function JoinScreen() {
       enterAs(parsed, result.user_id, detail)
     } catch (e) {
       if (backToRoomGate(e)) return
-      // 凭证已被 GM 重新签发：client 已清掉它，改走新建流程并说明原因
-      if (e instanceof ApiError && e.code === 'SEAT_TOKEN_INVALID') setMode('create')
+      // 本机保存的凭证已被 GM 重新签发：清掉它（显式带的凭证被拒时 client 不动本机槽位），改走新建流程
+      if (e instanceof ApiError && e.code === 'SEAT_TOKEN_INVALID') {
+        useSettingsStore.getState().rejectSeatToken(baseUrl, parsed.game)
+        setMode('create')
+      }
       setError(errorMessage(e))
     } finally {
       setBusy(false)
@@ -494,6 +553,15 @@ export default function JoinScreen() {
               <Text variant="muted">
                 {busy ? t('restoringViaLink') : t('dfJoinSeatLinkHint')}
               </Text>
+              {/* 深链带来的接管：先让用户看清接管的是谁、是否会替换本机现有席位 */}
+              {pendingSeatRef.current && takeover ? (
+                <View className="gap-1 rounded-xl border border-border p-3">
+                  <Text className="font-semibold">{t('dfJoinTakeoverTarget', { name: takeover.target || t('dfCharacterUnnamed') })}</Text>
+                  {takeover.current ? (
+                    <Text className="text-destructive">{t('dfJoinTakeoverReplaceWarning', { name: takeover.current })}</Text>
+                  ) : null}
+                </View>
+              ) : null}
               <Button onPress={resume} disabled={busy}>
                 {busy ? (
                   <ActivityIndicator className="text-primary-foreground" />

@@ -52,6 +52,15 @@ export function fetchGameDetail(gameKey: string, signal?: AbortSignal): Promise<
   return api<GameDetail>(gamePath(gameKey), signal ? { signal } : {})
 }
 
+/**
+ * 用一枚指定的席位凭证（接管链接里的，尚未写入本机）看对局详情：服务端按这枚凭证投影
+ * viewer，加入页据此告诉用户要接管的是哪个角色。凭证无效时请求失败，但不会清掉本机原有的
+ * 席位凭证（client 对显式凭证的拒绝不动本机槽位）。
+ */
+export function fetchGameDetailAsSeat(gameKey: string, seatToken: string): Promise<GameDetail> {
+  return api<GameDetail>(gamePath(gameKey), { headers: { [SEAT_TOKEN_HEADER]: seatToken } })
+}
+
 export function fetchCharacters(gameKey: string): Promise<CharacterListResponse> {
   return api<CharacterListResponse>(gamePath(gameKey, '/characters'))
 }
