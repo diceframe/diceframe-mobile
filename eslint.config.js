@@ -35,10 +35,18 @@ module.exports = defineConfig([
     files: ['src/**/*.{ts,tsx}'],
     ignores: ['src/stores/settings.ts', 'src/stores/local-library.ts', 'src/stores/local-library.web.ts', 'src/**/*.test.ts'],
     rules: {
-      'no-restricted-syntax': ['error', {
-        selector: "MemberExpression[property.name='installId']",
+      'no-restricted-syntax': ['error', ...[
+        // x.installId
+        "MemberExpression[property.name='installId']",
+        // x['installId']
+        "MemberExpression[computed=true][property.value='installId']",
+        // const { installId } = …（含改名、带默认值）
+        "ObjectPattern > Property[key.name='installId']",
+        "ObjectPattern > Property[key.value='installId']",
+      ].map((selector) => ({
+        selector,
         message: 'install id 只能经 resolveInstallId()（stores/local-library）取，settings.installId 只是缓存。',
-      }],
+      }))],
     },
   },
   // drizzle-kit 生成的迁移包（含 .sql 内联导入），不手改也不 lint

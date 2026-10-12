@@ -2480,4 +2480,137 @@ export interface PairingClaimResponse {
   device_token: string
   device_id: string
   label: string
+  /**
+   * 同一 install id 重新配对时被吊销的旧设备记录（服务端 #495：有效配对码视为房主授权，
+   * 旧配对令牌随即失效）。没有发生接管时不出现。
+   */
+  replaced_device_id?: string
+}
+
+// ---- 内容同步（/api/content/*，契约见 diceframe/diceframe#494、#500 的 docs/content-sync/CONTRACT.md） ----
+
+/** /api/config 对房主额外下发的实例标识；服务器身份文件损坏时给出 server_identity_error */
+export interface AppConfig {
+  server_instance_id?: string
+  server_identity_error?: string
+}
+
+export type ContentKind = 'character_template' | 'lorebook'
+
+export interface ContentSyncSource {
+  kind: 'device'
+  id: string
+}
+
+export interface ContentPushItem {
+  client_ref: string
+  kind: ContentKind
+  format?: string
+  document: unknown
+  /** 拉取过、但还不跟随本安装的服务器项（卡片；#500 起也支持书） */
+  canonical_hint?: string
+}
+
+export type ContentPlanAction = 'create' | 'update' | 'unchanged' | 'unsupported'
+export type ContentDecision = 'update' | 'duplicate' | 'skip'
+
+export interface ContentWarning {
+  code: string
+  message?: string
+}
+
+export interface ContentExisting {
+  canonical_id: string
+  state_token: string
+  /** 服务端副本在上次导入后被改过；null = 未知（计划机制之前导入的书、hint 匹配的书） */
+  server_modified: boolean | null
+  name?: string
+  matched_by?: string
+  entries_add?: number
+  entries_update?: number
+  entries_remove?: number
+  other_matches?: unknown[]
+  /** hint 匹配的书被哪些对局/角色绑定（#500），镜像更新前提示 */
+  bindings?: { scope_kind: string; scope_id: string }[]
+  [key: string]: unknown
+}
+
+export interface ContentPlanItem {
+  client_ref: string
+  kind: ContentKind
+  action: ContentPlanAction
+  draft_digest?: string
+  allowed: ContentDecision[]
+  reason?: string
+  existing: ContentExisting | null
+  warnings?: ContentWarning[]
+}
+
+export interface ContentPreviewResponse {
+  ok: boolean
+  plan_digest: string
+  items: ContentPlanItem[]
+  server_instance_id?: string
+}
+
+export type ContentCommitStatus = 'created' | 'updated' | 'duplicated' | 'skipped' | 'unchanged' | 'error' | 'not_attempted'
+
+export interface ContentCommitRow {
+  client_ref: string
+  kind: ContentKind
+  status: ContentCommitStatus
+  canonical_id?: string
+  state_token?: string
+  detached_id?: string
+  entries_removed?: number
+  error_code?: string
+  error?: string
+}
+
+export interface ContentCommitResponse {
+  ok: boolean
+  items: ContentCommitRow[]
+  server_instance_id?: string
+}
+
+export interface ContentProvenance {
+  source_kind?: string
+  source_id?: string
+  external_id?: string
+  link?: 'tracked' | 'detached'
+  book_id?: string
+  [key: string]: unknown
+}
+
+export interface ContentExportItem {
+  kind: ContentKind
+  format: string
+  document: unknown
+  warnings?: ContentWarning[]
+  origin: {
+    server_instance_id: string
+    canonical_id: string
+    state_token: string
+    provenance: ContentProvenance | null
+  }
+}
+
+export interface ContentExportResponse {
+  ok: boolean
+  items: ContentExportItem[]
+  server_instance_id?: string
+}
+
+export interface ContentStatusItem {
+  kind: ContentKind
+  canonical_id: string
+  exists: boolean
+  state_token: string
+  provenance: ContentProvenance | null
+}
+
+export interface ContentStatusResponse {
+  ok?: boolean
+  items: ContentStatusItem[]
+  server_instance_id?: string
 }

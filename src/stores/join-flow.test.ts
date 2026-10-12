@@ -161,6 +161,20 @@ describe('对局页与注入的玩家身份', () => {
   })
 })
 
+describe('内容同步（shareless）不受玩家模式影响', () => {
+  it('注入了玩家身份时，/content/* 仍带房主凭据且不带任何分享上下文', async () => {
+    const store = useSettingsStore.getState()
+    store.setToken('owner-password')
+    store.storeSeatToken(SERVER, 'GK', 'seat-token')
+    store.upsertShare({ game: 'GK', user: 'u1' })
+    await api('/content/status', { method: 'POST', body: '{"items":[]}' })
+    const { url, headers } = call(0)
+    expect(headers.get('Authorization')).toBe('Bearer owner-password')
+    expect(headers.get('X-Seat-Token')).toBeNull()
+    expect(url.searchParams.has('share')).toBe(false)
+  })
+})
+
 describe('#1 终审：玩家模式只作用于分享那一局的请求', () => {
   function injectPlayerOfA() {
     const store = useSettingsStore.getState()

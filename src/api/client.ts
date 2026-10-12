@@ -45,6 +45,11 @@ import { UserFacingError } from '@/lib/user-facing-error'
 export class ApiError extends Error {
   /** 403 且服务端声明 needs_room_password：房间令牌缺失/过期/改密吊销，需要重新输入房间密码 */
   needsRoomPassword = false
+  /**
+   * 错误响应的完整 JSON 正文。内容同步需要它：409 PLAN_STALE 内嵌新的 preview，
+   * 提交的部分失败（409/500）带逐项结果 items。其余调用方一般只看 code/status。
+   */
+  body: Record<string, unknown> = {}
 
   constructor(
     message: string,
@@ -160,6 +165,10 @@ function ownerAuthFor(path: string): boolean {
 /** 对这一局的请求是否以 Owner 身份发出（有房主凭据、且不是这一局的玩家模式） */
 export function ownerAuthActive(gameKey: string): boolean {
   return ownerAuthFor(`/games/${encodeURIComponent(gameKey)}`)
+}
+
+export function currentBaseUrl(): string {
+  return context.baseUrl
 }
 
 export function currentToken(): string | null {
@@ -304,7 +313,30 @@ function applyRoomTokenHeader(headers: Headers, path: string): void {
   if (token) headers.set(ROOM_TOKEN_HEADER, token)
 }
 
-function buildHeaders(init: RequestInit, anonymous: boolean, path: string): Headers {
+/**
+ * 请求的身份模式：
+ * - owner（默认）：Owner 凭据 + 会话 + 当前分享身份（玩家模式时）；
+ * - shareless：Owner 凭据 + 会话，但**不带任何分享上下文**（分享 query、席位凭证、
+ *   房间令牌）。/api/content/* 一律如此：内容库是 Owner 的，分享凭证不鉴权，
+ *   也不该随内容同步请求发出去；
+ * - anonymous：什么凭据都不带（公开配置、配对兑换）。
+ */
+export type RequestMode = 'owner' | 'shareless' | 'anonymous'
+
+export interface ApiOptions {
+  anonymous?: boolean
+  /** 不带分享上下文；/content/ 开头的路径自动启用 */
+  shareless?: boolean
+}
+
+function requestModeOf(path: string, options: ApiOptions): RequestMode {
+  if (options.anonymous === true) return 'anonymous'
+  if (options.shareless === true || /^\/?content\//.test(path)) return 'shareless'
+  return 'owner'
+}
+
+function buildHeaders(init: RequestInit, mode: RequestMode, path: string): Headers {
+  const anonymous = mode === 'anonymous'
   const headers = new Headers(init.headers)
   const rawBody = isRawBody(init.body)
   if (!rawBody && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
@@ -313,14 +345,20 @@ function buildHeaders(init: RequestInit, anonymous: boolean, path: string): Head
     headers.delete(SEAT_TOKEN_HEADER)
     headers.delete(ROOM_TOKEN_HEADER)
   } else {
-    if (ownerAuthFor(path)) headers.set('Authorization', `Bearer ${context.token}`)
+    // shareless（内容同步）只对房主开放、从不带分享上下文：有房主凭据就带，不受玩家模式影响
+    if (context.token && (mode === 'shareless' || ownerAuthFor(path))) headers.set('Authorization', `Bearer ${context.token}`)
     // Web 浏览器会静默丢弃 JS 设置的 Cookie 头，交给服务端 Set-Cookie +
     // cookie jar 自动管理；不引入 react-native 依赖以保证 node 测试环境可用
     if (typeof document === 'undefined' && !headers.has('Cookie')) {
       headers.set('Cookie', `trpg_session=${ensureSessionToken()}`)
     }
-    applySeatTokenHeader(headers, path)
-    applyRoomTokenHeader(headers, path)
+    if (mode === 'owner') {
+      applySeatTokenHeader(headers, path)
+      applyRoomTokenHeader(headers, path)
+    } else {
+      headers.delete(SEAT_TOKEN_HEADER)
+      headers.delete(ROOM_TOKEN_HEADER)
+    }
   }
   if (init.method && init.method !== 'GET') headers.set('X-TRPG-Confirm', 'true')
   return headers
@@ -351,6 +389,7 @@ function errorFrom(data: Record<string, unknown>, status: number, response?: Res
     typeof data.error === 'string' && data.error ? data.error : `HTTP ${status}`
   const error = new ApiError(message, status, errorCodeOf(data), retryAfterOf(data, response))
   error.needsRoomPassword = status === 403 && data.needs_room_password === true
+  error.body = data
   return error
 }
 
@@ -432,41 +471,42 @@ async function guardedFetch(url: string, init: RequestInit): Promise<Response> {
   return response
 }
 
-async function send(path: string, init: ApiRequestInit, anonymous: boolean): Promise<Response> {
+async function send(path: string, init: ApiRequestInit, mode: RequestMode): Promise<Response> {
   const { query, ...requestInit } = init
-  const { params, drop } = requestQuery(path, query, anonymous)
+  const { params, drop } = requestQuery(path, query, mode !== 'owner')
   const url = buildUrl(path, params, drop)
-  return guardedFetch(url, { ...requestInit, headers: buildHeaders(requestInit, anonymous, path) })
+  return guardedFetch(url, { ...requestInit, headers: buildHeaders(requestInit, mode, path) })
 }
 
-function failure(path: string, response: Response, data: Record<string, unknown>, anonymous: boolean): ApiError {
+function failure(path: string, response: Response, data: Record<string, unknown>, mode: RequestMode): ApiError {
   const error = errorFrom(data, response.status, response)
-  if (!anonymous) noteRejectedCredential(path, error)
+  if (mode === 'owner') noteRejectedCredential(path, error)
   return error
 }
 
 export async function api<T = unknown>(
   path: string,
   init: ApiRequestInit = {},
-  options: { anonymous?: boolean } = {},
+  options: ApiOptions = {},
 ): Promise<T> {
-  const anonymous = options.anonymous === true
-  const response = await send(path, init, anonymous)
+  const mode = requestModeOf(path, options)
+  const response = await send(path, init, mode)
   const data = (await readJson(response)) as T & Record<string, unknown>
-  handleUnauthorized(response, anonymous ? false : !!shareScopedFor(path))
-  if (!response.ok) throw failure(path, response, data, anonymous)
+  // shareless（内容同步）的 401 是「需要房主」，由调用方提示，不触发全局跳登录页
+  if (mode !== 'shareless') handleUnauthorized(response, mode === 'owner' ? !!shareScopedFor(path) : false)
+  if (!response.ok) throw failure(path, response, data, mode)
   return data
 }
 
 export async function apiBlob(
   path: string,
   init: ApiRequestInit = {},
-  options: { anonymous?: boolean } = {},
+  options: ApiOptions = {},
 ): Promise<Response> {
-  const anonymous = options.anonymous === true
-  const response = await send(path, init, anonymous)
-  handleUnauthorized(response, anonymous ? false : !!shareScopedFor(path))
-  if (!response.ok) throw failure(path, response, await readJson(response), anonymous)
+  const mode = requestModeOf(path, options)
+  const response = await send(path, init, mode)
+  if (mode !== 'shareless') handleUnauthorized(response, mode === 'owner' ? !!shareScopedFor(path) : false)
+  if (!response.ok) throw failure(path, response, await readJson(response), mode)
   return response
 }
 

@@ -8,6 +8,7 @@ import { zhCN as webZhCN } from './messages/web/zh-CN'
 import { auth } from './messages/mobile/auth'
 import { characters } from './messages/mobile/characters'
 import { common } from './messages/mobile/common'
+import { content } from './messages/mobile/content'
 import { create } from './messages/mobile/create'
 import { lore } from './messages/mobile/lore'
 import { overview } from './messages/mobile/overview'
@@ -16,10 +17,10 @@ import { profile } from './messages/mobile/profile'
 import { settings } from './messages/mobile/settings'
 
 const resources = {
-  'zh-CN': { translation: { ...webZhCN, ...common.zh, ...settings.zh, ...auth.zh, ...overview.zh, ...create.zh, ...profile.zh, ...play.zh, ...characters.zh, ...lore.zh } },
-  en: { translation: { ...webEn, ...common.en, ...settings.en, ...auth.en, ...overview.en, ...create.en, ...profile.en, ...play.en, ...characters.en, ...lore.en } },
-  ja: { translation: { ...webJa, ...common.ja, ...settings.ja, ...auth.ja, ...overview.ja, ...create.ja, ...profile.ja, ...play.ja, ...characters.ja, ...lore.ja } },
-  de: { translation: { ...webDe, ...common.de, ...settings.de, ...auth.de, ...overview.de, ...create.de, ...profile.de, ...play.de, ...characters.de, ...lore.de } },
+  'zh-CN': { translation: { ...webZhCN, ...common.zh, ...settings.zh, ...auth.zh, ...overview.zh, ...create.zh, ...profile.zh, ...play.zh, ...characters.zh, ...lore.zh, ...content.zh } },
+  en: { translation: { ...webEn, ...common.en, ...settings.en, ...auth.en, ...overview.en, ...create.en, ...profile.en, ...play.en, ...characters.en, ...lore.en, ...content.en } },
+  ja: { translation: { ...webJa, ...common.ja, ...settings.ja, ...auth.ja, ...overview.ja, ...create.ja, ...profile.ja, ...play.ja, ...characters.ja, ...lore.ja, ...content.ja } },
+  de: { translation: { ...webDe, ...common.de, ...settings.de, ...auth.de, ...overview.de, ...create.de, ...profile.de, ...play.de, ...characters.de, ...lore.de, ...content.de } },
 }
 
 // i18next 惯用法：默认实例链式 use/init；规则把命名导出误判为更优写法

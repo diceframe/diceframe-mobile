@@ -151,11 +151,29 @@ export function patchCardDocument(document: unknown, patch: Partial<CardBody>, o
       ? mergeObjects(current, value)
       : cloneJson(value)
   }
-  for (const path of options.remove ?? []) removePath(merged, path)
+  for (const path of sortRemovals(options.remove ?? [])) removePath(merged, path)
   next.data.extensions[DICEFRAME_EXTENSION] = merged
   if (patch.character_name !== undefined) next.data.name = pyStr(merged.character_name)
   if (patch.background !== undefined) next.data.description = pyStr(merged.background)
   return next
+}
+
+/**
+ * 删除顺序：同一数组里的多个下标按从大到小删，前面的删除不会让后面的下标错位；
+ * 调用方给出的顺序因此无关紧要。数字段按数值降序，其余段按字典序。
+ */
+function sortRemovals(paths: readonly CardFieldPath[]): CardFieldPath[] {
+  const numeric = (segment: string) => /^\d+$/.test(segment)
+  return [...paths].sort((left, right) => {
+    for (let index = 0; index < Math.min(left.length, right.length); index += 1) {
+      const a = left[index]
+      const b = right[index]
+      if (a === b) continue
+      if (numeric(a) && numeric(b)) return Number(b) - Number(a)
+      return a < b ? -1 : 1
+    }
+    return right.length - left.length
+  })
 }
 
 /** 按路径删除（就地修改 merged，它已是本次补丁的新副本）；数组项用下标删除，其余项前移 */

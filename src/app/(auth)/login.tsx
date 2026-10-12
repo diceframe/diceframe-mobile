@@ -22,6 +22,9 @@ import {
   validateAccessToken,
 } from '@/api/client'
 import { claimPairingCode } from '@/api/pairing'
+import { toastNotice } from '@/components/patterns/toast'
+import { pairingInstallIdNoticeKey } from '@/api/content'
+import { resolveInstallId } from '@/stores/local-library'
 import { QrScannerSheet } from '@/features/scan/QrScannerSheet'
 import { parsePairLink } from '@/lib/pair-link'
 import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
@@ -175,11 +178,19 @@ export default function LoginScreen() {
       const compat = checkServerCompatibility(config)
       // 非 ok 一律拦下：判定结论以后再加一种也默认是阻断，不会悄悄放行
       if (compat !== 'ok') throw new ServerCompatBlocked(compat, config)
+      // 本安装的 install id 一律经 resolveInstallId（本机库 meta 为准）；本机库打不开时
+      // 不阻断登录，只是不上报（推送时首次使用再绑定）
+      const installId = await resolveInstallId().catch(() => null)
       // 设备名只用于 Web 设置页的设备清单展示，方便 GM 认出该吊销哪一台
-      const deviceToken = await claimPairingCode(
+      const claimed = await claimPairingCode(
         parsed.code,
         Device.deviceName || Device.modelName || '',
+        installId,
       )
+      const deviceToken = claimed.deviceToken
+      if (claimed.replacedDeviceId) toastNotice(t('dfContentPairingReplaced'))
+      const rejectedKey = pairingInstallIdNoticeKey(claimed.installIdRejected)
+      if (rejectedKey) toastNotice(t(rejectedKey))
       if (!mountedRef.current) return
       if (parsed.baseUrl !== settings.baseUrl) {
         settings.setToken(null)
