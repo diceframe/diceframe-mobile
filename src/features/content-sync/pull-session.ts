@@ -23,7 +23,7 @@
  *   RULESET_CARD_UNSUPPORTED / RULESET_CARD 的卡与规则托管卡一样不导入。随推送者而定的锁定
  *   （TRACKED_BY_OTHER_SOURCE 等）不在 locked_reason 里，交给推送预览。
  */
-import type { ContentExportItem, ContentKind, ContentStatusItem, ContentWarning } from '@/api/types'
+import type { ContentExportItem, ContentKind, ContentProvenance, ContentStatusItem, ContentWarning } from '@/api/types'
 import { EMBEDDED_BOOK_SUFFIX, isCanonicalId } from '@/lib/local-library/ids'
 import { lorebookDocumentWith } from '@/lib/local-library/lorebook-library'
 import type { LocalItem, LocalItemOrigin, PullImport, PullImportResult, ServerLink } from '@/lib/local-library/repository'
@@ -68,6 +68,8 @@ export interface ServerItemRef {
   stateToken?: string
   /** 服务端声明的锁定原因（如插件卡）；拉下来会是只读 */
   lockedReason?: string
+  /** 列举时的来源信息（与 /status 同值）；用来提示「由其他设备或来源同步」 */
+  provenance?: ContentProvenance | null
 }
 
 /**

@@ -282,6 +282,11 @@ export class LocalLibraryRepository {
 
   // ---------- server links ----------
 
+  /** 所有服务器上的映射（本机列表汇总状态标记用） */
+  listAllLinks(): ServerLink[] {
+    return this.db.select().from(serverLinks).orderBy(serverLinks.localId).all().map(toLink)
+  }
+
   listLinks(serverInstanceId: string): ServerLink[] {
     return this.db.select().from(serverLinks)
       .where(eq(serverLinks.serverInstanceId, serverInstanceId))

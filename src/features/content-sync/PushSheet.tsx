@@ -2,7 +2,7 @@ import * as React from 'react'
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native'
 import { CheckSquare, Square } from 'lucide-react-native'
 
-import { contentErrorKey, contentErrorMessage } from '@/api/content'
+import { contentCodeText, contentErrorKey, contentErrorMessage } from '@/api/content'
 import type { ContentDecision } from '@/api/types'
 import { Sheet } from '@/components/patterns/sheet'
 import { Badge } from '@/components/ui/badge'
@@ -60,6 +60,8 @@ export function PushSheet({ open, onClose }: { open: boolean; onClose: () => voi
   const [session, setSession] = React.useState<PushSession | null>(null)
   const [state, setState] = React.useState<PushState | null>(null)
   const [error, setError] = React.useState('')
+  // 打开 / 列举失败后重试：换一个值重新跑加载
+  const [loadAttempt, setLoadAttempt] = React.useState(0)
 
   React.useEffect(() => {
     if (!open) return
@@ -76,7 +78,7 @@ export function PushSheet({ open, onClose }: { open: boolean; onClose: () => voi
       }
     })()
     return () => { cancelled = true }
-  }, [open])
+  }, [open, loadAttempt])
 
   React.useEffect(() => session?.subscribe(setState), [session])
 
@@ -119,8 +121,7 @@ export function PushSheet({ open, onClose }: { open: boolean; onClose: () => voi
 
   function outcomeText(outcome: ItemOutcome): string {
     if (outcome.code === 'ENTRY_TOO_LARGE' && outcome.entryId) return t('dfPushEntryTooLarge', { entry: outcome.entryId })
-    const key = contentErrorKey(outcome.code)
-    return key ? t(key) : ''
+    return contentCodeText(outcome.code)
   }
 
   const busy = state?.phase === 'previewing' || state?.phase === 'committing'
@@ -129,7 +130,16 @@ export function PushSheet({ open, onClose }: { open: boolean; onClose: () => voi
     <Sheet open={open} onClose={close} className="h-[85%]" scrollable={false}>
       <View className="min-h-0 flex-1 gap-3 pt-1">
         <Text variant="h3">{t('dfPushTitle')}</Text>
-        {error ? <Text className="text-destructive">{error}</Text> : null}
+        {error ? (
+          <View className="gap-2">
+            <Text className="text-destructive">{error}</Text>
+            {!session ? (
+              <Button variant="outline" onPress={() => { setError(''); setLoadAttempt((attempt) => attempt + 1) }}>
+                <Text>{t('dfCommonRetry')}</Text>
+              </Button>
+            ) : null}
+          </View>
+        ) : null}
 
         {!session ? (
           // 选择要推送的本机项
@@ -184,7 +194,7 @@ export function PushSheet({ open, onClose }: { open: boolean; onClose: () => voi
             ) : null}
             {state.stale ? <Text className="text-destructive">{t('dfPushStale')}</Text> : null}
             {state.phase === 'stopped' && state.stopCode ? (
-              <Text className="text-destructive">{t(contentErrorKey(state.stopCode) ?? 'dfErrorsUnexpected')}</Text>
+              <Text className="text-destructive">{contentCodeText(state.stopCode, 'dfErrorsUnexpected')}</Text>
             ) : null}
 
             <ScrollView className="flex-1" contentContainerClassName="gap-2 pb-4">

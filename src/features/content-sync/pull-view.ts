@@ -51,6 +51,20 @@ export function isSelectable(row: PullListRow): boolean {
   return row.state !== 'embedded' && row.state !== 'unsupported'
 }
 
+/**
+ * 服务器上的这一项由别的来源跟随（另一台设备、其他导入来源）：契约里 TRACKED_BY_OTHER_SOURCE /
+ * DETACHED_FROM_OTHER_SOURCE 不进 locked_reason，要按 provenance 自己推导——拉下来改过再推送时，
+ * 服务端只给「保留两份 / 跳过」。来源就是本安装的不算。
+ */
+export function syncedByOtherSource(ref: Pick<ServerItemRef, 'provenance'>, deviceSourceId: string): boolean {
+  const provenance = ref.provenance
+  if (!provenance) return false
+  const kind = String(provenance.source_kind ?? '')
+  const id = String(provenance.source_id ?? '')
+  if (!kind && !id) return false
+  return !(kind === 'device' && id === deviceSourceId)
+}
+
 /** 进度：已出结果的项数 / 总项数 */
 export function pullProgress(outcomes: readonly Pick<PullOutcome, 'status'>[]): { done: number; total: number } {
   return { done: outcomes.filter((outcome) => outcome.status !== 'pending').length, total: outcomes.length }

@@ -13,6 +13,7 @@ import { localCardEdit, newLocalCardBody, type EditorSnapshot } from '@/lib/loca
 import { createLatestGuard, createYielder } from '@/lib/local-library/yielder'
 import type { LocalItemSummary } from '@/lib/local-library/repository'
 import { withRuleCache } from '@/lib/local-library/rule-cache'
+import { localItemBadges, type LocalItemBadge } from '@/lib/local-library/sync-status'
 import type { CharacterCardPatch } from '@/lib/character-card'
 import {
   CARD_FORMAT,
@@ -27,6 +28,8 @@ import { localLibrary } from '@/stores/local-library'
 export interface LocalCardView extends LocalItemSummary {
   /** 卡体（展示用：出身、职业、背景、头像） */
   body: CharacterCard
+  /** 列表状态标记（未推送改动 / 服务器已删除 / 服务器锁定） */
+  badges: LocalItemBadge[]
 }
 
 /**
@@ -43,14 +46,16 @@ async function readLocalCards(): Promise<LocalCardView[] | null> {
   // 逐项读文档，按时间预算让出 JS 线程（同步 SQLite 读大文档会占线程）
   const maybeYield = createYielder()
   const views: LocalCardView[] = []
+  const links = library.listAllLinks()
   for (const summary of library.listItems({ kind: 'character_template' })) {
     const item = library.getItem(summary.localId)
     if (!item) continue
+    const badges = localItemBadges(summary, links)
     try {
-      views.push({ ...summary, body: readCardV3(item.document).body })
+      views.push({ ...summary, badges, body: readCardV3(item.document).body })
     } catch {
       // 文档坏了也列出来（只读展示），不让一项拖垮整个列表
-      views.push({ ...summary, readOnly: true, body: { character_name: summary.name } as CharacterCard })
+      views.push({ ...summary, badges, readOnly: true, body: { character_name: summary.name } as CharacterCard })
     }
     await maybeYield()
   }

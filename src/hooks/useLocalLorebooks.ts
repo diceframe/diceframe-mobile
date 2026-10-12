@@ -15,6 +15,7 @@ import {
   saveLocalLorebookEntry,
 } from '@/lib/local-library/lorebook-library'
 import type { LocalItemSummary } from '@/lib/local-library/repository'
+import { localItemBadges, type LocalItemBadge } from '@/lib/local-library/sync-status'
 import { createLatestGuard, createYielder } from '@/lib/local-library/yielder'
 import { readLorebookV3, type LorebookBook, type LorebookEntryEdit } from '@/lib/portable/lorebook-v3'
 import { localLibrary } from '@/stores/local-library'
@@ -22,6 +23,8 @@ import { localLibrary } from '@/stores/local-library'
 export interface LocalLorebookView extends LocalItemSummary {
   description: string
   entryCount: number
+  /** 列表状态标记（未推送改动 / 服务器已删除 / 服务器锁定） */
+  badges: LocalItemBadge[]
 }
 
 async function requireLibrary() {
@@ -35,15 +38,17 @@ async function readLocalLorebooks(): Promise<LocalLorebookView[] | null> {
   if (!library) return null
   const maybeYield = createYielder()
   const views: LocalLorebookView[] = []
+  const links = library.listAllLinks()
   for (const summary of library.listItems({ kind: 'lorebook' })) {
     const item = library.getItem(summary.localId)
     if (!item) continue
+    const badges = localItemBadges(summary, links)
     try {
       const book = readLorebookV3(item.document)
-      views.push({ ...summary, description: String(book.description ?? ''), entryCount: book.entries.length })
+      views.push({ ...summary, badges, description: String(book.description ?? ''), entryCount: book.entries.length })
     } catch {
       // 文档坏了也列出来（只读），不让一项拖垮整个列表
-      views.push({ ...summary, readOnly: true, description: '', entryCount: 0 })
+      views.push({ ...summary, badges, readOnly: true, description: '', entryCount: 0 })
     }
     await maybeYield()
   }

@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
+import { LocalItemBadges } from '@/features/content-sync/LocalItemBadges'
 import { PullSheet } from '@/features/content-sync/PullSheet'
 import { serverItemSource } from '@/features/content-sync/pull-runner'
 import { currentPushAccess } from '@/features/content-sync/push-runner'
@@ -151,7 +152,7 @@ export default function LocalLorebooksScreen() {
                   <View className="min-w-0 flex-1 gap-1">
                     <View className="flex-row items-center gap-2">
                       <Text className="flex-1 font-semibold" numberOfLines={1}>{item.name || t('dfLocalLorebookUnnamed')}</Text>
-                      {item.readOnly ? <Badge variant="secondary" className="px-1.5 py-0"><Text className="text-[10px]">{t('dfLocalCardReadOnly')}</Text></Badge> : null}
+                      <LocalItemBadges readOnly={item.readOnly} badges={item.badges} />
                     </View>
                     <Text variant="small" numberOfLines={1}>{t('dfLocalLorebookEntryCount', { count: item.entryCount })}</Text>
                   </View>
