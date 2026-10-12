@@ -28,7 +28,8 @@ export interface GameSsePayload {
   [key: string]: unknown
 }
 
-export type StreamStatus = 'idle' | 'connecting' | 'live' | 'degraded'
+/** stopped：服务端撤销了这条流（见 onRevoked），不会自己重连，要等调用方重新建流 */
+export type StreamStatus = 'idle' | 'connecting' | 'live' | 'degraded' | 'stopped'
 
 /** 服务端撤销这条流的原因（`event: revoked` 的 data） */
 export interface SseRevocation {

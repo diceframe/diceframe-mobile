@@ -9,6 +9,7 @@
  */
 export const play = {
   zh: {
+    dfPlayStreamStopped: '已断开',
     // 顶栏与连接状态
     dfPlayGmThinking: 'GM 正在思考…',
     dfPlayConnected: '实时',
@@ -202,6 +203,7 @@ export const play = {
     dfPlayControlRejected: '该角色无法切换托管状态。',
   },
   en: {
+    dfPlayStreamStopped: 'Disconnected',
     // Header & connection status
     dfPlayGmThinking: 'GM is thinking…',
     dfPlayConnected: 'Live',
@@ -393,6 +395,7 @@ export const play = {
     dfPlayControlRejected: 'This character cannot switch hosting.',
   },
   ja: {
+    dfPlayStreamStopped: '切断中',
     // ヘッダーと接続状態
     dfPlayGmThinking: 'GMが思考中…',
     dfPlayConnected: 'リアルタイム',
@@ -584,6 +587,7 @@ export const play = {
     dfPlayControlRejected: 'このキャラクターは委任状態を切り替えられません。',
   },
   de: {
+    dfPlayStreamStopped: 'Getrennt',
     // 顶栏与连接状态
     dfPlayGmThinking: 'SL denkt nach…',
     dfPlayConnected: 'Live',

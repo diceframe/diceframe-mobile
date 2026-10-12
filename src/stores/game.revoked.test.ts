@@ -70,7 +70,7 @@ describe('对局 SSE 被撤销', () => {
     handlers().onRevoked!({ errorCode: 'SEAT_TOKEN_INVALID', error: 'x', needsRoomPassword: false })
     expect(hasSeatToken('g')).toBe(false)
     expect(onShareCredentialRejected).toHaveBeenCalledWith({ kind: 'seat', baseUrl: 'https://h.example', game: 'g' })
-    expect(useGameStore.getState().streamStatus).toBe('idle')
+    expect(useGameStore.getState().streamStatus).toBe('stopped')
   })
 
   it('ROOM_TOKEN_INVALID（或 needs_room_password）：清房间令牌，交给路由层重输房间密码', async () => {
@@ -89,6 +89,32 @@ describe('对局 SSE 被撤销', () => {
     expect(onShareCredentialRejected).not.toHaveBeenCalled()
     expect(hasSeatToken('g')).toBe(true)
     expect(useGameStore.getState().error).toBe(errorMessage(new ApiError('', 403, 'PLAYER_ACCESS_CLOSED')))
+  })
+})
+
+describe('实机：玩家入口关闭后重新开放，点重试要恢复实时连接', () => {
+  it('撤销后状态为 stopped（不是「连接中」）；重试刷新成功后重新建流（新票据、新 /sse）', async () => {
+    useGameStore.getState().enter('g')
+    await settle()
+    expect(streams).toHaveLength(1)
+    handlers().onRevoked!({ errorCode: 'PLAYER_ACCESS_CLOSED', error: '', needsRoomPassword: false })
+    expect(useGameStore.getState().streamStatus).toBe('stopped')
+    await useGameStore.getState().refresh()
+    await settle()
+    expect(useGameStore.getState().error).toBe('')
+    expect(streams).toHaveLength(2)
+    expect(streams[1].start).toHaveBeenCalled()
+  })
+
+  it('刷新仍失败（入口还关着）：不重建流，保持 stopped', async () => {
+    useGameStore.getState().enter('g')
+    await settle()
+    handlers().onRevoked!({ errorCode: 'PLAYER_ACCESS_CLOSED', error: '', needsRoomPassword: false })
+    fetchMock.mockImplementation(async () => json({ ok: false, error_code: 'PLAYER_ACCESS_CLOSED', error: '本局玩家入口已关闭' }, 403))
+    await useGameStore.getState().refresh()
+    await settle()
+    expect(streams).toHaveLength(1)
+    expect(useGameStore.getState().streamStatus).toBe('stopped')
   })
 })
 
