@@ -7,7 +7,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api, configureApiClient, setJoinShare } from '@/api/client'
+import { api, buildPlaySseUrl, configureApiClient, setJoinShare } from '@/api/client'
+import { assetSource, avatarSource } from '@/api/assets'
 import { createPlayShareScope } from '@/lib/play-share-scope'
 import { useSettingsStore } from './settings'
 
@@ -96,7 +97,7 @@ describe('BUG 2：设备上登录了房主，以玩家身份加入与游玩', ()
     const store = useSettingsStore.getState()
     store.setToken('owner-password')
     setJoinShare({ game: 'GK', user: '' })
-    await api('/character-cards', { query: { share: 1 } })
+    await api('/games/GK/character-cards')
     await api('/games/GK/players', { method: 'POST', body: '{}' })
     for (const index of [0, 1]) expect(call(index).headers.get('Authorization')).toBeNull()
 
@@ -157,5 +158,54 @@ describe('对局页与注入的玩家身份', () => {
     player.scope.leave('A')
     player.flush()
     expect(player.state.active).toBe('A')
+  })
+})
+
+describe('#1 终审：玩家模式只作用于分享那一局的请求', () => {
+  function injectPlayerOfA() {
+    const store = useSettingsStore.getState()
+    store.setToken('owner-password')
+    store.storeSeatToken(SERVER, 'A', 'seat-a')
+    store.storeRoomToken(SERVER, 'A', 'room-a')
+    store.upsertShare({ game: 'A', user: 'u-a' })
+  }
+
+  it('注入了 A 局玩家身份：大厅 /games 与 B 局请求以房主身份发出（带 Bearer、无分享 query）', async () => {
+    injectPlayerOfA()
+    await api('/games')
+    await api('/games/B/log')
+    for (const index of [0, 1]) {
+      const { url, headers } = call(index)
+      expect(headers.get('Authorization')).toBe('Bearer owner-password')
+      expect(headers.get('X-Seat-Token')).toBeNull()
+      expect(url.searchParams.has('share')).toBe(false)
+      expect(url.searchParams.has('game')).toBe(false)
+    }
+  })
+
+  it('A 局请求：带席位凭证与房间令牌、不带 Bearer；A 局 SSE 与头像地址带分享 query', async () => {
+    injectPlayerOfA()
+    await api('/games/A/log')
+    const { url, headers } = call(0)
+    expect(headers.get('Authorization')).toBeNull()
+    expect(headers.get('X-Seat-Token')).toBe('seat-a')
+    expect(headers.get('X-Room-Token')).toBe('room-a')
+    expect(url.searchParams.get('game')).toBe('A')
+    const sse = new URL(buildPlaySseUrl('A', 'ticket'))
+    expect(sse.searchParams.get('share')).toBe('1')
+    expect(sse.searchParams.get('game')).toBe('A')
+    const avatar = new URL(avatarSource('A', { kind: 'upload', asset_id: 'x' })!.uri)
+    expect(avatar.searchParams.get('share')).toBe('1')
+    // 全局资源以房主身份取，不挂 A 局的分享 query
+    expect(new URL(assetSource('/scene-images/x').uri).searchParams.has('share')).toBe(false)
+  })
+
+  it('B 局请求 401 按房主掉线处理（跳登录），A 局请求 401 不跳', async () => {
+    injectPlayerOfA()
+    fetchMock.mockImplementation(async () => json({ error: '未授权' }, 401))
+    await expect(api('/games/A/log')).rejects.toMatchObject({ status: 401 })
+    expect(onUnauthorized).not.toHaveBeenCalled()
+    await expect(api('/games/B/log')).rejects.toMatchObject({ status: 401 })
+    expect(onUnauthorized).toHaveBeenCalledTimes(1)
   })
 })

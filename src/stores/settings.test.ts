@@ -178,15 +178,17 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     store.upsertShare(first)
     store.upsertShare(second)
     expect(activeIdentityOf(useSettingsStore.getState())).toEqual(second)
-    expect(Object.fromEntries(shareQuery()!)).toEqual({ game: 'b', user: 'u-b', share: '1' })
+    // 房主已登录：分享身份只作用于那一局的请求
+    expect(shareQuery('/games')).toBeNull()
+    expect(Object.fromEntries(shareQuery('/games/b')!)).toEqual({ game: 'b', user: 'u-b', share: '1' })
 
     store.activateShare('a')
     expect(currentShare()).toEqual(first)
-    expect(Object.fromEntries(shareQuery()!)).toEqual({
+    expect(Object.fromEntries(shareQuery('/games/a')!)).toEqual({
       game: 'a', user: 'u-a', name: 'Aria', share: '1', delegate: 'd-a',
     })
     store.upsertShare({ game: 'a', user: 'rebound-user' })
-    expect(Object.fromEntries(shareQuery()!)).toEqual({ game: 'a', user: 'rebound-user', share: '1' })
+    expect(Object.fromEntries(shareQuery('/games/a')!)).toEqual({ game: 'a', user: 'rebound-user', share: '1' })
     expect(useSettingsStore.getState().shares.b).toEqual(second)
     expect(currentToken()).toBe('owner-token')
     expect(currentSessionToken()).toBe(sessionToken)
