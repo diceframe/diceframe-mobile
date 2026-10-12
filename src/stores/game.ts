@@ -397,7 +397,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       } catch {
         // 404=存档没有可恢复的 GM 身份（纯玩家分享局）；其余失败不阻断入局
       }
-    } else if (!ownerAuthActive() && !hasSeatToken(gameKey)) {
+    } else if (!ownerAuthActive(gameKey) && !hasSeatToken(gameKey)) {
       // 分享玩家靠席位凭证行动。席位凭证上线前加入的玩家，本机会话仍绑着席位：
       // 一次性领取该席位的第一枚凭证（对齐 Web ensureSeatToken）。Owner 代操作不走这里；
       // 同一设备登录了房主、但以玩家身份游玩时照常领取（玩家模式不带房主凭据）。
@@ -569,7 +569,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       const { gameKey, userId } = state
       if (state.kpQuestionBusy || !question.trim()) return
       if (state.kpQuestionSupported === false) return
-      if (!canAskKpQuestion(gameKey, userId, state.players, currentShare(), ownerAuthActive())) {
+      if (!canAskKpQuestion(gameKey, userId, state.players, currentShare(), ownerAuthActive(gameKey))) {
         set({ kpQuestionError: errorMessage(new ApiError('Player required', 403, 'PLAYER_NOT_IN_GAME')) })
         return
       }
@@ -1028,7 +1028,7 @@ export function selectMySheet(state: GameStore) {
 
 /** 提问须有本局角色；GM 也不能凭管理权限冒用未认领的角色。 */
 export function selectCanAskKp(state: GameStore): boolean {
-  return canAskKpQuestion(state.gameKey, state.userId, state.players, currentShare(), ownerAuthActive())
+  return canAskKpQuestion(state.gameKey, state.userId, state.players, currentShare(), ownerAuthActive(state.gameKey))
 }
 
 /** “GM 思考中”：判定阶段 或 正在流式输出 */
