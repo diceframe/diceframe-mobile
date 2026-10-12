@@ -5,6 +5,9 @@
  */
 export const characters = {
   zh: {
+    dfLocalBadgeUnpushed: '有未推送的改动',
+    dfLocalBadgeServerDeleted: '服务器上已删除',
+    dfLocalBadgeLocked: '服务器锁定 · 只读',
     dfJoinLocalCardRuleMismatch: '规则不同（{{rule}}），带入后请检查数值',
     // 本机角色库（离线内容库）
     dfLocalLibraryTab: '本机',
@@ -78,6 +81,9 @@ export const characters = {
     // useCharacters 错误兜底复用 profile 簇的 dfCharacterSaveFailed/dfCharacterUpdateFailed/dfCharacterDeleteFailed
   },
   en: {
+    dfLocalBadgeUnpushed: 'Unpushed changes',
+    dfLocalBadgeServerDeleted: 'Deleted on server',
+    dfLocalBadgeLocked: 'Locked on server · read-only',
     dfJoinLocalCardRuleMismatch: 'Different rules ({{rule}}); check the numbers after using it',
     // 本机角色库（离线内容库）
     dfLocalLibraryTab: 'On this device',
@@ -151,6 +157,9 @@ export const characters = {
     // useCharacters error fallbacks reuse the profile cluster's dfCharacterSaveFailed/dfCharacterUpdateFailed/dfCharacterDeleteFailed
   },
   ja: {
+    dfLocalBadgeUnpushed: '未プッシュの変更あり',
+    dfLocalBadgeServerDeleted: 'サーバーで削除済み',
+    dfLocalBadgeLocked: 'サーバーでロック · 読み取り専用',
     dfJoinLocalCardRuleMismatch: 'ルールが異なります（{{rule}}）。取り込み後に数値を確認してください',
     // 本机角色库（离线内容库）
     dfLocalLibraryTab: 'この端末',
@@ -224,6 +233,9 @@ export const characters = {
     // useCharacters のエラーは profile 簇の dfCharacterSaveFailed/dfCharacterUpdateFailed/dfCharacterDeleteFailed を再利用
   },
   de: {
+    dfLocalBadgeUnpushed: 'Nicht übertragene Änderungen',
+    dfLocalBadgeServerDeleted: 'Auf dem Server gelöscht',
+    dfLocalBadgeLocked: 'Auf dem Server gesperrt · schreibgeschützt',
     dfJoinLocalCardRuleMismatch: 'Andere Regeln ({{rule}}); prüfe die Werte nach dem Übernehmen',
     // 本机角色库（离线内容库）
     dfLocalLibraryTab: 'Auf diesem Gerät',

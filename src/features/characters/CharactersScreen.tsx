@@ -18,6 +18,7 @@ import { Text } from '@/components/ui/text'
 import { CharacterCardEditor } from '@/features/characters/CharacterCardEditor'
 import { PullSheet } from '@/features/content-sync/PullSheet'
 import { serverItemSource } from '@/features/content-sync/pull-runner'
+import { LocalItemBadges } from '@/features/content-sync/LocalItemBadges'
 import { PushSheet } from '@/features/content-sync/PushSheet'
 import { currentPushAccess } from '@/features/content-sync/push-runner'
 import type { PushAccess } from '@/features/content-sync/sync-state'
@@ -207,9 +208,7 @@ export default function CharactersScreen() {
         renderItem={({ item }) => (
           <CardRow
             card={item.body}
-            badges={item.readOnly ? (
-              <Badge variant="secondary" className="px-1.5 py-0"><Text className="text-[10px]">{t('dfLocalCardReadOnly')}</Text></Badge>
-            ) : null}
+            badges={<LocalItemBadges readOnly={item.readOnly} badges={item.badges} />}
             actions={(
               <>
                 {item.readOnly ? null : (
