@@ -16,7 +16,7 @@ export interface AssetSource {
 }
 
 export function assetSource(path: string): AssetSource {
-  return { uri: buildUrl(path, shareQuery() ?? undefined), apiPath: path }
+  return { uri: buildUrl(path, shareQuery(path) ?? undefined), apiPath: path }
 }
 
 /**
