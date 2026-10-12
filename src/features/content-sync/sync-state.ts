@@ -56,12 +56,18 @@ export function localSyncState(
 }
 
 /**
- * 推送候选快照。拉取来源就是这台服务器、但还没有映射的项带 canonical_hint，让推送对准
- * 服务器上原来那一份；「保留两份」得到的副本没有 origin，作为新项推送。
+ * 推送候选快照。canonical_hint 让推送对准服务器上本机跟随的那一份：
+ * - 在这台服务器上有映射 → 映射的 canonical id。服务端先按身份（设备、install、client_ref）
+ *   匹配、再看 hint：本机自己推上去的项靠身份就能匹配，hint 不影响；拉取来的项在服务器上
+ *   不是本安装的身份，没有 hint 就会被当成新项，服务器上多出一份、映射也被挪走；
+ * - 没有映射但来源是这台服务器 → 来源的 canonical id；
+ * - 「保留两份」得到的副本既没有映射也没有来源，作为新项推送（不带 hint）。
  */
 export function pushCandidateOf(item: LocalItem, link: ServerLink | null, serverInstanceId: string): PushCandidate {
   const origin = item.origin
-  const hint = !link && origin && origin.server_instance_id === serverInstanceId ? origin.canonical_id : undefined
+  const hint = link
+    ? link.canonicalId
+    : origin && origin.server_instance_id === serverInstanceId ? origin.canonical_id : undefined
   return {
     localId: item.localId,
     kind: item.kind,

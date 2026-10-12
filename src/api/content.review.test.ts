@@ -165,7 +165,7 @@ describe('7. 删除多个数组下标与给出的顺序无关', () => {
   })
 })
 
-describe('错误码映射覆盖服务端 CONTRACT.md（diceframe/diceframe@aa460848，含 #502 补列的码）', () => {
+describe('错误码映射覆盖服务端 CONTRACT.md（diceframe/diceframe#508 @95159e23，含 #502 补列的码）', () => {
   // CONTRACT.md 里出现的全部错误 / 原因 / 警告码
   const CONTRACT_CODES = [
     'BODY_TOO_LARGE', 'DECISION_NOT_ALLOWED', 'DECISION_REQUIRED', 'DETACHED_FROM_OTHER_SOURCE', 'ENTRY_TOO_LARGE',
@@ -175,6 +175,8 @@ describe('错误码映射覆盖服务端 CONTRACT.md（diceframe/diceframe@aa460
     'TOO_MANY_ITEMS', 'TRACKED_BY_OTHER_SOURCE',
     // #502 补进 CONTRACT.md 的 5 个码
     'CARD_IDENTITY_CONFLICT', 'LOREBOOK_IDENTITY_CONFLICT', 'CARD_V3_INVALID', 'IMPORT_SOURCE_INVALID', 'BOOK_NOT_IMPORTED',
+    // #508（/list）新增
+    'CURSOR_INVALID',
   ]
 
   it.each(CONTRACT_CODES)('%s 有文案', (code) => {

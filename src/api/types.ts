@@ -2592,6 +2592,8 @@ export interface ContentExportItem {
     canonical_id: string
     state_token: string
     provenance: ContentProvenance | null
+    /** 推送这份导出时预览会给出的锁定原因（#508 起）；null = 不锁定 */
+    locked_reason?: string | null
   }
 }
 
@@ -2612,5 +2614,26 @@ export interface ContentStatusItem {
 export interface ContentStatusResponse {
   ok?: boolean
   items: ContentStatusItem[]
+  server_instance_id?: string
+}
+
+/** POST /api/content/list 的一项（#508）：state_token / provenance 与 /status 同值 */
+export interface ContentListItem {
+  kind: ContentKind
+  canonical_id: string
+  name: string
+  state_token: string
+  provenance: ContentProvenance | null
+  /** PLUGIN_CARD / RULESET_CARD_UNSUPPORTED / RULESET_CARD / PLUGIN_BOOK，或 null */
+  locked_reason: string | null
+  /** 仅 lorebook：条目数 */
+  entries?: number
+}
+
+export interface ContentListResponse {
+  ok: boolean
+  items: ContentListItem[]
+  /** null = 最后一页；非 null 时即使本页为空也要继续 */
+  next_cursor: string | null
   server_instance_id?: string
 }

@@ -1,6 +1,7 @@
 import * as React from 'react'
-import { FlatList, Pressable, ScrollView, View } from 'react-native'
-import { BookMarked, Eye, EyeOff, Plus, Users } from 'lucide-react-native'
+import { FlatList, Platform, Pressable, ScrollView, View } from 'react-native'
+import { BookMarked, Eye, EyeOff, Plus, Smartphone, Users } from 'lucide-react-native'
+import { useRouter } from 'expo-router'
 
 import { PageHeader } from '@/components/page-header'
 import { Sheet } from '@/components/patterns/sheet'
@@ -74,6 +75,7 @@ function visibilityBadgeIcon(mode: LoreVisibilityMode) {
 
 export default function LorebookScreen() {
   const t = useT()
+  const router = useRouter()
   const { worlds, worldId, setWorldId, entries, loading, error, refresh, addWorld, addEntry, updateEntry, deleteEntry } = useLorebook()
   const [category, setCategory] = React.useState<CategoryFilter>('all')
   const [worldEditorOpen, setWorldEditorOpen] = React.useState(false)
@@ -155,10 +157,19 @@ export default function LorebookScreen() {
         subtitle={loading ? t('dfLorebookSyncing') : t('dfLorebookCountSubtitle', { count: entries.length })}
         className="px-0"
         right={
-          <Button size="sm" onPress={openCreate}>
-            <Icon as={Plus} size={16} />
-            <Text>{t('dfLorebookNewEntry')}</Text>
-          </Button>
+          <View className="flex-row gap-2">
+            {/* 本机 Lorebook（离线内容库）：Web 端没有本机库，不显示入口 */}
+            {Platform.OS === 'web' ? null : (
+              <Button size="sm" variant="outline" onPress={() => router.push('/local-lorebooks')}>
+                <Icon as={Smartphone} size={16} />
+                <Text>{t('dfLocalLorebooksOpen')}</Text>
+              </Button>
+            )}
+            <Button size="sm" onPress={openCreate}>
+              <Icon as={Plus} size={16} />
+              <Text>{t('dfLorebookNewEntry')}</Text>
+            </Button>
+          </View>
         }
       />
 
