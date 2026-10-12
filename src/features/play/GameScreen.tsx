@@ -65,6 +65,7 @@ import {
 import { appLayoutForWidth } from '@/lib/layout'
 import { levelUpAttributes, levelUpPoints } from '@/lib/level-up'
 import { isStoredPlayerMember } from '@/lib/player-identity'
+import { createPlayShareScope } from '@/lib/play-share-scope'
 import { buildShareLink } from '@/lib/share-link'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import {
@@ -86,6 +87,12 @@ function stateLabelOf(state: string | undefined, t: T): string {
 }
 
 /** 对局屏主体：路由只做薄壳，界面实现在 features/play（与 WorldsScreen 等同一模式） */
+const playShareScope = createPlayShareScope({
+  activeShareGame: () => useSettingsStore.getState().activeShareGame,
+  ownerLoggedIn: () => !!useSettingsStore.getState().token,
+  activate: (gameKey) => useSettingsStore.getState().activateShare(gameKey),
+})
+
 export default function GameScreen() {
   const t = useT()
   const router = useRouter()
@@ -203,8 +210,14 @@ export default function GameScreen() {
   const busy = actionBusy || gmBusy
 
   React.useEffect(() => {
-    if (gameKey) useGameStore.getState().enter(gameKey)
-    return () => useGameStore.getState().leave()
+    if (!gameKey) return () => useGameStore.getState().leave()
+    // 先理顺注入的玩家身份（别的局的身份不能带进这一局），enter 据此判定玩家 / GM
+    playShareScope.enter(gameKey)
+    useGameStore.getState().enter(gameKey)
+    return () => {
+      useGameStore.getState().leave()
+      playShareScope.leave(gameKey)
+    }
   }, [gameKey])
 
   React.useEffect(() => {

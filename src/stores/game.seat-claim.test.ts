@@ -78,3 +78,16 @@ describe('领取首枚席位凭证被明确拒绝时', () => {
     expect(useGameStore.getState().seatCredentialLost).toBe(false)
   })
 })
+
+describe('设备上登录了房主、以玩家身份进入对局（GM / 玩家身份独立）', () => {
+  it('按普通玩家入局：没有席位凭证就领取，请求不带房主 Bearer；服务端投影本席位时不踢回加入页', async () => {
+    claimResponse = () => json({ ok: true, seat_token: 'claimed' })
+    configureApiClient({ token: 'owner' })
+    useGameStore.getState().enter('g')
+    await settle()
+    const claim = fetchMock.mock.calls.find(([url]) => new URL(url).pathname.endsWith('/seat-token/claim'))
+    expect(claim).toBeTruthy()
+    for (const [, init] of fetchMock.mock.calls) expect(new Headers((init as RequestInit).headers).get('Authorization')).toBeNull()
+    expect(useGameStore.getState()).toMatchObject({ isGm: false, userId: 'u1', seatCredentialLost: false })
+  })
+})
