@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { openTestLibraryDb } from '@/test/library-db'
 import { migrateLibrary } from './migrate'
 import { LocalLibraryRepository } from './repository'
+import { uniqueCopyName } from './copy-name'
 import { groupLinksByLocalId, localItemBadges } from './sync-status'
 
 function sequence() {
@@ -62,5 +63,13 @@ describe('M7 后续：状态标记按本机 id 预先分组；卡的内嵌书在
     expect(grouped.get('a')).toHaveLength(2)
     expect(grouped.get('a.book')).toHaveLength(1)
     expect(grouped.get('b')).toBeUndefined()
+  })
+})
+
+describe('副本名', () => {
+  it('找第一个没被占用的名字', () => {
+    const suffix = (n: number) => (n === 1 ? '（副本）' : `（副本 ${n}）`)
+    expect(uniqueCopyName('A', new Set(), suffix)).toBe('A（副本）')
+    expect(uniqueCopyName('A', new Set(['A（副本）', 'A（副本 2）']), suffix)).toBe('A（副本 3）')
   })
 })

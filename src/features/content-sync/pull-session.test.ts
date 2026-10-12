@@ -122,6 +122,7 @@ async function harness() {
     uuid: sequence(),
     sleep: vi.fn(async () => undefined),
     maybeYield: vi.fn(async () => undefined),
+    copySuffix: (n: number) => (n === 1 ? ' (copy)' : ` (copy ${n})`),
   }
   const pull = async (refs: ServerItemRef[]) => {
     const session = new PullSession(deps, refs)
@@ -217,7 +218,10 @@ describe('拉取状态机（假服务端）', () => {
     expect(out.localId).not.toBe(localId)
     // 改过的那份：内容不动、不再跟随服务器项（推送时作为新项，不带 canonical_hint）
     const mine = h.library.getItem(localId)!
-    expect(mine.name).toBe('Local edit')
+    // 两份不再同名：改过的那份（已不跟随服务器、之后作为新项推送）加上副本后缀，文档里的名字一起改
+    expect(mine.name).toBe('Local edit (copy)')
+    expect(readCardV3(mine.document).body.character_name).toBe('Local edit (copy)')
+    expect(readCardV3(mine.document).body.race).toBe(freeformBody.race)
     expect(mine.origin).toBeNull()
     expect(h.library.getLink(SRV, localId)).toBeNull()
     expect(h.library.getLink(SRV, `${localId}.book`)).toBeNull()
@@ -592,5 +596,22 @@ describe('#7 复验后续：锁定时还有未推送的本机改动', () => {
     expect(item.readOnly).toBe(true)
     expect(readCardV3(item.document).body.race).toBe('Unpushed')
     expect(contentErrorKey(LOCKED_WITH_LOCAL_EDITS)).toBe('dfPullLockedWithLocalEdits')
+  })
+})
+
+describe('M7 后续：保留两份后两份可区分', () => {
+  it('副本名已被占用时加序号；书同样改名（书名与文档一致）', async () => {
+    const h = await harness()
+    h.server.put('book_1', { kind: 'lorebook', document: fixtures.lorebook })
+    const localId = outcome(await h.pull([bookRef('book_1')]), 'book_1').localId!
+    const name = h.library.getItem(localId)!.name
+    h.library.createItem({ kind: 'lorebook', format: 'lorebook_v3', document: fixtures.lorebook, name: `${name} (copy)` })
+    h.library.updateDocument(localId, { document: lorebookWith((book) => { book.entries[0].content = 'mine' }) })
+    h.server.put('book_1', { kind: 'lorebook', document: lorebookWith((book) => { book.entries[0].content = 'theirs' }) })
+    expect(outcome(await h.pull([bookRef('book_1')]), 'book_1').status).toBe('kept-both')
+    const mine = h.library.getItem(localId)!
+    expect(mine.name).toBe(`${name} (copy 2)`)
+    expect(readLorebookV3(mine.document).name).toBe(`${name} (copy 2)`)
+    expect(readLorebookV3(mine.document).entries[0].content).toBe('mine')
   })
 })

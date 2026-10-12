@@ -87,6 +87,8 @@ export interface PullImport {
   mode: 'create' | 'update' | 'keep-both'
   targetLocalId?: string
   detachLocalId?: string
+  /** keep-both 时给改过的那份换的名字与文档（两份不再同名）；不给就只解除映射 */
+  detachRename?: { name: string; document: unknown }
   kind: LocalItemKind
   format: string
   document: unknown
@@ -428,6 +430,15 @@ export class LocalLibraryRepository {
           )).run()
           // 改过的那份不再声称来自这个服务器项：推送时不带 canonical_hint，作为新项推送
           tx.update(items).set({ origin: null }).where(eq(items.localId, detach)).run()
+          const rename = input.detachRename
+          if (rename) {
+            const current = this.readItem(tx, detach)
+            if (current) {
+              tx.update(items).set({
+                document: JSON.stringify(rename.document), name: rename.name, revision: current.revision + 1, updatedAt: now,
+              }).where(eq(items.localId, detach)).run()
+            }
+          }
         }
         localId = newLocalId(input.kind, this.uuid())
         revision = 1

@@ -3,6 +3,8 @@
  */
 export const content = {
   zh: {
+    dfLocalCopySuffix: '（副本）',
+    dfLocalCopySuffixN: '（副本 {{n}}）',
     dfPullOtherSourceHint: '由其他设备或来源同步：拉下来改过后再推送，只能保留两份或跳过。',
     dfPullLockedWithLocalEdits: '服务器上的这一项现在已锁定，本机副本变为只读；要保留本机没推送的改动，请复制一份。',
     dfContentListPagingStuck: '服务器的内容列表一直翻不完（重复返回同一页），已停止。请稍后重试。',
@@ -22,7 +24,7 @@ export const content = {
     dfPullStatusKeptBoth: '已保留两份',
     dfPullStatusServerDeleted: '服务器上已删除',
     dfPullStatusNotFound: '服务器上没有',
-    dfPullKeptBothHint: '本机改过的那份保持原样，已不再跟随服务器上的这一项。',
+    dfPullKeptBothHint: '本机改过的那份内容不变，已加上「副本」后缀，不再跟随服务器上的这一项。',
     dfPullEmbeddedBookLinked: '这本书已作为本机某张角色卡的内嵌设定跟随，没有另存一份。',
     dfPullRulesetUnsupported: '规则托管（如 D&D）角色卡暂不能拉到本机。',
     dfPullDone: '拉取完成',
@@ -118,6 +120,8 @@ export const content = {
     dfContentPairingReplaced: '已替换本设备之前的配对，旧的配对令牌已失效。',
   },
   en: {
+    dfLocalCopySuffix: ' (copy)',
+    dfLocalCopySuffixN: ' (copy {{n}})',
     dfPullOtherSourceHint: 'Synced by another device or source: if you edit it after pulling, pushing can only keep both or skip.',
     dfPullLockedWithLocalEdits: 'This item is now locked on the server, so the copy on this device is read-only. To keep your unpushed edits, make a copy.',
     dfContentListPagingStuck: 'The server content list kept returning the same page, so listing was stopped. Please try again later.',
@@ -137,7 +141,7 @@ export const content = {
     dfPullStatusKeptBoth: 'Kept both',
     dfPullStatusServerDeleted: 'Deleted on server',
     dfPullStatusNotFound: 'Not on server',
-    dfPullKeptBothHint: 'Your edited copy is unchanged and no longer follows this server item.',
+    dfPullKeptBothHint: 'Your edited copy keeps its content, now has a "copy" suffix, and no longer follows this server item.',
     dfPullEmbeddedBookLinked: 'This book is already followed as the embedded book of a card on this device, so no separate copy was saved.',
     dfPullRulesetUnsupported: 'Rules-managed cards (such as D&D) cannot be pulled to this device yet.',
     dfPullDone: 'Pull finished',
@@ -233,6 +237,8 @@ export const content = {
     dfContentPairingReplaced: 'This device’s previous pairing was replaced; the old pairing token no longer works.',
   },
   ja: {
+    dfLocalCopySuffix: '（コピー）',
+    dfLocalCopySuffixN: '（コピー {{n}}）',
     dfPullOtherSourceHint: '別の端末またはソースが同期しています。取得後に編集してプッシュすると、両方を保持するかスキップのみになります。',
     dfPullLockedWithLocalEdits: 'この項目はサーバーでロックされたため、端末のコピーは読み取り専用になりました。未プッシュの変更を残すにはコピーを作成してください。',
     dfContentListPagingStuck: 'サーバーの一覧が同じページを返し続けたため、取得を停止しました。しばらくしてから再試行してください。',
@@ -252,7 +258,7 @@ export const content = {
     dfPullStatusKeptBoth: '両方を保持',
     dfPullStatusServerDeleted: 'サーバーで削除済み',
     dfPullStatusNotFound: 'サーバーにない',
-    dfPullKeptBothHint: '編集した端末側のコピーはそのままで、このサーバー項目には追従しなくなりました。',
+    dfPullKeptBothHint: '編集した端末側のコピーは内容そのままで「コピー」の接尾辞が付き、このサーバー項目には追従しなくなりました。',
     dfPullEmbeddedBookLinked: 'このブックは端末上のカードの内蔵ブックとして追従しているため、別のコピーは保存していません。',
     dfPullRulesetUnsupported: 'ルール管理（D&D など）のカードはまだ端末に取得できません。',
     dfPullDone: '取得完了',
@@ -348,6 +354,8 @@ export const content = {
     dfContentPairingReplaced: '本端末の以前のペアリングを置き換えました。古いペアリングトークンは無効です。',
   },
   de: {
+    dfLocalCopySuffix: ' (Kopie)',
+    dfLocalCopySuffixN: ' (Kopie {{n}})',
     dfPullOtherSourceHint: 'Wird von einem anderen Gerät oder einer anderen Quelle synchronisiert: Nach dem Holen und Bearbeiten kann beim Übertragen nur „beide behalten“ oder „überspringen“ gewählt werden.',
     dfPullLockedWithLocalEdits: 'Dieser Eintrag ist auf dem Server jetzt gesperrt, die Kopie auf diesem Gerät ist schreibgeschützt. Um nicht übertragene Änderungen zu behalten, erstelle eine Kopie.',
     dfContentListPagingStuck: 'Die Inhaltsliste des Servers lieferte immer wieder dieselbe Seite, daher wurde abgebrochen. Bitte später erneut versuchen.',
@@ -367,7 +375,7 @@ export const content = {
     dfPullStatusKeptBoth: 'Beide behalten',
     dfPullStatusServerDeleted: 'Auf dem Server gelöscht',
     dfPullStatusNotFound: 'Nicht auf dem Server',
-    dfPullKeptBothHint: 'Deine bearbeitete Kopie bleibt unverändert und folgt diesem Servereintrag nicht mehr.',
+    dfPullKeptBothHint: 'Deine bearbeitete Kopie behält ihren Inhalt, trägt jetzt den Zusatz „Kopie“ und folgt diesem Servereintrag nicht mehr.',
     dfPullEmbeddedBookLinked: 'Dieses Buch wird bereits als eingebettetes Buch einer Karte auf diesem Gerät verfolgt; es wurde keine eigene Kopie gespeichert.',
     dfPullRulesetUnsupported: 'Regelverwaltete Karten (etwa D&D) können noch nicht auf dieses Gerät geholt werden.',
     dfPullDone: 'Holen abgeschlossen',
