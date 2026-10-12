@@ -89,6 +89,15 @@ export function isStoredPlayerMember(detail: Partial<GameDetail>, uid: string): 
   return members.some((player) => player.user_id === uid)
 }
 
+/** 本次请求所坐席位的角色名（凭席位凭证访问时），找不到名字退回 uid；不是席位返回空串 */
+export function seatCharacterNameOf(detail: Partial<GameDetail> | null | undefined): string {
+  const uid = seatUidOf(detail)
+  if (!uid) return ''
+  const m = detail?.multiplayer
+  const players = [...(m?.ready_players ?? []), ...(m?.waiting_players ?? []), ...(m?.away_players ?? [])]
+  return players.find((player) => player.user_id === uid)?.character_name || uid
+}
+
 /** 服务端认定的本次请求所坐席位 uid（凭席位凭证访问时）；访客/GM/旧服务端返回空串 */
 export function seatUidOf(detail: Partial<GameDetail> | null | undefined): string {
   const viewer = detail?.viewer

@@ -13,7 +13,7 @@ import { localCardEdit, newLocalCardBody, type EditorSnapshot } from '@/lib/loca
 import { createLatestGuard, createYielder } from '@/lib/local-library/yielder'
 import type { LocalItemSummary } from '@/lib/local-library/repository'
 import { withRuleCache } from '@/lib/local-library/rule-cache'
-import { localItemBadges, type LocalItemBadge } from '@/lib/local-library/sync-status'
+import { groupLinksByLocalId, localItemBadges, type LocalItemBadge } from '@/lib/local-library/sync-status'
 import type { CharacterCardPatch } from '@/lib/character-card'
 import {
   CARD_FORMAT,
@@ -46,7 +46,7 @@ async function readLocalCards(): Promise<LocalCardView[] | null> {
   // 逐项读文档，按时间预算让出 JS 线程（同步 SQLite 读大文档会占线程）
   const maybeYield = createYielder()
   const views: LocalCardView[] = []
-  const links = library.listAllLinks()
+  const links = groupLinksByLocalId(library.listAllLinks())
   for (const summary of library.listItems({ kind: 'character_template' })) {
     const item = library.getItem(summary.localId)
     if (!item) continue

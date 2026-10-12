@@ -73,6 +73,16 @@ export function redactShareLink(input: string): string {
 }
 
 /**
+ * 点「解析链接」时实际解析哪条链接：输入框只回显剥掉 seat= 的链接（凭证不留在可见状态），
+ * 深链带来的接管链接因此在输入框里没有席位凭证。输入框仍是那条深链的预填内容时，用原始链接
+ * 解析，席位凭证才不会在这一步丢掉；用户改过输入框就以输入框为准。
+ */
+export function linkToParse(fieldText: string, incomingLink: string): string {
+  if (incomingLink && fieldText.trim() === redactShareLink(incomingLink).trim()) return incomingLink
+  return fieldText
+}
+
+/**
  * 深链（`diceframe://join?link=…`）能否不经确认自动解析：任何网页都能拉起这个路由，
  * 自动解析一条指向别的服务器的链接会登出房主、清掉身份并把 App 指向对方服务器
  * （随后的假登录页可钓访问密码）。所以只放行：

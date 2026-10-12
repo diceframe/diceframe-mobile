@@ -3,6 +3,7 @@
  *
  * 同一张卡推给服务器 A 之后，相对 B 仍是「未推送」：基线按服务器分开记录。
  */
+import { EMBEDDED_BOOK_SUFFIX } from './ids'
 import type { LocalItemSummary, ServerLink } from './repository'
 
 export type SyncStatus =
@@ -27,14 +28,32 @@ export type LocalItemBadge =
   /** 服务器声明的锁定（插件卡 / 插件书），本机只读 */
   | 'locked'
 
+type BadgeLink = Pick<ServerLink, 'localId' | 'syncedRevision' | 'remoteDeletedAt'>
+
+/** 按本机 id 分组一次（列表里每项再按 id 取，不必每项都扫一遍全部映射） */
+export function groupLinksByLocalId<T extends Pick<ServerLink, 'localId'>>(links: readonly T[]): Map<string, T[]> {
+  const grouped = new Map<string, T[]>()
+  for (const link of links) {
+    const list = grouped.get(link.localId)
+    if (list) list.push(link)
+    else grouped.set(link.localId, [link])
+  }
+  return grouped
+}
+
+/**
+ * 卡片的内嵌书在服务器上是独立的一本书（`<卡片 id>.book` 映射）：它被删了也算卡「服务器上已删除」
+ * ——推送时这本书会一起镜像，用户需要知道。未推送改动只看项本身的映射（内嵌书的基线与卡同步）。
+ */
 export function localItemBadges(
   item: Pick<LocalItemSummary, 'localId' | 'revision' | 'readOnly' | 'origin'>,
-  links: readonly Pick<ServerLink, 'localId' | 'syncedRevision' | 'remoteDeletedAt'>[],
+  linksByLocalId: ReadonlyMap<string, readonly BadgeLink[]>,
 ): LocalItemBadge[] {
-  const own = links.filter((link) => link.localId === item.localId)
+  const own = linksByLocalId.get(item.localId) ?? []
+  const book = linksByLocalId.get(`${item.localId}${EMBEDDED_BOOK_SUFFIX}`) ?? []
   const badges: LocalItemBadge[] = []
   if (!item.readOnly && own.some((link) => !link.remoteDeletedAt && item.revision > link.syncedRevision)) badges.push('unpushed')
-  if (own.some((link) => !!link.remoteDeletedAt)) badges.push('server-deleted')
+  if ([...own, ...book].some((link) => !!link.remoteDeletedAt)) badges.push('server-deleted')
   if (item.origin?.locked_reason) badges.push('locked')
   return badges
 }

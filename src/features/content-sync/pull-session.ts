@@ -25,12 +25,14 @@
  */
 import type { ContentExportItem, ContentKind, ContentProvenance, ContentStatusItem, ContentWarning } from '@/api/types'
 import { EMBEDDED_BOOK_SUFFIX, isCanonicalId } from '@/lib/local-library/ids'
+import { uniqueCopyName } from '@/lib/local-library/copy-name'
 import { lorebookDocumentWith } from '@/lib/local-library/lorebook-library'
 import type { LocalItem, LocalItemOrigin, PullImport, PullImportResult, ServerLink } from '@/lib/local-library/repository'
 import {
   CARD_FORMAT,
   cardSummary,
   isRulesAwareCard,
+  patchCardDocument,
   pushableCardDocument,
   readCardV3,
   withCharacterBook,
@@ -41,6 +43,7 @@ import {
   LOREBOOK_FORMAT,
   ensureEntryIds,
   lorebookSummary,
+  patchBook,
   readLorebookV3,
 } from '@/lib/portable/lorebook-v3'
 
@@ -103,6 +106,8 @@ interface ExportRef {
 /** 会话用到的本机库能力（LocalLibraryRepository 的子集） */
 export interface PullLibrary {
   getItem(localId: string): LocalItem | null
+  listItems(filter?: { kind?: ContentKind }): Pick<LocalItem, 'name'>[]
+  listAllLinks(): Pick<ServerLink, 'serverInstanceId' | 'localId'>[]
   getLink(serverInstanceId: string, localId: string): ServerLink | null
   findByCanonical(serverInstanceId: string, canonicalId: string): ServerLink | null
   importFromServer(serverInstanceId: string, input: PullImport): PullImportResult
@@ -123,6 +128,8 @@ export interface PullDeps {
   sleep(ms: number): Promise<void>
   /** 按时间预算让出 JS 线程 */
   maybeYield(): Promise<void>
+  /** 「副本」后缀（界面语言）：n = 1 是第一份，之后带序号 */
+  copySuffix(n: number): string
 }
 
 export type PullItemStatus =
@@ -175,7 +182,7 @@ export function embeddedBookIdOf(item: Pick<ContentExportItem, 'kind' | 'origin'
 }
 
 type Prepared =
-  | { ok: true; input: Omit<PullImport, 'mode' | 'targetLocalId' | 'detachLocalId'>; warnings: ContentWarning[] }
+  | { ok: true; input: Omit<PullImport, 'mode' | 'targetLocalId' | 'detachLocalId' | 'detachRename'>; warnings: ContentWarning[] }
   | { ok: false; status: 'unsupported' | 'rejected'; code: string; entryId?: string; warnings: ContentWarning[] }
 
 function keyOf(kind: ContentKind, canonicalId: string): string {
@@ -442,7 +449,7 @@ export class PullSession {
         ...prepared.input,
         mode,
         ...(mode === 'update' && current ? { targetLocalId: current.localId } : {}),
-        ...(mode === 'keep-both' && current ? { detachLocalId: current.localId } : {}),
+        ...(mode === 'keep-both' && current ? { detachLocalId: current.localId, ...this.detachRename(current, prepared.input.name) } : {}),
       })
       const status: PullItemStatus = mode === 'create' ? 'created' : mode === 'update' ? 'updated' : 'kept-both'
       const warnings = result.skippedBookLink
@@ -451,6 +458,29 @@ export class PullSession {
       this.setOutcome(key, { name, status, localId: result.localId, warnings })
     } catch (error) {
       this.setOutcome(key, { name, status: 'rejected', code: codeOf(error), warnings: prepared.warnings })
+    }
+  }
+
+  /**
+   * 保留两份时给改过的那份换个可区分的名字（它仍跟随别的服务器时不改，见下）（`名字（副本）`，被占用就带序号），文档里的名字一起改。
+   * 改的是本机这份而不是服务器版本：它已不跟随服务器项、之后作为新项推送，改名不会波及服务器上
+   * 原来那一份；服务器版本保持服务器上的名字，再拉取时也不会来回改名。改不了（文档读不出）就不改。
+   */
+  private detachRename(current: LocalItem, serverName: string): { detachRename?: { name: string; document: unknown } } {
+    const { library, copySuffix, serverInstanceId } = this.deps
+    // 改过的那份还跟随别的服务器：不改名。改名要加 revision，下次推到那台时会把它那边的副本也改名
+    const ownRefs = new Set([current.localId, `${current.localId}${EMBEDDED_BOOK_SUFFIX}`])
+    if (library.listAllLinks().some((link) => ownRefs.has(link.localId) && link.serverInstanceId !== serverInstanceId)) return {}
+    // 正在写入的服务器版本也占一个名字（服务器上那份可能已经叫「X（副本）」）
+    const taken = new Set([...library.listItems({ kind: current.kind }).map((item) => item.name), serverName])
+    const name = uniqueCopyName(current.name, taken, copySuffix)
+    try {
+      const document = current.kind === 'character_template'
+        ? patchCardDocument(current.document, { character_name: name })
+        : lorebookDocumentWith(current.document, patchBook(readLorebookV3(current.document), { name }))
+      return { detachRename: { name, document } }
+    } catch {
+      return {}
     }
   }
 

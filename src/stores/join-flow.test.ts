@@ -223,3 +223,20 @@ describe('#1 终审：玩家模式只作用于分享那一局的请求', () => {
     expect(onUnauthorized).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('#9 安全评审：显式带的席位凭证被拒，不清掉本机原有的席位凭证', () => {
+  it('接管链接里的凭证无效（401 SEAT_TOKEN_INVALID）：本机保存的凭证保留，也不通知路由层', async () => {
+    const store = useSettingsStore.getState()
+    store.storeSeatToken(SERVER, 'GK', 'mine')
+    store.upsertShare({ game: 'GK', user: 'u1' })
+    const rejected = vi.fn()
+    configureApiClient({ onShareCredentialRejected: rejected })
+    fetchMock.mockImplementation(async () => json({ ok: false, error_code: 'SEAT_TOKEN_INVALID' }, 401))
+    await expect(api('/games/GK/players', { method: 'POST', body: '{}', headers: { 'X-Seat-Token': 'garbage' } }))
+      .rejects.toMatchObject({ code: 'SEAT_TOKEN_INVALID' })
+    expect(rejected).not.toHaveBeenCalled()
+    fetchMock.mockImplementation(async () => json({ ok: true }))
+    await api('/games/GK/log')
+    expect(call(1).headers.get('X-Seat-Token')).toBe('mine')
+  })
+})

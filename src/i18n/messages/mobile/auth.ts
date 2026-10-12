@@ -3,6 +3,11 @@
  */
 export const auth = {
   zh: {
+    dfJoinTakeoverTarget: "将接管角色：{{name}}",
+    dfJoinTakeoverReplaceWarning: "这会替换本设备在这一局的现有角色「{{name}}」。",
+    dfJoinTakeoverReplaceTitle: "替换本设备的角色？",
+    dfJoinTakeoverReplaceMessage: "本设备在这一局已有角色「{{name}}」。继续会改为接管链接里的角色，原来的角色需要 GM 的新链接才能找回。",
+    dfJoinTakeoverReplaceConfirm: "替换",
     dfJoinSeatBannerHint: "要回到原来的角色，请向 GM 要一条新的接管链接。新建角色会占用一个新席位。",
     dfJoinCreateAnyway: "仍然新建角色",
     dfScanLoginAction: "扫码登录",
@@ -61,6 +66,11 @@ export const auth = {
     dfServerCompatConfirm: "知道了",
   },
   en: {
+    dfJoinTakeoverTarget: "You will take over: {{name}}",
+    dfJoinTakeoverReplaceWarning: "This replaces your current character \"{{name}}\" in this game on this device.",
+    dfJoinTakeoverReplaceTitle: "Replace the character on this device?",
+    dfJoinTakeoverReplaceMessage: "This device already plays \"{{name}}\" in this game. Continuing switches to the character from the link; getting the old one back needs a new link from the GM.",
+    dfJoinTakeoverReplaceConfirm: "Replace",
     dfJoinSeatBannerHint: "To get back your original character, ask the GM for a new takeover link. Creating a character takes a new seat.",
     dfJoinCreateAnyway: "Create a new character anyway",
     dfScanLoginAction: "Scan to sign in",
@@ -118,6 +128,11 @@ export const auth = {
     dfServerCompatConfirm: "OK",
   },
   ja: {
+    dfJoinTakeoverTarget: "引き継ぐキャラクター：{{name}}",
+    dfJoinTakeoverReplaceWarning: "この端末でのこのゲームの現在のキャラクター「{{name}}」を置き換えます。",
+    dfJoinTakeoverReplaceTitle: "この端末のキャラクターを置き換えますか？",
+    dfJoinTakeoverReplaceMessage: "この端末はこのゲームで「{{name}}」を使っています。続けるとリンクのキャラクターに切り替わり、元のキャラクターに戻るには GM の新しいリンクが必要です。",
+    dfJoinTakeoverReplaceConfirm: "置き換える",
     dfJoinSeatBannerHint: "元のキャラクターに戻るには、GM に新しい引き継ぎリンクをもらってください。新しく作成すると別の席を使います。",
     dfJoinCreateAnyway: "それでも新しいキャラクターを作成",
     dfScanLoginAction: "QR でログイン",
@@ -175,6 +190,11 @@ export const auth = {
     dfServerCompatConfirm: "OK",
   },
   de: {
+    dfJoinTakeoverTarget: "Du übernimmst: {{name}}",
+    dfJoinTakeoverReplaceWarning: "Das ersetzt deinen aktuellen Charakter „{{name}}“ in diesem Spiel auf diesem Gerät.",
+    dfJoinTakeoverReplaceTitle: "Charakter auf diesem Gerät ersetzen?",
+    dfJoinTakeoverReplaceMessage: "Dieses Gerät spielt in diesem Spiel bereits „{{name}}“. Wenn du fortfährst, wechselst du zum Charakter aus dem Link; für den alten brauchst du einen neuen Link vom GM.",
+    dfJoinTakeoverReplaceConfirm: "Ersetzen",
     dfJoinSeatBannerHint: "Um zu deinem ursprünglichen Charakter zurückzukehren, bitte den GM um einen neuen Übernahme-Link. Ein neuer Charakter belegt einen neuen Platz.",
     dfJoinCreateAnyway: "Trotzdem neuen Charakter erstellen",
     dfScanLoginAction: "Per QR anmelden",

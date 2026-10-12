@@ -2,9 +2,14 @@
  * 对局实时流（SSE）通道。
  *
  * 对齐 Web useGame.ts 的连接策略：
- * - POST /games/{key}/sse-ticket 取一次性票据（30s TTL），再 GET /sse?ticket&cursor
- * - 每条消息记录 lastEventId 作为可恢复游标（服务端格式 r{n}.p{n}.a{digest}.s{digest}）
- * - 断开后 5s 重连（带游标）；连续失败进入轮询降级（30s REST 刷新兜底），重连仍继续
+ * - POST /games/{key}/sse-ticket 取一次性票据（30s TTL），再 GET /sse?ticket
+ * - 每条消息记录 lastEventId 作为游标（服务端格式 r{n}.p{n}.a{digest}.s{digest}），交给调用方
+ * - 断开后 5s 重连；连续失败进入轮询降级（30s REST 刷新兜底），重连仍继续
+ *
+ * 与 Web 的差异：连接**不带游标**。服务端只在不带游标的新连接上立刻发 baseline，带游标时要等到
+ * 下一次真有变化才写第一字节；react-native-sse 要收到响应体才触发 open，于是带游标的重连在安静的
+ * 对局里一直停在「连接中」，还会被建连超时反复断开重连（实机）。改为每次都按新连接订阅，open 后
+ * 若此前已有游标（重连、回前台）就要求一次完整刷新，补上断开期间没被推送的变化。
  *
  * 事件语义（对齐 gameSse.ts / routes/sse.py）：
  * baseline=仅确认基线；narration_delta/narration_reset=流式叙事；其余=触发完整刷新。
@@ -28,7 +33,8 @@ export interface GameSsePayload {
   [key: string]: unknown
 }
 
-export type StreamStatus = 'idle' | 'connecting' | 'live' | 'degraded'
+/** stopped：服务端撤销了这条流（见 onRevoked），不会自己重连，要等调用方重新建流 */
+export type StreamStatus = 'idle' | 'connecting' | 'live' | 'degraded' | 'stopped'
 
 /** 服务端撤销这条流的原因（`event: revoked` 的 data） */
 export interface SseRevocation {
@@ -94,6 +100,8 @@ export function createGameStream(
   let pollTimer: ReturnType<typeof setInterval> | null = null
   let consecutiveFailures = 0
   let cursor = ''
+  /** 这次 open 之前可能漏了事件（重连、或带着已知游标开始）：open 后要一次完整刷新 */
+  let needsGapRefresh = false
   let attempt = 0
   let ticketController: AbortController | null = null
   let connectTimer: ReturnType<typeof setTimeout> | null = null
@@ -184,7 +192,7 @@ export function createGameStream(
     if (!isCurrent()) return
     ticketController = null
 
-    const es = new EventSource<'revoked'>(buildPlaySseUrl(gameKey, ticket, getCursor()), {
+    const es = new EventSource<'revoked'>(buildPlaySseUrl(gameKey, ticket), {
       method: 'GET',
       pollingInterval: RECONNECT_DELAY_MS,
     })
@@ -196,6 +204,9 @@ export function createGameStream(
       consecutiveFailures = 0
       stopPollFallback()
       setStatus('live')
+      if (needsGapRefresh) handlers.onEvent('refresh', {}, cursor || getCursor())
+      // 之后的每次 open 都是重连
+      needsGapRefresh = true
     })
 
     es.addEventListener('message', (event) => {
@@ -237,6 +248,7 @@ export function createGameStream(
       stopped = false
       consecutiveFailures = 0
       cursor = getCursor()
+      needsGapRefresh = !!cursor
       void connect()
     },
     stop() {

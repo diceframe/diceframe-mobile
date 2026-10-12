@@ -4,6 +4,8 @@
  */
 export const lore = {
   zh: {
+    dfLocalLorebookSecondaryKeys: '次要关键词',
+    dfLocalLorebookSecondaryKeysHint: '可选；与关键词配合进一步筛选，同样用逗号或换行分隔',
     // 本机 Lorebook（离线内容库里的独立书）
     dfLocalLorebooksTitle: '本机 Lorebook',
     dfLocalLorebooksOpen: '本机书',
@@ -109,6 +111,8 @@ export const lore = {
     // useLorebook 错误兜底复用 profile 簇的 dfLoreCreateWorldFirst/dfLoreCreateWorldFailed/dfLoreSaveEntryFailed/dfLoreUpdateEntryFailed/dfLoreDeleteEntryFailed
   },
   en: {
+    dfLocalLorebookSecondaryKeys: 'Secondary keywords',
+    dfLocalLorebookSecondaryKeysHint: 'Optional; narrows matching together with the keywords. Separate with commas or new lines',
     // 本机 Lorebook（离线内容库里的独立书）
     dfLocalLorebooksTitle: 'Local lorebooks',
     dfLocalLorebooksOpen: 'On this device',
@@ -212,6 +216,8 @@ export const lore = {
     // useLorebook error fallbacks reuse the profile cluster's dfLoreCreateWorldFirst/dfLoreCreateWorldFailed/dfLoreSaveEntryFailed/dfLoreUpdateEntryFailed/dfLoreDeleteEntryFailed
   },
   ja: {
+    dfLocalLorebookSecondaryKeys: 'サブキーワード',
+    dfLocalLorebookSecondaryKeysHint: '任意。キーワードと組み合わせて絞り込みます。カンマまたは改行で区切ります',
     // 本机 Lorebook（离线内容库里的独立书）
     dfLocalLorebooksTitle: '端末の Lorebook',
     dfLocalLorebooksOpen: 'この端末',
@@ -315,6 +321,8 @@ export const lore = {
     // useLorebook のエラーは profile 簇の dfLoreCreateWorldFirst/dfLoreCreateWorldFailed/dfLoreSaveEntryFailed/dfLoreUpdateEntryFailed/dfLoreDeleteEntryFailed を再利用
   },
   de: {
+    dfLocalLorebookSecondaryKeys: 'Sekundäre Schlüsselwörter',
+    dfLocalLorebookSecondaryKeysHint: 'Optional; grenzt zusammen mit den Schlüsselwörtern ein. Durch Kommas oder Zeilenumbrüche trennen',
     // 本机 Lorebook（离线内容库里的独立书）
     dfLocalLorebooksTitle: 'Lokale Lorebooks',
     dfLocalLorebooksOpen: 'Auf diesem Gerät',

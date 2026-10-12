@@ -349,7 +349,8 @@ export const useGameStore = create<GameStore>((set, get) => {
         // 相同的路由（席位失效 / 重输房间密码）；玩家入口关闭只在对局页提示，不跳转。
         onRevoked: (revocation: SseRevocation) => {
           if (!isCurrent(gameKey, version) || suspended) return
-          set({ streamStatus: 'idle' })
+          // 流是被服务端有意停掉的：不是「连接中」；重试刷新成功后由 refresh 重新建流
+          set({ streamStatus: 'stopped' })
           const share = currentShare()
           const player = !get().isGm && share?.game === gameKey
           if (player && revocation.errorCode === 'SEAT_TOKEN_INVALID') {
@@ -545,6 +546,10 @@ export const useGameStore = create<GameStore>((set, get) => {
         })
         // 远端重开也换 run_id；旧频道请求与新 run 不可混用，须重取当前记录。
         if (runChanged && !playerRemoved) await get().refreshTableTalk()
+        // 流曾被服务端撤销（例如玩家入口关闭）：刷新成功说明又能访问了，重新取票建流
+        if (get().streamStatus === 'stopped' && !playerRemoved && !suspended && get().gameKey === gameKey) {
+          startStream(gameKey, connectionVersion)
+        }
       } catch (error) {
         if (get().gameKey === gameKey && requestVersion === refreshVersion && sameIdentity()) {
           if (error instanceof ApiError && [401, 403, 404].includes(error.status)) clearTableTalk()

@@ -445,6 +445,8 @@ export default function GameScreen() {
       <StatusBadge tone="success">{t('dfPlayConnected')}</StatusBadge>
     ) : streamStatus === 'degraded' ? (
       <StatusBadge tone="warning">{t('dfPlayPolling')}</StatusBadge>
+    ) : streamStatus === 'stopped' ? (
+      <StatusBadge tone="secondary">{t('dfPlayStreamStopped')}</StatusBadge>
     ) : (
       <StatusBadge tone="secondary">{t('connecting')}</StatusBadge>
     )

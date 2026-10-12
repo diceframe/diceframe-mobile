@@ -5,6 +5,7 @@
 import { randomUUID } from 'expo-crypto'
 
 import { assertContentServer, contentStatus, exportContent, listContent } from '@/api/content'
+import { getT } from '@/i18n/t'
 import { createYielder } from '@/lib/local-library/yielder'
 
 import { contentListSource } from './list-source'
@@ -26,6 +27,7 @@ export function createPullSession(context: PullContext, refs: readonly ServerIte
     uuid: randomUUID,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     maybeYield: createYielder(),
+    copySuffix: (n) => (n === 1 ? getT()('dfLocalCopySuffix') : getT()('dfLocalCopySuffixN', { n })),
   }, refs)
 }
 

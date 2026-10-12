@@ -156,3 +156,33 @@ describe('本机 Lorebook 库操作', () => {
     expect(library.getItem(item.localId)!.revision).toBe(1)
   })
 })
+
+describe('M7 后续：次要关键词（secondary_keys）与关键词同样编辑', () => {
+  it('表单回显、只写改过的、清空写成空数组、新条目可带', async () => {
+    const entry = readLorebookV3(fixtures.lorebook).entries[0]
+    const snapshot = entryFormOf(entry)
+    expect(snapshot.secondaryKeysText).toBe((entry.secondary_keys as string[]).join(', '))
+    expect(entryEditOf(snapshot, { ...snapshot })).toEqual({})
+    expect(entryEditOf(snapshot, { ...snapshot, secondaryKeysText: 'x，y' })).toEqual({ secondary_keys: ['x', 'y'] })
+    const withSecondary = entryFormOf({ id: 'e', keys: ['k'], secondary_keys: ['s1', 's2'], content: '' })
+    expect(withSecondary.secondaryKeysText).toBe('s1, s2')
+    expect(entryEditOf(withSecondary, { ...withSecondary, secondaryKeysText: '' })).toEqual({ secondary_keys: [] })
+    expect(entryEditOf(withSecondary, { ...withSecondary, secondaryKeysText: 's1，s2 ' })).toEqual({})
+    expect(newEntryEditOf({ ...entryFormOf(null), content: 'c', secondaryKeysText: 's1' })).toMatchObject({ secondary_keys: ['s1'] })
+    expect(newEntryEditOf({ ...entryFormOf(null), content: 'c' })).not.toHaveProperty('secondary_keys')
+
+    const library = await setup()
+    const item = library.createItem({ kind: 'lorebook', format: 'lorebook_v3', document: richDocument(), name: 'b' })
+    saveLocalLorebookEntry(library, item.localId, 'town-cinder', entryEditOf(snapshot, { ...snapshot, secondaryKeysText: ' a , b ' }), sequence())
+    const saved = readLorebookV3(library.getItem(item.localId)!.document).entries[0]
+    const expected = richDocument().data.lorebook.entries[0]
+    expect(saved).toEqual({ ...expected, secondary_keys: ['a', 'b'] })
+  })
+})
+
+describe('#9 评审：次要关键词兼容 Tavern 别名 keysecondary', () => {
+  it('没有 secondary_keys 时回退读 keysecondary；两者都有以 secondary_keys 为准', () => {
+    expect(entryFormOf({ id: 'e', keys: ['k'], keysecondary: ['a', 'b'], content: '' }).secondaryKeysText).toBe('a, b')
+    expect(entryFormOf({ id: 'e', keys: ['k'], secondary_keys: ['x'], keysecondary: ['a'], content: '' }).secondaryKeysText).toBe('x')
+  })
+})
