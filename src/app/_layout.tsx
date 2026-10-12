@@ -17,6 +17,8 @@ import { getT } from '@/i18n/t'
 import { Toaster } from 'sonner-native'
 import { useLocaleSync } from '@/hooks/useLocaleSync'
 import { useServerCompatCheck } from '@/hooks/useServerCompatCheck'
+import { shouldBounceToJoin } from '@/lib/join-bounce'
+import { joinLinkParams } from '@/lib/join-deep-link'
 import { buildShareLink } from '@/lib/share-link'
 import { useResolvedTheme, useThemeToken } from '@/lib/theme'
 import { useSettingsStore } from '@/stores/settings'
@@ -75,10 +77,12 @@ export default function RootLayout() {
         else settings.rejectRoomToken(baseUrl, game)
         // 加入页从抛出的 ApiError 就地处理；别的后端（加入页探测中）的拒绝也不该把人带走
         if (pathnameRef.current === '/join' || baseUrl !== settings.baseUrl) return
+        // 同一时刻在途的几个请求会各报一次：只跳一次
+        if (!shouldBounceToJoin(`${baseUrl}:${game}`)) return
         router.replace({
           pathname: '/join',
           params: {
-            link: buildShareLink(game, baseUrl, undefined, baseUrl),
+            ...joinLinkParams(buildShareLink(game, baseUrl, undefined, baseUrl)),
             notice: kind === 'seat' ? 'seat-invalid' : 'room',
           },
         })

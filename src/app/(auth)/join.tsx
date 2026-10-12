@@ -39,12 +39,19 @@ import {
   type ParsedShareLink,
 } from '@/lib/share-link'
 import { confirmDestructive } from '@/lib/confirm'
+import { joinLinkFromParams } from '@/lib/join-deep-link'
 import { ServerCompatBlocked, fetchServerCompat, serverCompatErrorText } from '@/lib/server-compat'
 import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
 import { useT } from '@/i18n/t'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 
 type Step = 'link' | 'room' | 'identity' | 'done'
+
+/**
+ * 页面顶部的说明横幅（不是错误）：席位凭证失效 / 缺失 / 旧链接、房间访问过期。
+ * seat 类时「找 GM 要新链接」是主要出路，新建角色收起为次要操作，免得玩家顺手建出重复席位。
+ */
+type JoinBanner = { kind: 'seat' | 'room'; text: string }
 
 /** 解析后进入界面状态的链接：席位凭证已剥离（只进凭证槽位） */
 type PublicShareLink = Omit<ParsedShareLink, 'seat'>
@@ -53,7 +60,9 @@ export default function JoinScreen() {
   const router = useRouter()
   const t = useT()
   // 路由层在凭证被拒/席位失效时带回来：link 是不含凭证的邀请链接，notice 说明原因
-  const params = useLocalSearchParams<{ link?: string; notice?: string }>()
+  const params = useLocalSearchParams<{ link?: string; link64?: string; notice?: string }>()
+  // 邀请链接经 link64 传入（深链与 App 内跳转都不会被路由层按 # 截断，见 lib/join-deep-link）
+  const incomingLink = joinLinkFromParams(params)
   const setBaseUrl = useSettingsStore((s) => s.setBaseUrl)
   const setToken = useSettingsStore((s) => s.setToken)
   const clearShares = useSettingsStore((s) => s.clearShares)
@@ -62,7 +71,7 @@ export default function JoinScreen() {
   const storeRoomToken = useSettingsStore((s) => s.storeRoomToken)
 
   // 输入框只回显剥掉 seat= 的链接：凭证不留在可见状态（截图/录屏/剪贴板历史）
-  const [link, setLink] = React.useState(() => (params.link ? redactShareLink(params.link) : ''))
+  const [link, setLink] = React.useState(() => (incomingLink ? redactShareLink(incomingLink) : ''))
   const [parsed, setParsed] = React.useState<PublicShareLink | null>(null)
   const [detail, setDetail] = React.useState<GameDetail | null>(null)
   const [roomPassword, setRoomPassword] = React.useState('')
@@ -85,6 +94,9 @@ export default function JoinScreen() {
   const [scanning, setScanning] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
+  const [banner, setBanner] = React.useState<JoinBanner | null>(null)
+  // seat 类横幅下，新建角色表单默认收起，用户明确选择后才展开
+  const [createAnyway, setCreateAnyway] = React.useState(false)
   const keyboardHeight = useKeyboardHeight()
   const mountedRef = React.useRef(true)
   const pendingClientRestoreRef = React.useRef<Parameters<typeof configureApiClient>[0] | null>(null)
@@ -93,8 +105,8 @@ export default function JoinScreen() {
   const autoParsedRef = React.useRef(false)
   // 深链带来的链接指向别的服务器时不自动解析，只预填并提示目标主机，由用户明确操作
   const [foreignLinkHost] = React.useState(() =>
-    params.link && !joinLinkAutoParseAllowed(params.link, useSettingsStore.getState().baseUrl)
-      ? serverSwitchTarget(params.link, useSettingsStore.getState().baseUrl)
+    incomingLink && !joinLinkAutoParseAllowed(incomingLink, useSettingsStore.getState().baseUrl)
+      ? serverSwitchTarget(incomingLink, useSettingsStore.getState().baseUrl)
       : null,
   )
 
@@ -113,11 +125,11 @@ export default function JoinScreen() {
   // 这个路由也能被任意网页经 diceframe:// 深链拉起，所以只自动解析指向当前服务器、
   // 且不带席位凭证的链接；其余只预填输入框，等用户明确点击（切服务器还要再确认）。
   React.useEffect(() => {
-    if (autoParsedRef.current || !params.link) return
+    if (autoParsedRef.current || !incomingLink) return
     autoParsedRef.current = true
-    if (!joinLinkAutoParseAllowed(params.link, useSettingsStore.getState().baseUrl)) return
-    void parse(params.link)
-  }, [params.link])
+    if (!joinLinkAutoParseAllowed(incomingLink, useSettingsStore.getState().baseUrl)) return
+    void parse(incomingLink)
+  }, [incomingLink])
 
   // 进入建卡步骤后拉一次本局共享卡库（对齐 Web JoinView loadGameData 的
   // /character-cards 预取）；拉取失败按 Web 语义降级为空列表 → 入口整体隐藏。
@@ -233,7 +245,7 @@ export default function JoinScreen() {
   async function gate(p: PublicShareLink, gameDetail: GameDetail, seatLink: boolean) {
     const ownerDelegate = !!useSettingsStore.getState().token && isDelegateFlag(p.delegate)
     if (gameDetail.has_room_password && !ownerDelegate && !hasRoomToken(p.game)) {
-      if (noticeRef.current === 'room') setError(t('roomAccessExpired'))
+      if (noticeRef.current === 'room') setBanner({ kind: 'room', text: t('roomAccessExpired') })
       setStep('room')
       return
     }
@@ -253,9 +265,9 @@ export default function JoinScreen() {
       return
     }
     const notice = noticeRef.current
-    if (p.legacyUser) setError(t('seatLinkExpired'))
-    else if (notice === 'seat') setError(t('seatTokenMissing'))
-    else if (notice === 'seat-invalid') setError(t('apiErrors.SEAT_TOKEN_INVALID'))
+    if (p.legacyUser) setBanner({ kind: 'seat', text: t('seatLinkExpired') })
+    else if (notice === 'seat') setBanner({ kind: 'seat', text: t('seatTokenMissing') })
+    else if (notice === 'seat-invalid') setBanner({ kind: 'seat', text: t('apiErrors.SEAT_TOKEN_INVALID') })
     setMode('create')
     setStep('identity')
   }
@@ -280,7 +292,7 @@ export default function JoinScreen() {
     if (!(e instanceof ApiError) || !e.needsRoomPassword) return false
     setRoomPassword('')
     setStep('room')
-    setError(t('roomAccessExpired'))
+    setBanner({ kind: 'room', text: t('roomAccessExpired') })
     return true
   }
 
@@ -301,6 +313,7 @@ export default function JoinScreen() {
       const token = await verifyRoomPassword(parsed.game, roomPassword)
       storeRoomToken(useSettingsStore.getState().baseUrl, parsed.game, token)
       setRoomPassword('')
+      if (banner?.kind === 'room') setBanner(null)
       // 有房间密码时大厅视图藏着场景与成员投影，拿到令牌后重取一次再决定找回/新建
       let fresh = detail
       try {
@@ -404,6 +417,12 @@ export default function JoinScreen() {
           contentContainerClassName="flex-grow justify-center gap-6"
           keyboardShouldPersistTaps="handled"
         >
+      {banner ? (
+        <View className="gap-1 rounded-xl border border-destructive/40 bg-destructive/10 p-3">
+          <Text className="font-semibold text-destructive">{banner.text}</Text>
+          {banner.kind === 'seat' ? <Text variant="small">{t('dfJoinSeatBannerHint')}</Text> : null}
+        </View>
+      ) : null}
       {step === 'link' && (
         <View className="gap-3">
           {foreignLinkHost ? (
@@ -469,6 +488,10 @@ export default function JoinScreen() {
                 )}
               </Button>
             </>
+          ) : banner?.kind === 'seat' && !createAnyway ? (
+            <Button variant="outline" onPress={() => setCreateAnyway(true)} disabled={busy}>
+              <Text>{t('dfJoinCreateAnyway')}</Text>
+            </Button>
           ) : (
             <>
               <JoinCharacterForm
