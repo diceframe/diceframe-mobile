@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
 import { useT } from '@/i18n/t'
+import { updateSkillRow } from '@/lib/local-library/card-edit'
 import { SKILL_EFFECT_MAX_CHARS, skillPoolNames } from '@/lib/character-card'
 import { cn } from '@/lib/utils'
 
@@ -53,8 +54,11 @@ export function SkillRowsEditor({
     })
   }
 
+  // 行必须用对象展开更新（updateSkillRow）：本机编辑靠行上的 SKILL_SOURCE（Symbol 键）对回
+  // 存着的技能，经 JSON 或 structuredClone 拷贝会丢掉它，那一行就会被当成新增、丢掉未知字段。
+  // 删除行用 filter 保留原对象，同理不要复制。
   function update(index: number, patch: Partial<CharacterSkill>) {
-    onChange(skills.map((skill, i) => (i === index ? { ...skill, ...patch } : skill)))
+    onChange(updateSkillRow(skills, index, patch))
   }
 
   function addSkill(name = '') {

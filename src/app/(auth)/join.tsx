@@ -22,6 +22,7 @@ import {
 import { fetchCharacterCards, fetchGameDetail, joinGame, verifyRoomPassword } from '@/api/games'
 import type { CharacterCard, CharacterPortrait, GameDetail } from '@/api/types'
 import { JoinCharacterForm } from '@/features/join/JoinCharacterForm'
+import { loadLocalJoinCards } from '@/hooks/useLocalCards'
 import {
   applyCardToDraft,
   buildJoinNewPayload,
@@ -86,6 +87,8 @@ export default function JoinScreen() {
   const [joinCard, setJoinCard] = React.useState<CharacterCard | null>(null)
   // 本局共享卡库；null = 尚未拉取（进入 identity 步骤后拉一次）
   const [cards, setCards] = React.useState<CharacterCard[]>([])
+  // 本机角色库里的卡（离线内容库）：玩家不必推送，直接用它建卡加入
+  const [localCards, setLocalCards] = React.useState<CharacterCard[]>([])
   const [cardsLoading, setCardsLoading] = React.useState(false)
   const cardsRequestedRef = React.useRef(false)
   const [step, setStep] = React.useState<Step>('link')
@@ -136,17 +139,21 @@ export default function JoinScreen() {
     if (step !== 'identity' || mode !== 'create' || !parsed || cardsRequestedRef.current) return
     cardsRequestedRef.current = true
     setCardsLoading(true)
-    fetchCharacterCards(parsed.game)
-      .then((result) => setCards(result.cards ?? []))
-      .catch((cause: unknown) => {
-        setCards([])
-        // 房间访问失效（改了房间密码 / 令牌过期）不是「没有可选的卡」：回房间密码步骤
-        if (mountedRef.current && cardsFailureNeedsRoomGate(cause, !!detail?.has_room_password, hasRoomToken(parsed.game))) {
-          cardsRequestedRef.current = false
-          showRoomGate()
-        }
-      })
-      .finally(() => setCardsLoading(false))
+    Promise.all([
+      fetchCharacterCards(parsed.game)
+        .then((result) => setCards(result.cards ?? []))
+        .catch((cause: unknown) => {
+          setCards([])
+          // 房间访问失效（改了房间密码 / 令牌过期）不是「没有可选的卡」：回房间密码步骤
+          if (mountedRef.current && cardsFailureNeedsRoomGate(cause, !!detail?.has_room_password, hasRoomToken(parsed.game))) {
+            cardsRequestedRef.current = false
+            showRoomGate()
+          }
+        }),
+      loadLocalJoinCards()
+        .then(setLocalCards)
+        .catch(() => setLocalCards([])),
+    ]).finally(() => setCardsLoading(false))
   }, [step, mode, parsed])
 
   function shareOf(p: PublicShareLink, userId?: string) {
@@ -506,6 +513,8 @@ export default function JoinScreen() {
                 portrait={portrait}
                 selectedCard={joinCard}
                 cards={cards}
+                localCards={localCards}
+                gameRuleId={detail?.rule_id ? String(detail.rule_id) : undefined}
                 cardsLoading={cardsLoading}
                 onChangeCharacterName={setCharacterName}
                 onChangeBackground={setBackground}

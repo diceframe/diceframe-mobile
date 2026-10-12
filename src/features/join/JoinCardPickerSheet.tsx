@@ -5,10 +5,15 @@ import { Sheet } from '@/components/patterns/sheet'
 import { Text } from '@/components/ui/text'
 import type { CharacterCard } from '@/api/types'
 import { useT } from '@/i18n/t'
+import { orderLocalCardsForGame } from './orderLocalCards'
 
 interface JoinCardPickerSheetProps {
   open: boolean
   cards: CharacterCard[]
+  /** 本机角色库里可用于加入的卡（离线内容库；Web 端为空） */
+  localCards: CharacterCard[]
+  /** 本局规则；本机卡绑定的规则与之不同（或没绑规则）时标出来，并排在匹配的卡后面 */
+  gameRuleId?: string
   loading: boolean
   onClose: () => void
   onSelect: (card: CharacterCard) => void
@@ -21,11 +26,41 @@ interface JoinCardPickerSheetProps {
 export function JoinCardPickerSheet({
   open,
   cards,
+  localCards,
+  gameRuleId,
   loading,
   onClose,
   onSelect,
 }: JoinCardPickerSheetProps) {
   const t = useT()
+  const orderedLocal = orderLocalCardsForGame(localCards, gameRuleId)
+  const renderCard = (card: CharacterCard, key: string, mismatch = false) => (
+    <Button
+      key={key}
+      variant="outline"
+      className="items-start gap-1 p-4"
+      onPress={() => onSelect(card)}
+    >
+      <View className="gap-1">
+        <Text className="font-medium">
+          {card.character_name || t('dfCharacterCardUnnamed')}
+        </Text>
+        <Text variant="small" className="text-muted-foreground">
+          {[card.race, card.class].filter(Boolean).join(' · ') || t('dfCharacterCardNoIdentity')}
+        </Text>
+        {card.background ? (
+          <Text variant="small" numberOfLines={2} className="text-muted-foreground">
+            {String(card.background).slice(0, 100)}
+          </Text>
+        ) : null}
+        {mismatch ? (
+          <Text variant="small" className="text-destructive">
+            {t('dfJoinLocalCardRuleMismatch', { rule: String(card.rule_name || card.rule_id || t('dfCharacterNoRule')) })}
+          </Text>
+        ) : null}
+      </View>
+    </Button>
+  )
   return (
     <Sheet open={open} onClose={onClose} className="h-[70%]" scrollable={false}>
       <View className="flex-1 gap-4 pt-1">
@@ -37,35 +72,18 @@ export function JoinCardPickerSheet({
         ) : (
           // 卡库为空时入口在 join 页已整体隐藏，这里理论到不了空态，仍兜底防呆
           <View className="flex-1 gap-3 pb-6">
-            {cards.length === 0 ? (
+            {cards.length === 0 && localCards.length === 0 ? (
               <Text variant="muted" className="text-center">{t('dfCharacterCardsEmpty')}</Text>
-            ) : (
-              cards.map((card, index) => {
-                const id = String(card.card_id || card.id || `card-${index}`)
-                return (
-                  <Button
-                    key={id}
-                    variant="outline"
-                    className="items-start gap-1 p-4"
-                    onPress={() => onSelect(card)}
-                  >
-                    <View className="gap-1">
-                      <Text className="font-medium">
-                        {card.character_name || t('dfCharacterCardUnnamed')}
-                      </Text>
-                      <Text variant="small" className="text-muted-foreground">
-                        {[card.race, card.class].filter(Boolean).join(' · ') || t('dfCharacterCardNoIdentity')}
-                      </Text>
-                      {card.background ? (
-                        <Text variant="small" numberOfLines={2} className="text-muted-foreground">
-                          {String(card.background).slice(0, 100)}
-                        </Text>
-                      ) : null}
-                    </View>
-                  </Button>
-                )
-              })
-            )}
+            ) : null}
+            {/* 本机角色在前：玩家自己的卡；本局共享卡库在后 */}
+            {localCards.length > 0 ? (
+              <Text variant="small" className="font-semibold">{t('dfJoinLocalCards')}</Text>
+            ) : null}
+            {orderedLocal.map(({ card, matches }, index) => renderCard(card, `local-${index}`, !matches))}
+            {localCards.length > 0 && cards.length > 0 ? (
+              <Text variant="small" className="font-semibold">{t('dfJoinSharedCards')}</Text>
+            ) : null}
+            {cards.map((card, index) => renderCard(card, String(card.card_id || card.id || `card-${index}`)))}
           </View>
         )}
       </View>

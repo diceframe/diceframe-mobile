@@ -3,14 +3,23 @@ import { View } from 'react-native'
 
 import { libraryAvatarSource } from '@/api/assets'
 import { fetchCharacterSchema, fetchRuleLibrary } from '@/api/library'
-import type { CharacterCard, CharacterPortrait, CharacterSkill, RuleMeta, RuleSummary, SkillSpec } from '@/api/types'
+import type {
+  CharacterCard,
+  CharacterPortrait,
+  CharacterSchemaResponse,
+  RuleMeta,
+  RulesResponse,
+  RuleSummary,
+  SkillSpec,
+} from '@/api/types'
 import { RemoteAvatar } from '@/components/patterns/remote-avatar'
 import { SheetSelect } from '@/components/patterns/sheet-select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
-import { buildCardPatch, normalizeSkillList, type CharacterCardPatch } from '@/lib/character-card'
+import { buildCardPatch, type CharacterCardPatch } from '@/lib/character-card'
+import { editorSkillRows, type EditorSkillRow, type EditorSnapshot } from '@/lib/local-library/card-edit'
 import {
   currencyAmountToInputText,
   currencyEditableUnitLabel,
@@ -36,13 +45,22 @@ export function CharacterCardEditor({
   card,
   onSubmit,
   onClose,
+  editing,
+  ruleLibrarySource = fetchRuleLibrary,
+  schemaSource = fetchCharacterSchema,
 }: {
   card: CharacterCard | null
-  onSubmit: (payload: CharacterCardPatch) => Promise<void>
+  /** snapshot = 原始表单状态（技能行带来源下标），本机编辑据此只写用户改过的字段 */
+  onSubmit: (payload: CharacterCardPatch, snapshot: EditorSnapshot) => Promise<void>
   onClose: () => void
+  /** 是否编辑已有卡；缺省按服务器卡的 id 判断（本机卡没有服务器 id，由调用方显式给出） */
+  editing?: boolean
+  /** 规则库 / 角色模板来源；本机库传带离线缓存的版本 */
+  ruleLibrarySource?: () => Promise<RulesResponse>
+  schemaSource?: (ruleId: string) => Promise<CharacterSchemaResponse>
 }) {
   const t = useT()
-  const isEditing = Boolean(card?.card_id || card?.id)
+  const isEditing = editing ?? Boolean(card?.card_id || card?.id)
 
   const [name, setName] = React.useState(card?.character_name ?? '')
   const [race, setRace] = React.useState(card?.race ?? '')
@@ -51,7 +69,7 @@ export function CharacterCardEditor({
   // 金额按可编辑单位输入（$0.25 输 "0.25"），canonical 整数与文本的换算统一走 lib/currency。
   // null = 用户还没动过输入框：规则 schema 是异步到的，此时初值跟着 currency_system 重算。
   const [goldInput, setGoldInput] = React.useState<string | null>(null)
-  const [skills, setSkills] = React.useState<CharacterSkill[]>(() => normalizeSkillList(card?.skills))
+  const [skills, setSkills] = React.useState<EditorSkillRow[]>(() => editorSkillRows(card?.skills))
   const [portrait, setPortrait] = React.useState<CharacterPortrait | null>(card?.portrait ?? null)
 
   const [rules, setRules] = React.useState<RuleSummary[]>([])
@@ -67,7 +85,7 @@ export function CharacterCardEditor({
     let cancelled = false
     async function loadRules() {
       try {
-        const result = await fetchRuleLibrary()
+        const result = await ruleLibrarySource()
         if (cancelled) return
         const list = result.rules ?? []
         setRules(list)
@@ -87,7 +105,7 @@ export function CharacterCardEditor({
     let cancelled = false
     async function loadSchema() {
       try {
-        const result = await fetchCharacterSchema(ruleId)
+        const result = await schemaSource(ruleId)
         if (cancelled) return
         setSchemaError('')
         setSchema({
@@ -133,7 +151,15 @@ export function CharacterCardEditor({
           language: 'zh-CN',
         })
       }
-      await onSubmit(patch)
+      await onSubmit(patch, {
+        character_name: name,
+        race,
+        class: klass,
+        background,
+        ...(goldInput !== null ? { gold } : {}),
+        skills,
+        portrait,
+      })
       onClose()
     } catch (cause) {
       setError(errorMessage(cause))

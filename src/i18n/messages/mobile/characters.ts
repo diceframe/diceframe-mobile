@@ -5,6 +5,18 @@
  */
 export const characters = {
   zh: {
+    dfJoinLocalCardRuleMismatch: '规则不同（{{rule}}），带入后请检查数值',
+    // 本机角色库（离线内容库）
+    dfLocalLibraryTab: '本机',
+    dfServerLibraryTab: '服务器卡库',
+    dfLocalCardCount: '{{count}} 张本机角色卡',
+    dfLocalCardReadOnly: '只读',
+    dfLocalCardDuplicate: '复制',
+    dfLocalEmptyTitle: '本机还没有角色',
+    dfLocalEmptyDesc: '在这里建的角色卡存在本机，离线也能编辑，加入对局时可直接选用。',
+    dfLocalCardReadOnlyHint: '规则托管（如 D&D）的角色卡在本机只读，可以复制。',
+    dfJoinLocalCards: '本机角色',
+    dfJoinSharedCards: '本局共享卡库',
     // 角色名册（列表页）
     dfCharacterRosterTitle: '角色名册',
     dfCharacterSyncing: '正在同步角色卡库',
@@ -66,6 +78,18 @@ export const characters = {
     // useCharacters 错误兜底复用 profile 簇的 dfCharacterSaveFailed/dfCharacterUpdateFailed/dfCharacterDeleteFailed
   },
   en: {
+    dfJoinLocalCardRuleMismatch: 'Different rules ({{rule}}); check the numbers after using it',
+    // 本机角色库（离线内容库）
+    dfLocalLibraryTab: 'On this device',
+    dfServerLibraryTab: 'Server library',
+    dfLocalCardCount: '{{count}} characters on this device',
+    dfLocalCardReadOnly: 'Read-only',
+    dfLocalCardDuplicate: 'Duplicate',
+    dfLocalEmptyTitle: 'No characters on this device yet',
+    dfLocalEmptyDesc: 'Characters created here are stored on this device, can be edited offline and can be picked when joining a game.',
+    dfLocalCardReadOnlyHint: 'Rules-managed characters (such as D&D) are read-only on this device. You can duplicate them.',
+    dfJoinLocalCards: 'On this device',
+    dfJoinSharedCards: 'Shared library for this game',
     // Character roster
     dfCharacterRosterTitle: 'Character roster',
     dfCharacterSyncing: 'Syncing character cards',
@@ -127,6 +151,18 @@ export const characters = {
     // useCharacters error fallbacks reuse the profile cluster's dfCharacterSaveFailed/dfCharacterUpdateFailed/dfCharacterDeleteFailed
   },
   ja: {
+    dfJoinLocalCardRuleMismatch: 'ルールが異なります（{{rule}}）。取り込み後に数値を確認してください',
+    // 本机角色库（离线内容库）
+    dfLocalLibraryTab: 'この端末',
+    dfServerLibraryTab: 'サーバーのライブラリ',
+    dfLocalCardCount: 'この端末のキャラクター {{count}} 件',
+    dfLocalCardReadOnly: '読み取り専用',
+    dfLocalCardDuplicate: '複製',
+    dfLocalEmptyTitle: 'この端末にはまだキャラクターがありません',
+    dfLocalEmptyDesc: 'ここで作ったキャラクターカードはこの端末に保存され、オフラインでも編集でき、対局参加時にそのまま選べます。',
+    dfLocalCardReadOnlyHint: 'ルール管理（D&D など）のキャラクターはこの端末では読み取り専用です。複製はできます。',
+    dfJoinLocalCards: 'この端末のキャラクター',
+    dfJoinSharedCards: 'この対局の共有ライブラリ',
     // キャラクター一覧
     dfCharacterRosterTitle: 'キャラクター一覧',
     dfCharacterSyncing: 'キャラクターカードを同期中',
@@ -188,6 +224,18 @@ export const characters = {
     // useCharacters のエラーは profile 簇の dfCharacterSaveFailed/dfCharacterUpdateFailed/dfCharacterDeleteFailed を再利用
   },
   de: {
+    dfJoinLocalCardRuleMismatch: 'Andere Regeln ({{rule}}); prüfe die Werte nach dem Übernehmen',
+    // 本机角色库（离线内容库）
+    dfLocalLibraryTab: 'Auf diesem Gerät',
+    dfServerLibraryTab: 'Server-Bibliothek',
+    dfLocalCardCount: '{{count}} Charaktere auf diesem Gerät',
+    dfLocalCardReadOnly: 'Schreibgeschützt',
+    dfLocalCardDuplicate: 'Duplizieren',
+    dfLocalEmptyTitle: 'Noch keine Charaktere auf diesem Gerät',
+    dfLocalEmptyDesc: 'Hier erstellte Charaktere werden auf diesem Gerät gespeichert, lassen sich offline bearbeiten und beim Beitritt zu einem Spiel auswählen.',
+    dfLocalCardReadOnlyHint: 'Regelverwaltete Charaktere (z. B. D&D) sind auf diesem Gerät schreibgeschützt. Du kannst sie duplizieren.',
+    dfJoinLocalCards: 'Auf diesem Gerät',
+    dfJoinSharedCards: 'Geteilte Bibliothek dieses Spiels',
     dfCharacterRosterTitle: 'Charakterübersicht',
     dfCharacterSyncing: 'Charakterbögen werden synchronisiert',
     dfCharacterCardCount: 'Gemeinsame Charakterbögen: {{count}}',
