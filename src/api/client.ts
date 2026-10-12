@@ -13,7 +13,11 @@
  * - 玩家分享链接鉴权：query 参数 game/name/share/delegate 声明分享模式；席位身份走
  *   `X-Seat-Token` 请求头，房间密码令牌走 `X-Room-Token` 请求头（见 lib/seat-credentials）。
  *   `?user=` 只在 Owner 代操作或尚未持有席位凭证时下发（无访问密码 / 旧服务端的回退）。
- * - 玩家模式（有分享身份、且不是 delegate 代操作）一律不带 Owner 的 Authorization：
+ * - 分享身份只作用于「这一局」的请求：设备上登录了房主时，只有 /games/<分享局>/... 按分享
+ *   身份发出，其余请求（大厅、房主自己的对局、全局资源）
+ *   照常以房主身份发出、不带分享 query——对局页留在栈里时房主页面不会被当成玩家请求。
+ *   没有房主凭据的纯玩家所有请求都带分享身份（与以前一致）。
+ * - 按分享身份发出、且不是 delegate 代操作的请求是玩家模式，一律不带 Owner 的 Authorization：
  *   GM 身份与玩家身份互相独立，同一设备登录了房主也按普通玩家（席位凭证 + 房间令牌）
  *   加入和游玩；带着房主凭据会被服务端当成「房主预览」，不能行动、不发席位凭证。
  * - 加入流程的临时分享身份（joinShare）独立于 settings 注入的 share：加入途中写
@@ -129,17 +133,33 @@ export function setJoinShare(share: ShareIdentity | null): void {
 }
 
 /**
- * 玩家模式：有分享身份且不是 delegate 代操作。此时请求按普通玩家发出，不带 Owner 凭据
+ * 这次请求是否按分享身份发出（带分享 query）：
+ * - 没有房主凭据：有分享身份就带（纯玩家，与以前一致）；
+ * - 有房主凭据：只有分享那一局的请求（/games/<局>/...，加入页的详情、卡、加入都在其中）。
+ */
+function shareScopedFor(path: string): ShareIdentity | null {
+  const share = activeShare()
+  if (!share) return null
+  if (!context.token) return share
+  return gameKeyOfApiPath(path) === share.game ? share : null
+}
+
+/**
+ * 玩家模式：按分享身份发出、且不是 delegate 代操作。此时请求按普通玩家发出，不带 Owner 凭据
  * （席位凭证 + 房间令牌证明身份）。delegate 是 Owner 代 P2P 访客操作，仍以 Owner 身份发出。
  */
-function playerMode(): boolean {
-  const share = activeShare()
+function playerModeFor(path: string): boolean {
+  const share = shareScopedFor(path)
   return !!share && !isDelegateFlag(share.delegate)
 }
 
-/** 本次请求是否以 Owner 身份发出（有房主凭据、且不在玩家模式） */
-export function ownerAuthActive(): boolean {
-  return !!context.token && !playerMode()
+function ownerAuthFor(path: string): boolean {
+  return !!context.token && !playerModeFor(path)
+}
+
+/** 对这一局的请求是否以 Owner 身份发出（有房主凭据、且不是这一局的玩家模式） */
+export function ownerAuthActive(gameKey: string): boolean {
+  return ownerAuthFor(`/games/${encodeURIComponent(gameKey)}`)
 }
 
 export function currentToken(): string | null {
@@ -202,20 +222,23 @@ export { normalizeBaseUrl }
  * 不再把 uid 放进 URL。没有凭证时保留 `?user=`——无访问密码的服务端与
  * 席位凭证上线前的旧服务端仍按它识别玩家。
  */
-function sendsShareUser(share: ShareIdentity): boolean {
-  return ownerAuthActive() || !hasSeatToken(share.game)
+function sendsShareUser(share: ShareIdentity, path: string): boolean {
+  return ownerAuthFor(path) || !hasSeatToken(share.game)
 }
 
 /** 分享模式下由身份统一接管的 query 字段：业务 query 与 path 里的同名值一律丢弃 */
 const SHARE_QUERY_KEYS = ['game', 'user', 'name', 'share', 'delegate', 'room_token'] as const
 
-/** 玩家模式下需要拼到 /games/... 请求上的 query 参数（对齐 Web shareQuery） */
-export function shareQuery(): URLSearchParams | null {
-  const share = activeShare()
+/**
+ * 按分享身份发出的请求要拼上的 query 参数（对齐 Web shareQuery）。path 是这次请求的 API 路径：
+ * 设备上登录了房主时只有分享那一局的请求带（见 shareScopedFor）。
+ */
+export function shareQuery(path = ''): URLSearchParams | null {
+  const share = shareScopedFor(path)
   if (!share) return null
   const q = new URLSearchParams()
   q.set('game', share.game)
-  if (share.user && sendsShareUser(share)) q.set('user', share.user)
+  if (share.user && sendsShareUser(share, path)) q.set('user', share.user)
   if (share.name) q.set('name', share.name)
   q.set('share', '1')
   if (share.delegate) q.set('delegate', share.delegate)
@@ -245,10 +268,11 @@ export function buildStaticAssetUrl(path: string): string {
 
 /** 游戏 SSE 地址（一次性票据 + 游标 + 分享参数；对齐 Web gameEventSource） */
 export function buildPlaySseUrl(gameKey: string, ticket: string, cursor = ''): string {
-  const q = shareQuery() ?? new URLSearchParams()
+  const path = `/games/${encodeURIComponent(gameKey)}/sse`
+  const q = shareQuery(path) ?? new URLSearchParams()
   q.set('ticket', ticket)
   if (cursor) q.set('cursor', cursor)
-  return buildUrl(`/games/${encodeURIComponent(gameKey)}/sse`, q)
+  return buildUrl(path, q)
 }
 
 type RawBody = Uint8Array | ArrayBuffer | FormData | Blob
@@ -268,7 +292,7 @@ function isRawBody(body: unknown): body is RawBody {
  * 它们以 GM 身份执行，预览席位靠 `?user=` 指名。
  */
 function applySeatTokenHeader(headers: Headers, path: string): void {
-  if (headers.has(SEAT_TOKEN_HEADER) || !playerMode()) return
+  if (headers.has(SEAT_TOKEN_HEADER) || !playerModeFor(path)) return
   const token = readCredential(context.credentials, context.baseUrl, gameKeyOfApiPath(path)).seat
   if (token) headers.set(SEAT_TOKEN_HEADER, token)
 }
@@ -289,7 +313,7 @@ function buildHeaders(init: RequestInit, anonymous: boolean, path: string): Head
     headers.delete(SEAT_TOKEN_HEADER)
     headers.delete(ROOM_TOKEN_HEADER)
   } else {
-    if (ownerAuthActive()) headers.set('Authorization', `Bearer ${context.token}`)
+    if (ownerAuthFor(path)) headers.set('Authorization', `Bearer ${context.token}`)
     // Web 浏览器会静默丢弃 JS 设置的 Cookie 头，交给服务端 Set-Cookie +
     // cookie jar 自动管理；不引入 react-native 依赖以保证 node 测试环境可用
     if (typeof document === 'undefined' && !headers.has('Cookie')) {
@@ -338,7 +362,7 @@ function errorFrom(data: Record<string, unknown>, status: number, response?: Res
  * Owner 请求不走这里：它从不隐式携带席位凭证，也不受房间密码约束。
  */
 function noteRejectedCredential(path: string, error: ApiError): void {
-  if (ownerAuthActive()) return
+  if (ownerAuthFor(path)) return
   const game = gameKeyOfApiPath(path)
   if (!game) return
   const baseUrl = context.baseUrl
@@ -346,7 +370,7 @@ function noteRejectedCredential(path: string, error: ApiError): void {
   if (error.status === 401 && error.code === 'SEAT_TOKEN_INVALID') {
     kind = 'seat'
     context.credentials = withoutSeatToken(context.credentials, baseUrl, game)
-  } else if (error.needsRoomPassword && activeShare()) {
+  } else if (error.needsRoomPassword && shareScopedFor(path)) {
     kind = 'room'
     context.credentials = withoutRoomToken(context.credentials, baseUrl, game)
   }
@@ -367,12 +391,12 @@ export interface ApiRequestInit extends RequestInit {
   query?: ApiQuery
 }
 
-function requestQuery(query: ApiQuery | undefined, anonymous = false): { params: URLSearchParams; drop: string[] } {
+function requestQuery(path: string, query: ApiQuery | undefined, anonymous = false): { params: URLSearchParams; drop: string[] } {
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== null && value !== undefined) params.set(key, String(value))
   }
-  const share = anonymous ? null : shareQuery()
+  const share = anonymous ? null : shareQuery(path)
   if (!share) return { params, drop: [] }
   // 当前分享身份优先于业务参数及 path 中的同名字段，避免重复参数产生鉴权歧义；
   // 身份不下发的字段（持凭证时的 user、已废弃的 room_token）也不许从别处漏出去。
@@ -410,7 +434,7 @@ async function guardedFetch(url: string, init: RequestInit): Promise<Response> {
 
 async function send(path: string, init: ApiRequestInit, anonymous: boolean): Promise<Response> {
   const { query, ...requestInit } = init
-  const { params, drop } = requestQuery(query, anonymous)
+  const { params, drop } = requestQuery(path, query, anonymous)
   const url = buildUrl(path, params, drop)
   return guardedFetch(url, { ...requestInit, headers: buildHeaders(requestInit, anonymous, path) })
 }
@@ -429,7 +453,7 @@ export async function api<T = unknown>(
   const anonymous = options.anonymous === true
   const response = await send(path, init, anonymous)
   const data = (await readJson(response)) as T & Record<string, unknown>
-  handleUnauthorized(response, anonymous ? false : !!activeShare())
+  handleUnauthorized(response, anonymous ? false : !!shareScopedFor(path))
   if (!response.ok) throw failure(path, response, data, anonymous)
   return data
 }
@@ -441,7 +465,7 @@ export async function apiBlob(
 ): Promise<Response> {
   const anonymous = options.anonymous === true
   const response = await send(path, init, anonymous)
-  handleUnauthorized(response, anonymous ? false : !!activeShare())
+  handleUnauthorized(response, anonymous ? false : !!shareScopedFor(path))
   if (!response.ok) throw failure(path, response, await readJson(response), anonymous)
   return response
 }
