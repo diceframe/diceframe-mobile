@@ -57,7 +57,7 @@ describe('锁屏后的实时连接恢复', () => {
     expect(handlers.onError).not.toHaveBeenCalled()
   })
 
-  it('SSE 没有 open/error 时也会超时重试，并带最新游标取新连接', async () => {
+  it('SSE 没有 open/error 时也会超时重试；重连不带游标（服务端带游标时不发 baseline、连接一直不 open）', async () => {
     stream.start()
     await settle()
     const oldOpen = sources[0].listeners.get('open')!
@@ -66,7 +66,7 @@ describe('锁屏后的实时连接恢复', () => {
     cursor = 'r2.p2'
     await vi.advanceTimersByTimeAsync(5000)
     expect(sources).toHaveLength(2)
-    expect(sources[1].url).toContain('cursor=r2.p2')
+    expect(sources[1].url).not.toContain('cursor=')
     oldOpen({})
     expect(handlers.onStatusChange).not.toHaveBeenCalledWith('live')
     sources[1].emit('open')
@@ -74,6 +74,7 @@ describe('锁屏后的实时连接恢复', () => {
   })
 
   it('正常连接长期静默不会被建连超时断开', async () => {
+    cursor = '' // 首次进入：open 后没有补刷新，便于断言后续没有任何事件
     stream.start()
     await settle()
     sources[0].emit('open')
@@ -130,6 +131,7 @@ describe('锁屏后的实时连接恢复', () => {
 
 describe('服务端撤销这条流（diceframe/diceframe#512 event: revoked）', () => {
   it('收到 revoked：交出原因、停止，之后的 error / close 不再重连也不轮询', async () => {
+    cursor = '' // 首次进入：open 后没有补刷新，便于断言后续没有任何事件
     stream.start()
     await settle()
     sources[0].emit('open')
@@ -166,5 +168,32 @@ describe('服务端撤销这条流（diceframe/diceframe#512 event: revoked）',
     expect(parseRevocation('not json')).toEqual({ errorCode: '', error: '', needsRoomPassword: false })
     expect(parseRevocation('{"error_code":"ROOM_TOKEN_INVALID","needs_room_password":true}'))
       .toEqual({ errorCode: 'ROOM_TOKEN_INVALID', error: '', needsRoomPassword: true })
+  })
+})
+
+describe('实机：重连后状态卡在「连接中」', () => {
+  it('任何连接都不带游标：服务端按新连接立刻发 baseline，open 能触发；重连 open 后要求一次完整刷新补上断开期间的变化', async () => {
+    cursor = 'r5.p1'
+    stream.start()
+    await settle()
+    expect(sources[0].url).not.toContain('cursor=')
+    sources[0].emit('open')
+    // 带着已知游标开始（例如回前台）：断开期间的变化没人补发，open 后完整刷新一次
+    expect(handlers.onEvent).toHaveBeenCalledWith('refresh', {}, 'r5.p1')
+    expect(handlers.onStatusChange).toHaveBeenLastCalledWith('live')
+    handlers.onEvent.mockClear()
+    sources[0].emit('error')
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(sources[1].url).not.toContain('cursor=')
+    sources[1].emit('open')
+    expect(handlers.onEvent).toHaveBeenCalledWith('refresh', {}, expect.any(String))
+  })
+
+  it('首次进入（还没有游标）：open 后不额外刷新（进入时已整页拉取过）', async () => {
+    cursor = ''
+    stream.start()
+    await settle()
+    sources[0].emit('open')
+    expect(handlers.onEvent).not.toHaveBeenCalled()
   })
 })
