@@ -3,6 +3,8 @@
  */
 export const auth = {
   zh: {
+    dfJoinSeatBannerHint: "要回到原来的角色，请向 GM 要一条新的接管链接。新建角色会占用一个新席位。",
+    dfJoinCreateAnyway: "仍然新建角色",
     dfScanLoginAction: "扫码登录",
     dfScanLoginTitle: "对准服务器二维码",
     dfScanLoginHint: "在 Web 端「设置 → 访问密码 → 手机扫码登录」里生成二维码。",
@@ -59,6 +61,8 @@ export const auth = {
     dfServerCompatConfirm: "知道了",
   },
   en: {
+    dfJoinSeatBannerHint: "To get back your original character, ask the GM for a new takeover link. Creating a character takes a new seat.",
+    dfJoinCreateAnyway: "Create a new character anyway",
     dfScanLoginAction: "Scan to sign in",
     dfScanLoginTitle: "Point at the server QR code",
     dfScanLoginHint: "Generate it in the web UI under Settings → Access password → Sign in by QR code.",
@@ -114,6 +118,8 @@ export const auth = {
     dfServerCompatConfirm: "OK",
   },
   ja: {
+    dfJoinSeatBannerHint: "元のキャラクターに戻るには、GM に新しい引き継ぎリンクをもらってください。新しく作成すると別の席を使います。",
+    dfJoinCreateAnyway: "それでも新しいキャラクターを作成",
     dfScanLoginAction: "QR でログイン",
     dfScanLoginTitle: "サーバーの QR コードに向けてください",
     dfScanLoginHint: "Web の「設定 → アクセスパスワード → QR コードでログイン」で生成できます。",
@@ -169,6 +175,8 @@ export const auth = {
     dfServerCompatConfirm: "OK",
   },
   de: {
+    dfJoinSeatBannerHint: "Um zu deinem ursprünglichen Charakter zurückzukehren, bitte den GM um einen neuen Übernahme-Link. Ein neuer Charakter belegt einen neuen Platz.",
+    dfJoinCreateAnyway: "Trotzdem neuen Charakter erstellen",
     dfScanLoginAction: "Per QR anmelden",
     dfScanLoginTitle: "Auf den Server-QR-Code richten",
     dfScanLoginHint: "Im Web unter „Einstellungen → Zugangspasswort → Per QR-Code anmelden“ erzeugen.",
