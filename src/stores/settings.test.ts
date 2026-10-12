@@ -319,9 +319,10 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
       expect(hasSeatToken('other-game')).toBe(false)
       const sseUrl = new URL(buildPlaySseUrl('new-game', 'ticket'))
       expect(sseUrl.origin).toBe('http://new:18000')
-      // Owner 已登录：仍按 ?user= 指名预览席位；房间令牌只走请求头，不进 URL
+      // 玩家模式（delegate 值不是代操作开关）：持席位凭证不再用 ?user= 指名，房主登录也一样；
+      // 房间令牌只走请求头，不进 URL
       expect(Object.fromEntries(sseUrl.searchParams)).toEqual({
-        game: 'new-game', user: 'new-user', name: 'Aria', share: '1',
+        game: 'new-game', name: 'Aria', share: '1',
         delegate: 'delegate-a', ticket: 'ticket',
       })
       expect(await AsyncStorage.getItem('diceframe-settings')).toBe(saved)
