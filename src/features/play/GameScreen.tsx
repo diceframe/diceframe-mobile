@@ -66,7 +66,7 @@ import { appLayoutForWidth } from '@/lib/layout'
 import { levelUpAttributes, levelUpPoints } from '@/lib/level-up'
 import { isStoredPlayerMember } from '@/lib/player-identity'
 import { createPlayShareScope } from '@/lib/play-share-scope'
-import { shouldBounceToJoin } from '@/lib/join-bounce'
+import { joinBounceKey, shouldBounceToJoin } from '@/lib/join-bounce'
 import { joinLinkParams } from '@/lib/join-deep-link'
 import { buildShareLink } from '@/lib/share-link'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
@@ -256,8 +256,8 @@ export default function GameScreen() {
     const settings = useSettingsStore.getState()
     const baseUrl = settings.baseUrl
     settings.removeShare(gameKey)
-    // 凭证被拒的全局回调可能已经为同一局跳过一次：不重复挂载加入页
-    if (!shouldBounceToJoin(`${baseUrl}:${gameKey}`)) return
+    // 同一局同一原因刚跳过一次（多个在途请求各报一次）：不重复挂载加入页
+    if (!shouldBounceToJoin(joinBounceKey(baseUrl, gameKey, seatCredentialLost ? 'seat-missing' : 'removed'))) return
     router.replace({
       pathname: '/join',
       params: {

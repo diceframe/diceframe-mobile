@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { createJoinBounceGuard } from './join-bounce'
+import { createJoinBounceGuard, joinBounceKey } from './join-bounce'
+import { cardsFailureNeedsRoomGate } from './join-room-gate'
 import { decodeJoinLink, encodeJoinLink, joinLinkFromParams, joinLinkParams, rewriteJoinDeepLink } from './join-deep-link'
 import { buildShareLink, parseShareLink } from './share-link'
 
@@ -59,5 +60,27 @@ describe('跳回加入页去重（实机：同一秒三次 /config + 三次详�
     now = 5000
     expect(guard('h:other')).toBe(true)
     expect(guard('h:GK')).toBe(true)
+  })
+})
+
+describe('#1 终审：跳转去重按原因区分', () => {
+  it('同一局不同原因（席位凭证失效 / 房间访问过期）不会被前一次吞掉', () => {
+    const guard = createJoinBounceGuard(() => 0)
+    expect(guard(joinBounceKey('h', 'GK', 'seat'))).toBe(true)
+    expect(guard(joinBounceKey('h', 'GK', 'room'))).toBe(true)
+    expect(guard(joinBounceKey('h', 'GK', 'room'))).toBe(false)
+  })
+})
+
+describe('#1 终审：加入页拉卡失败时识别房间访问失效', () => {
+  it('403 needs_room_password，或有房间密码但令牌已被清掉：回房间密码步骤', () => {
+    expect(cardsFailureNeedsRoomGate({ needsRoomPassword: true }, true, true)).toBe(true)
+    expect(cardsFailureNeedsRoomGate(new Error('network'), true, false)).toBe(true)
+  })
+
+  it('其他失败（网络、没有房间密码的局、令牌还在）：照常降级为没有可选的卡', () => {
+    expect(cardsFailureNeedsRoomGate(new Error('network'), true, true)).toBe(false)
+    expect(cardsFailureNeedsRoomGate(new Error('network'), false, false)).toBe(false)
+    expect(cardsFailureNeedsRoomGate({ needsRoomPassword: false }, false, false)).toBe(false)
   })
 })
