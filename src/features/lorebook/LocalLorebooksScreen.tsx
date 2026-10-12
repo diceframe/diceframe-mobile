@@ -342,6 +342,11 @@ function LocalLorebookEntries({ book: summary, onBack }: { book: LocalLorebookVi
             <Text variant="small" className="text-muted-foreground">{t('dfLocalLorebookKeysHint')}</Text>
           </View>
           <View className="gap-1.5">
+            <Text variant="small" className="font-semibold">{t('dfLocalLorebookSecondaryKeys')}</Text>
+            <Input value={form.secondaryKeysText} onChangeText={(value) => patch({ secondaryKeysText: value })} autoCapitalize="none" />
+            <Text variant="small" className="text-muted-foreground">{t('dfLocalLorebookSecondaryKeysHint')}</Text>
+          </View>
+          <View className="gap-1.5">
             <Text variant="small" className="font-semibold">{t('dfLocalLorebookContent')}</Text>
             <Textarea value={form.content} onChangeText={(value) => patch({ content: value })} className="min-h-36" />
           </View>

@@ -2,7 +2,7 @@
  * 本机 Lorebook 条目编辑器的表单 ↔ 补丁。
  *
  * 保存时只写回用户真的改过的字段（与打开编辑器那一刻的表单快照比较），条目其余字段——
- * 次要关键词、extensions、未知字段，以及没碰过的可编辑字段——原样保留：推送是全量镜像，
+ * extensions、未知字段，以及没碰过的可编辑字段——原样保留：推送是全量镜像，
  * 丢掉的字段会在服务端被一起清掉。条目按稳定 id 定位（entryIdOf），不按列表下标。
  */
 import { entryIdOf, type LorebookBook, type LorebookEntry, type LorebookEntryEdit } from '@/lib/portable/lorebook-v3'
@@ -11,6 +11,8 @@ export interface EntryForm {
   name: string
   /** 关键词，逗号（中英文）或换行分隔 */
   keysText: string
+  /** 次要关键词，同上 */
+  secondaryKeysText: string
   content: string
   enabled: boolean
   constant: boolean
@@ -25,6 +27,10 @@ function integerText(value: unknown): string {
   return typeof value === 'number' && Number.isFinite(value) ? String(value) : ''
 }
 
+function keysTextOf(value: unknown): string {
+  return Array.isArray(value) ? value.filter((key) => typeof key === 'string').join(', ') : ''
+}
+
 export function splitKeys(text: string): string[] {
   return text.split(/[,，、\n]/).map((key) => key.trim()).filter(Boolean)
 }
@@ -33,7 +39,8 @@ export function splitKeys(text: string): string[] {
 export function entryFormOf(entry: LorebookEntry | null): EntryForm {
   return {
     name: typeof entry?.name === 'string' ? entry.name : '',
-    keysText: Array.isArray(entry?.keys) ? entry.keys.filter((key) => typeof key === 'string').join(', ') : '',
+    keysText: keysTextOf(entry?.keys),
+    secondaryKeysText: keysTextOf(entry?.secondary_keys),
     content: typeof entry?.content === 'string' ? entry.content : '',
     enabled: entry ? entry.enabled !== false : true,
     constant: entry?.constant === true,
@@ -61,6 +68,10 @@ export function entryEditOf(snapshot: EntryForm, form: EntryForm): LorebookEntry
     const keys = splitKeys(form.keysText)
     if (keys.join('\u0000') !== splitKeys(snapshot.keysText).join('\u0000')) edit.keys = keys
   }
+  if (form.secondaryKeysText !== snapshot.secondaryKeysText) {
+    const keys = splitKeys(form.secondaryKeysText)
+    if (keys.join('\u0000') !== splitKeys(snapshot.secondaryKeysText).join('\u0000')) edit.secondary_keys = keys
+  }
   if (form.content !== snapshot.content) edit.content = form.content
   if (form.enabled !== snapshot.enabled) edit.enabled = form.enabled
   if (form.constant !== snapshot.constant) edit.constant = form.constant
@@ -83,6 +94,8 @@ export function newEntryEditOf(form: EntryForm): LorebookEntryEdit {
     content: form.content,
     enabled: form.enabled,
   }
+  const secondary = splitKeys(form.secondaryKeysText)
+  if (secondary.length) edit.secondary_keys = secondary
   if (form.constant) edit.constant = true
   const order = parseInteger(form.insertionOrder)
   if (order !== null) edit.insertion_order = order
