@@ -15,7 +15,7 @@ import {
   saveLocalLorebookEntry,
 } from '@/lib/local-library/lorebook-library'
 import type { LocalItemSummary } from '@/lib/local-library/repository'
-import { localItemBadges, type LocalItemBadge } from '@/lib/local-library/sync-status'
+import { groupLinksByLocalId, localItemBadges, type LocalItemBadge } from '@/lib/local-library/sync-status'
 import { createLatestGuard, createYielder } from '@/lib/local-library/yielder'
 import { readLorebookV3, type LorebookBook, type LorebookEntryEdit } from '@/lib/portable/lorebook-v3'
 import { localLibrary } from '@/stores/local-library'
@@ -38,7 +38,7 @@ async function readLocalLorebooks(): Promise<LocalLorebookView[] | null> {
   if (!library) return null
   const maybeYield = createYielder()
   const views: LocalLorebookView[] = []
-  const links = library.listAllLinks()
+  const links = groupLinksByLocalId(library.listAllLinks())
   for (const summary of library.listItems({ kind: 'lorebook' })) {
     const item = library.getItem(summary.localId)
     if (!item) continue
