@@ -60,6 +60,7 @@
     "lucide-react-native": "^1.33.0",
     "marked": "^18.0.10",
     "nativewind": "^4.2.6",
+    "qrcode-generator": "^1.4.4",
     "react": "19.2.3",
     "react-compiler-runtime": "^1.0.0",
     "react-dom": "19.2.3",

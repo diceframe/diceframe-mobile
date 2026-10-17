@@ -38,10 +38,10 @@ export function JoinCardPickerSheet({
     <Button
       key={key}
       variant="outline"
-      className="items-start gap-1 p-4"
+      className="h-auto items-start justify-start gap-1 p-4"
       onPress={() => onSelect(card)}
     >
-      <View className="gap-1">
+      <View className="flex-1 gap-1">
         <Text className="font-medium">
           {card.character_name || t('dfCharacterCardUnnamed')}
         </Text>

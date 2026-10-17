@@ -1,7 +1,8 @@
 import * as React from 'react'
 import { Modal, Platform, Pressable, View } from 'react-native'
-import { CameraView, useCameraPermissions } from 'expo-camera'
-import { X } from 'lucide-react-native'
+import { CameraView, scanFromURLAsync, useCameraPermissions } from 'expo-camera'
+import * as ImagePicker from 'expo-image-picker'
+import { Image as ImageIcon, X } from 'lucide-react-native'
 
 import { Button } from '@/components/ui/button'
 import { Text } from '@/components/ui/text'
@@ -41,17 +42,25 @@ export function QrScannerSheet({
   const t = useT()
   const [permission, requestPermission] = useCameraPermissions()
   const scannedRef = React.useRef(false)
+  const autoAskedRef = React.useRef(false)
   const gold = useThemeToken('gold')
+  const [picking, setPicking] = React.useState(false)
+  const [albumError, setAlbumError] = React.useState('')
 
   React.useEffect(() => {
     // 每次重新打开都解锁，否则第二次扫码会被上一次的自锁挡住
-    if (visible) scannedRef.current = false
+    if (visible) {
+      scannedRef.current = false
+      autoAskedRef.current = false
+    }
   }, [visible])
 
   React.useEffect(() => {
     // 首次打开直接弹系统权限框：让用户先点一次「允许使用相机」再弹，等于白白多一步。
-    // 已被永久拒绝（canAskAgain=false）时不再请求，改为提示去系统设置。
-    if (visible && permission && !permission.granted && permission.canAskAgain) {
+    // 每次打开只自动弹一次：拒绝后 permission 更新、canAskAgain 仍为 true，不加锁会立刻再弹，
+    // 用户永远够不到「相册」入口。已被永久拒绝（canAskAgain=false）时不再请求，改为提示去系统设置。
+    if (visible && !autoAskedRef.current && permission && !permission.granted && permission.canAskAgain) {
+      autoAskedRef.current = true
       void requestPermission()
     }
   }, [visible, permission, requestPermission])
@@ -59,7 +68,47 @@ export function QrScannerSheet({
   function handleScan(result: { data: string }) {
     if (scannedRef.current) return
     scannedRef.current = true
+    setAlbumError('')
     onScanned(result.data)
+  }
+
+  function handleClose() {
+    setAlbumError('')
+    onClose()
+  }
+
+  /**
+   * 从相册识别：同桌玩家常把邀请码截图转发过来，当面扫不到屏幕。
+   * 不依赖相机权限——拒绝了相机的用户照样能走这条路。识别结果与实时取景走同一个自锁回调。
+   */
+  async function pickFromAlbum() {
+    if (picking || scannedRef.current) return
+    setAlbumError('')
+    setPicking(true)
+    try {
+      const mediaPermission = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (!mediaPermission.granted) {
+        setAlbumError(t('dfCharacterCardGalleryPermissionDenied'))
+        return
+      }
+      const picked = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: false,
+        quality: 1,
+        exif: false,
+      })
+      if (picked.canceled || !picked.assets[0]) return
+      const found = await scanFromURLAsync(picked.assets[0].uri, ['qr'])
+      if (!found[0]?.data) {
+        setAlbumError(t('dfScanAlbumNone'))
+        return
+      }
+      handleScan({ data: found[0].data })
+    } catch {
+      setAlbumError(t('dfScanAlbumFailed'))
+    } finally {
+      setPicking(false)
+    }
   }
 
   const granted = permission?.granted === true
@@ -68,7 +117,7 @@ export function QrScannerSheet({
     <Modal
       visible={visible}
       animationType={Platform.OS === 'android' ? 'none' : 'slide'}
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
       statusBarTranslucent
     >
       <View className="flex-1 bg-black">
@@ -92,8 +141,8 @@ export function QrScannerSheet({
           </View>
         )}
 
-        {/* 取景框与文案叠在预览之上；不拦触摸，关闭按钮除外 */}
-        <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
+        {/* 取景框与文案叠在预览之上；不拦触摸，关闭按钮除外。取景框上提，给底部文案和相册入口让位 */}
+        <View className="absolute inset-0 items-center justify-center pb-24" pointerEvents="none">
           {granted ? (
             <View
               className="h-64 w-64 rounded-2xl"
@@ -101,13 +150,35 @@ export function QrScannerSheet({
             />
           ) : null}
         </View>
-        <View className="absolute inset-x-0 bottom-0 gap-2 px-8 pb-16" pointerEvents="none">
+        <View className="absolute inset-x-0 bottom-0 gap-2 px-8 pb-32" pointerEvents="none">
           <Text className="text-center text-lg font-semibold text-white">{title}</Text>
-          <Text className="text-center text-white/70">{hint}</Text>
+          {albumError ? (
+            <Text className="text-center text-destructive">{albumError}</Text>
+          ) : (
+            <Text className="text-center text-white/70">{hint}</Text>
+          )}
+        </View>
+
+        {/* 与微信扫一扫同位：底部居中的相册入口 */}
+        <View className="absolute inset-x-0 bottom-8 items-center">
+          <Pressable
+            onPress={() => void pickFromAlbum()}
+            disabled={picking}
+            accessibilityRole="button"
+            accessibilityLabel={t('dfScanFromAlbum')}
+            hitSlop={8}
+            className="items-center gap-1.5 active:opacity-70"
+            style={{ opacity: picking ? 0.5 : 1 }}
+          >
+            <View className="h-12 w-12 items-center justify-center rounded-full bg-black/60">
+              <ImageIcon size={22} color="#ffffff" />
+            </View>
+            <Text className="text-xs text-white">{t('dfScanFromAlbum')}</Text>
+          </Pressable>
         </View>
 
         <Pressable
-          onPress={onClose}
+          onPress={handleClose}
           accessibilityRole="button"
           accessibilityLabel={t('cancel')}
           hitSlop={12}

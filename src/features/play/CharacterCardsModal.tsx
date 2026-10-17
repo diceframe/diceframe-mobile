@@ -50,11 +50,11 @@ export function CharacterCardsModal({
                 <Button
                   key={id}
                   variant="outline"
-                  className="gap-2 p-4"
+                  className="h-auto items-start justify-start gap-2 p-4"
                   disabled={busy}
                   onPress={() => onSelect(card)}
                 >
-                  <View className="gap-1">
+                  <View className="flex-1 gap-1">
                     <Text className="font-medium">
                       {card.character_name || t('dfCharacterCardUnnamed')}
                     </Text>
