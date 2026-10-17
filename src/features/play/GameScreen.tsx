@@ -33,6 +33,7 @@ import { GameTimeline } from '@/features/play/GameTimeline'
 import { ActionRecoveryBanner } from '@/features/play/ActionRecoveryBanner'
 import { ActionSkillPicker } from '@/features/play/ActionSkillPicker'
 import { CheckModesTool } from '@/features/play/CheckModesTool'
+import { StoryPortraitsTool } from '@/features/play/StoryPortraitsTool'
 import { GameSettingsSheet } from '@/features/play/GameSettingsSheet'
 import { KpQuestionSheet } from '@/features/play/KpQuestionSheet'
 import { TableTalkPanel } from '@/features/play/TableTalkPanel'
@@ -144,6 +145,7 @@ export default function GameScreen() {
   const [recoveryRefreshing, setRecoveryRefreshing] = React.useState(false)
   // 本次行动指定的技能：只在内存里随草稿走，提交成功或切局即清空
   const [pickedSkill, setPickedSkill] = React.useState('')
+  const [storyPortraitsOpen, setStoryPortraitsOpen] = React.useState(false)
   const [characterOpen, setCharacterOpen] = React.useState(false)
   const [menuOpen, setMenuOpen] = React.useState(false)
   const [gmPanelTab, setGmPanelTab] = React.useState<
@@ -593,6 +595,11 @@ export default function GameScreen() {
               <Icon as={ChevronsRight} size={16} />
               <Text>{t('gmForceAdvance')}</Text>
             </Button>
+            {detail?.story_mode === 'dialogue' ? (
+              <Button size="sm" variant="outline" className="shrink-0" onPress={() => setStoryPortraitsOpen(true)}>
+                <Text>{t('storyPortraits')}</Text>
+              </Button>
+            ) : null}
           </>
         ) : null}
         {canAskKp ? (
@@ -869,6 +876,15 @@ export default function GameScreen() {
         <Text variant="h3">{t('tableTalkTitle')}</Text>
         <TableTalkPanel gameKey={gameKey} />
       </Sheet>
+      {isGm ? (
+        <StoryPortraitsTool
+          key={gameKey}
+          open={storyPortraitsOpen}
+          onClose={() => setStoryPortraitsOpen(false)}
+          gameKey={gameKey}
+          ruleId={ruleMeta?.rule_id ?? ''}
+        />
+      ) : null}
       {isGm ? (
         <GameSettingsSheet
           key={`${gameKey}:${identityRevision}`}
