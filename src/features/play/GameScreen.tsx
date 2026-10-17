@@ -85,6 +85,7 @@ import {
   selectMyPendingPayments,
   useGameStore,
 } from '@/stores/game'
+import { useAssistantStore } from '@/stores/assistant'
 import { useSettingsStore } from '@/stores/settings'
 
 /**
@@ -192,6 +193,7 @@ export default function GameScreen() {
   const ttsEngine = useSettingsStore((s) => s.ttsEngine)
   const ttsAuto = useSettingsStore((s) => s.ttsAuto)
   const baseUrl = useSettingsStore((s) => s.baseUrl)
+  const ownerToken = useSettingsStore((s) => s.token)
   const quickActionKey = quickActionVisibilityKey(baseUrl, gameKey, userId)
   const personalQuickActions = useSettingsStore((s) => s.quickActionVisibility[quickActionKey])
   const showQuickActions = quickActionsVisible(personalQuickActions, detail?.quick_actions_enabled)
@@ -833,6 +835,11 @@ export default function GameScreen() {
         isGm={isGm}
         onOpenRuleHelp={() => setRuleHelpOpen(true)}
         onOpenSceneGallery={() => void openSceneGallery()}
+        onOpenAssistant={ownerToken ? () => {
+          // 从对局里打开：每轮请求带上当前对局，Agent 据此理解「这局」指哪一局
+          useAssistantStore.getState().setContext({ route: 'play', game_key: gameKey })
+          router.push('/assistant')
+        } : undefined}
       />
 
       {/* 侧边栏（窄屏抽屉）：内容跟随情境行点按的入口，见 storySheetContent */}

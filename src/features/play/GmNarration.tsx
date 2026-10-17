@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { View } from 'react-native'
 
+import { renderInlineMarkdown } from '@/components/patterns/inline-markdown'
 import { Badge } from '@/components/ui/badge'
 import { Text } from '@/components/ui/text'
 import { useT } from '@/i18n/t'
@@ -8,41 +9,6 @@ import { cn } from '@/lib/utils'
 
 import { parseGMText, type TagBadge } from './gmText'
 import { STATE_TONES, TAG_TONES } from './tagTones'
-
-/** 段内行内 markdown（粗体/斜体/行内代码），覆盖 GM 输出的常见形态 */
-function renderInline(text: string) {
-  const parts: React.ReactNode[] = []
-  const pattern = /(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`\n]+`)/g
-  let last = 0
-  let match: RegExpExecArray | null
-  let key = 0
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > last) parts.push(<Text key={key++}>{text.slice(last, match.index)}</Text>)
-    const token = match[0]
-    if (token.startsWith('**')) {
-      parts.push(
-        <Text key={key++} className="font-bold">
-          {token.slice(2, -2)}
-        </Text>,
-      )
-    } else if (token.startsWith('`')) {
-      parts.push(
-        <Text key={key++} className="font-mono text-muted-foreground">
-          {token.slice(1, -1)}
-        </Text>,
-      )
-    } else {
-      parts.push(
-        <Text key={key++} className="italic">
-          {token.slice(1, -1)}
-        </Text>,
-      )
-    }
-    last = match.index + token.length
-  }
-  if (last < text.length) parts.push(<Text key={key++}>{text.slice(last)}</Text>)
-  return parts
-}
 
 function TagChip({ badge }: { badge: TagBadge }) {
   // roll 等中性标签走次级徽章令牌；数值类标签用 Web 同款强色+同色底
@@ -79,7 +45,7 @@ export function GmNarration({
     <View className={cn('gap-2', className)}>
       {block.paragraphs.map((paragraph, index) => (
         <Text key={index} className="leading-6 text-foreground">
-          {renderInline(paragraph.replace(/^[#>\s]+/, '').replace(/^[-•*]\s+/, '• '))}
+          {renderInlineMarkdown(paragraph.replace(/^[#>\s]+/, '').replace(/^[-•*]\s+/, '• '))}
         </Text>
       ))}
       {image}

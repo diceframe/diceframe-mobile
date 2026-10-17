@@ -12,6 +12,7 @@ import {
   Palette,
   RefreshCw,
   Server,
+  Sparkles,
   Vibrate,
   Volume2,
 } from 'lucide-react-native'
@@ -26,6 +27,7 @@ import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import { useT } from '@/i18n/t'
 import { LANGUAGE_OPTIONS, THEME_OPTIONS, type SettingsSection } from '@/features/settings/config'
+import { useAssistantStore } from '@/stores/assistant'
 import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
 
 interface MenuRowProps {
@@ -120,6 +122,16 @@ export default function ProfileScreen() {
         <View className="gap-2">
           <Text variant="small" className="px-1 font-semibold text-foreground">{t('dfProfileTools')}</Text>
           <MenuGroup>
+            {settings.token ? (
+              <MenuRow
+                icon={Sparkles}
+                label={t('dfAgentEntry')}
+                onPress={() => {
+                  useAssistantStore.getState().setContext({ route: 'overview' })
+                  router.push('/assistant')
+                }}
+              />
+            ) : null}
             <MenuRow icon={Globe2} label={t('dfProfileWorlds')} onPress={() => router.push('/worlds')} />
             <MenuRow icon={PackageOpen} label={t('dfPluginsTitle')} onPress={() => router.push('/plugins')} />
             <MenuRow icon={Brain} label={t('dfMemoryTitle')} onPress={() => router.push('/memory')} />

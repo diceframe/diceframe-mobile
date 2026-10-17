@@ -512,6 +512,26 @@ export async function api<T = unknown>(
   return data
 }
 
+/**
+ * 流式请求（DF Agent 的 SSE-over-POST）：鉴权头、重定向防线与错误归一和 api() 同一条路径，
+ * 成功时把原始 Response 交给调用方逐块读取。Android/iOS 上全局 fetch 即 expo/fetch，
+ * 支持 response.body.getReader()；读不到 body 的环境由调用方回退为整段读取。
+ */
+export async function apiStream(
+  path: string,
+  init: ApiRequestInit = {},
+  options: ApiOptions = {},
+): Promise<Response> {
+  const mode = requestModeOf(path, options)
+  const response = await send(path, init, mode)
+  if (!response.ok) {
+    const data = await readJson(response)
+    if (mode !== 'shareless') handleUnauthorized(response, mode === 'owner' ? !!shareScopedFor(path) : false)
+    throw failure(path, response, data, mode, new Headers(init.headers).has(SEAT_TOKEN_HEADER))
+  }
+  return response
+}
+
 export async function apiBlob(
   path: string,
   init: ApiRequestInit = {},
