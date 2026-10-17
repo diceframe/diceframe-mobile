@@ -22,6 +22,7 @@ import { joinLinkParams } from '@/lib/join-deep-link'
 import { buildShareLink } from '@/lib/share-link'
 import { useResolvedTheme, useThemeToken } from '@/lib/theme'
 import { useSettingsStore } from '@/stores/settings'
+import { resetTo } from '@/hooks/use-back-navigation'
 
 // NativeWind 只对 RN 核心组件自动生效；不注册的话 expo-image 的 className
 // 不映射到 style，RemoteAvatar 会渲染成无尺寸的隐形图
@@ -66,7 +67,8 @@ export default function RootLayout() {
         // 服务端第一次设置访问密码会吊销免密期签发的设备令牌，扫码登录过的设备
         // 会突然 401。静默跳登录页看起来像 App 自己退出了，给一句解释。
         toastNotice(getT()('dfAuthSessionExpired'))
-        router.replace('/login')
+        // 清掉栈里已失效的页面：登录后返回不该退回那些会再次 401 的页面
+        resetTo('/login')
       },
       // 分享凭证被服务端拒绝（对齐 Web handleRejectedSeatToken / RoomToken）：
       // 席位凭证失效 = 该局身份作废，回加入页说明需要 GM 的新链接；房间令牌失效 =

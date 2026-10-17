@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { ActivityIndicator, ScrollView, View } from 'react-native'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useLocalSearchParams } from 'expo-router'
 import { ScanLine } from 'lucide-react-native'
 
 import { PageHeader } from '@/components/page-header'
@@ -47,6 +47,7 @@ import { ServerCompatBlocked, fetchServerCompat, serverCompatErrorText } from '@
 import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
 import { useT } from '@/i18n/t'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
+import { enterFromFlow, useBackNavigation } from '@/hooks/use-back-navigation'
 
 type Step = 'link' | 'room' | 'identity' | 'done'
 
@@ -60,7 +61,7 @@ type JoinBanner = { kind: 'seat' | 'room'; text: string }
 type PublicShareLink = Omit<ParsedShareLink, 'seat'>
 
 export default function JoinScreen() {
-  const router = useRouter()
+  const goBack = useBackNavigation('/')
   const t = useT()
   // 路由层在凭证被拒/席位失效时带回来：link 是不含凭证的邀请链接，notice 说明原因
   const params = useLocalSearchParams<{ link?: string; link64?: string; notice?: string }>()
@@ -304,7 +305,8 @@ export default function JoinScreen() {
     // 身份已写入 settings 并成为当前注入：加入流程的临时身份到此结束
     setJoinShare(null)
     setStep('done')
-    router.replace({ pathname: '/play/[gameKey]', params: { gameKey: p.game } })
+    // 弹掉加入流程的中间页：对局页返回回到栈底的家，而不是已完成的加入页 / 登录页
+    enterFromFlow({ pathname: '/play/[gameKey]', params: { gameKey: p.game } })
   }
 
   /** 加入过程中房间令牌被拒（过期/改密）：回到房间密码步骤重新输入 */
@@ -479,7 +481,7 @@ export default function JoinScreen() {
       <PageHeader
         title={t('dfJoinTitle')}
         subtitle={detail?.world_name}
-        onBack={() => router.back()}
+        onBack={goBack}
         className="px-0"
       />
 

@@ -31,6 +31,7 @@ import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
 import { ServerCompatBlocked, checkServerCompatibility, serverCompatErrorText } from '@/lib/server-compat'
 import { useThemeToken } from '@/lib/theme'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
+import { resetTo, useBackNavigation } from '@/hooks/use-back-navigation'
 
 /** 服务器连接 + Owner 登录；已连接时进入即“换服务器”流程 */
 export default function LoginScreen() {
@@ -71,6 +72,8 @@ export default function LoginScreen() {
   // 进入页面时的模式快照：已有服务器 = “换服务器”流程。
   // 用快照而不是响应式读取，避免首次连接成功保存 baseUrl 后页面中途翻转。
   const [switching] = React.useState(() => settings.baseUrl !== '')
+  // 只有「切换服务器」模式是从设置页推进来的；首次登录时登录页就是栈底，返回键照常退出
+  const goBack = useBackNavigation('/profile', { hardware: switching })
 
   // 表单在品牌区下方：键盘弹出后内容超出可视区，Android 不会自动把聚焦框
   // 滚入视口，聚焦任意输入框都滚到底部——表单区（地址/密码/登录）正好完整
@@ -138,7 +141,7 @@ export default function LoginScreen() {
       settings.rememberServerPassword(normalized, needsPassword ? password : '')
       settings.clearShares()
       pendingClientRestoreRef.current = null
-      router.replace('/overview')
+      resetTo('/overview')
     } catch (e) {
       // 候选服务器请求失败后恢复当前已连接实例，不能让 API 内存态停在坏地址上。
       restoreCurrentClient()
@@ -202,7 +205,7 @@ export default function LoginScreen() {
       settings.rememberServerPassword(parsed.baseUrl, deviceToken)
       settings.clearShares()
       pendingClientRestoreRef.current = null
-      router.replace('/overview')
+      resetTo('/overview')
     } catch (e) {
       restoreCurrentClient()
       if (mountedRef.current) {
@@ -216,7 +219,7 @@ export default function LoginScreen() {
   return (
     <Screen style={{ width: '100%', maxWidth: 600, alignSelf: 'center' }}>
       {switching ? (
-        <PageHeader title={t('dfServerSwitch')} onBack={() => router.back()} />
+        <PageHeader title={t('dfServerSwitch')} onBack={goBack} />
       ) : (
         <View className="h-3" />
       )}

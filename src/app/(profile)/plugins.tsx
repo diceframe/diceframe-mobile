@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { FlatList, Switch, View } from 'react-native'
 import { PackageCheck, Search, Store } from 'lucide-react-native'
-import { useRouter } from 'expo-router'
 
 import { PageHeader } from '@/components/page-header'
 import { Screen } from '@/components/screen'
@@ -14,9 +13,10 @@ import { Text } from '@/components/ui/text'
 import { useT } from '@/i18n/t'
 import { usePlugins } from '@/hooks/usePlugins'
 import { useThemeToken } from '@/lib/theme'
+import { useBackNavigation } from '@/hooks/use-back-navigation'
 
 export default function PluginsScreen() {
-  const router = useRouter()
+  const goBack = useBackNavigation('/profile')
   const t = useT()
   const { plugins, loading, error, refresh, installPlugin, uninstallPlugin, togglePlugin } = usePlugins()
   const [query, setQuery] = React.useState('')
@@ -31,7 +31,7 @@ export default function PluginsScreen() {
 
   return (
     <Screen className="px-4" style={{ width: '100%', maxWidth: 840, alignSelf: 'center' }}>
-      <PageHeader title={t('dfPluginsTitle')} subtitle={t('dfPluginsSubtitle')} onBack={() => router.back()} className="px-0" />
+      <PageHeader title={t('dfPluginsTitle')} subtitle={t('dfPluginsSubtitle')} onBack={goBack} className="px-0" />
       {error ? <View className="mb-3 flex-row items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3"><Text className="flex-1 text-destructive" numberOfLines={2}>{error}</Text><Button size="sm" variant="outline" onPress={() => void refresh()}><Text>{t('dfCommonRetry')}</Text></Button></View> : null}
       <Tabs value={tab} onValueChange={(value) => setTab(value as typeof tab)} className="mb-3">
         <TabsList>

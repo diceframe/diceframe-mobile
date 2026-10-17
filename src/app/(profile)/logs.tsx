@@ -6,7 +6,6 @@ import {
   RefreshCw,
   Search,
 } from 'lucide-react-native'
-import { useRouter } from 'expo-router'
 
 import { fetchGames } from '@/api/games'
 import type { GameSummary } from '@/api/types'
@@ -22,9 +21,10 @@ import { Text } from '@/components/ui/text'
 import { useT } from '@/i18n/t'
 import { errorMessage } from '@/api/client'
 import { useLogs } from '@/hooks/useLogs'
+import { useBackNavigation } from '@/hooks/use-back-navigation'
 
 export default function LogsScreen() {
-  const router = useRouter()
+  const goBack = useBackNavigation('/profile')
   const t = useT()
   const [games, setGames] = React.useState<GameSummary[]>([])
   const [gameKey, setGameKey] = React.useState('')
@@ -63,7 +63,7 @@ export default function LogsScreen() {
       <PageHeader
         title={t('dfLogsTitle')}
         subtitle={t('dfLogsSubtitle', { count: filtered.length })}
-        onBack={() => router.back()}
+        onBack={goBack}
         className="px-0"
         right={
           <Button

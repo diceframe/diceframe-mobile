@@ -9,6 +9,7 @@ import { Icon } from '@/components/ui/icon'
 import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import { useT } from '@/i18n/t'
+import { useBackNavigation } from '@/hooks/use-back-navigation'
 
 interface LegalRowProps {
   icon: typeof ScrollText
@@ -39,11 +40,12 @@ function LegalRow({ icon, title, description, onPress }: LegalRowProps) {
 
 export default function LegalIndexScreen() {
   const router = useRouter()
+  const goBack = useBackNavigation('/profile')
   const t = useT()
 
   return (
     <Screen className="px-4" style={{ width: '100%', maxWidth: 720, alignSelf: 'center' }}>
-      <PageHeader title={t('legalDocumentLabel')} subtitle={t('dfLegalSubtitle')} onBack={() => router.back()} className="px-0" />
+      <PageHeader title={t('legalDocumentLabel')} subtitle={t('dfLegalSubtitle')} onBack={goBack} className="px-0" />
       <Card className="overflow-hidden py-0">
         <CardContent className="px-0 py-0">
           <LegalRow icon={ScrollText} title={t('dfLegalTermsTitle')} description={t('dfLegalTermsDesc')} onPress={() => router.push('/legal/terms')} />

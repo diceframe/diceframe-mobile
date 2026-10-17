@@ -88,6 +88,7 @@ import {
 } from '@/stores/game'
 import { useAssistantStore } from '@/stores/assistant'
 import { useSettingsStore } from '@/stores/settings'
+import { useBackNavigation } from '@/hooks/use-back-navigation'
 
 /**
  * 顶栏对局状态文案：映射与 lib/game-state 的 gameStateLabel 一致，
@@ -109,6 +110,7 @@ const playShareScope = createPlayShareScope({
 export default function GameScreen() {
   const t = useT()
   const router = useRouter()
+  const goBack = useBackNavigation('/overview')
   const { gameKey } = useLocalSearchParams<{ gameKey: string }>()
   const { width } = useWindowDimensions()
   const { isWideTablet, gameSidebarWidth } = appLayoutForWidth(width)
@@ -636,9 +638,7 @@ export default function GameScreen() {
             variant="ghost"
             size="icon"
             className="h-9 w-9"
-            onPress={() =>
-              router.canGoBack() ? router.back() : router.replace('/overview')
-            }
+            onPress={goBack}
             accessibilityLabel={t('dfCommonBack')}
             hitSlop={8}
           >
