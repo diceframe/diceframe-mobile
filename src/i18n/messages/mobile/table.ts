@@ -6,6 +6,11 @@
  */
 export const table = {
   zh: {
+    dfCocUnits: '共享个位',
+    dfCocTens: '十位骰组合',
+    dfCocBonus: '奖励骰',
+    dfCocPenalty: '惩罚骰',
+    dfCocTaken: '采用',
     dfQuickActionsShow: '显示行动建议',
     dfQuickActionsHide: '隐藏行动建议',
     dfQuickActionsPersonalHint: '只影响当前设备、本局中自己的角色，并记住选择。',
@@ -47,6 +52,11 @@ export const table = {
     dfPostCheckWaiting: '请先处理骰子卡片上的检定选择，再继续叙事。',
   },
   en: {
+    dfCocUnits: 'Shared units',
+    dfCocTens: 'Tens combinations',
+    dfCocBonus: 'Bonus dice',
+    dfCocPenalty: 'Penalty dice',
+    dfCocTaken: 'Taken',
     dfQuickActionsShow: 'Show action suggestions',
     dfQuickActionsHide: 'Hide action suggestions',
     dfQuickActionsPersonalHint: 'Only your view on this device, for this game and character. Your choice is remembered.',
@@ -88,6 +98,11 @@ export const table = {
     dfPostCheckWaiting: 'Resolve the choices on the dice cards before continuing the story.',
   },
   ja: {
+    dfCocUnits: '共通の一の位',
+    dfCocTens: '十の位の組合せ',
+    dfCocBonus: 'ボーナスダイス',
+    dfCocPenalty: 'ペナルティダイス',
+    dfCocTaken: '採用',
     dfQuickActionsShow: '行動候補を表示',
     dfQuickActionsHide: '行動候補を隠す',
     dfQuickActionsPersonalHint: 'この端末・この卓の自分のキャラクターにだけ適用され、選択は記憶されます。',
@@ -129,6 +144,11 @@ export const table = {
     dfPostCheckWaiting: '物語を続ける前に、ダイスカードの判定選択を完了してください。',
   },
   de: {
+    dfCocUnits: 'Gemeinsame Einerstelle',
+    dfCocTens: 'Zehnerkombinationen',
+    dfCocBonus: 'Bonuswürfel',
+    dfCocPenalty: 'Strafwürfel',
+    dfCocTaken: 'Verwendet',
     dfQuickActionsShow: 'Aktionsvorschläge anzeigen',
     dfQuickActionsHide: 'Aktionsvorschläge ausblenden',
     dfQuickActionsPersonalHint: 'Gilt nur auf diesem Gerät für deine Figur in diesem Spiel. Die Auswahl wird gespeichert.',

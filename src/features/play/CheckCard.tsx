@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Icon } from '@/components/ui/icon'
 import { Text } from '@/components/ui/text'
-import type { CheckResult } from '@/api/types'
+import type { CheckResult, PercentileDice } from '@/api/types'
 import { checkStatusOf, type CheckStatus } from '@/lib/check-status'
 import {
   checkAccentOf,
@@ -22,9 +22,44 @@ import {
 } from '@/lib/check-details'
 import { useT } from '@/i18n/t'
 import type { TKey } from '@/i18n/keyset'
+import { tensLabel, validPercentileDice } from '@/lib/percentile-dice'
 import { cn } from '@/lib/utils'
 
 import { PushDecisionPanel } from './PushDecisionPanel'
+
+/** CoC 奖励/惩罚骰明细（对齐上游 CocDiceFaces）：共享个位 + 每颗十位骰的组合，标出采用的那组 */
+function PercentileDiceFaces({ dice }: { dice: PercentileDice }) {
+  const t = useT()
+  return (
+    <View className="mt-1 gap-1">
+      <Text variant="small" className="text-muted-foreground">
+        {t('dfCocUnits')}: <Text variant="small" className="font-bold">{dice.units}</Text>
+      </Text>
+      <Text variant="small" className="text-muted-foreground">
+        {t('dfCocBonus')}: {dice.bonus_dice} · {t('dfCocPenalty')}: {dice.penalty_dice}
+      </Text>
+      <View className="flex-row flex-wrap gap-1.5" accessibilityLabel={t('dfCocTens')}>
+        {dice.tens.map((ten, index) => {
+          const taken = index === dice.taken_index
+          return (
+            <View
+              key={index}
+              className={cn(
+                'flex-row items-center gap-1.5 rounded-md border px-2 py-1',
+                taken ? 'border-success bg-success/10' : 'border-border',
+              )}
+            >
+              <Text variant="small" className="font-mono">
+                {tensLabel(ten)} + {dice.units} = {dice.candidates[index]}
+              </Text>
+              {taken ? <Text variant="small" className="text-success">{t('dfCocTaken')}</Text> : null}
+            </View>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
 
 /** 揭示动画时长：对齐 Web CheckRevealCard 的 720ms 骰子滚动 */
 const REVEAL_DURATION_MS = 720
@@ -250,6 +285,9 @@ export function CheckCard({
                   {t(row.key, row.options)}
                 </Text>
               ))}
+              {check.dice_mechanic === 'coc_bonus_penalty' && validPercentileDice(check.percentile_dice) ? (
+                <PercentileDiceFaces dice={check.percentile_dice} />
+              ) : null}
             </View>
           ) : null}
 
