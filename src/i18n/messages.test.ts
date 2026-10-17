@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import i18n from './index'
+import { assistant } from './messages/mobile/assistant'
 import { auth } from './messages/mobile/auth'
 import { characters } from './messages/mobile/characters'
 import { common } from './messages/mobile/common'
@@ -29,6 +30,7 @@ const MOBILE_CLUSTERS = {
   lore,
   content,
   table,
+  assistant,
 } as const
 
 const keysOf = (obj: Record<string, unknown>): string[] => Object.keys(obj).sort()

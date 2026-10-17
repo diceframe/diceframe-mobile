@@ -6,6 +6,7 @@
  * 这里只取 key 名做字面量联合，值展宽为 string，用最朴素的函数签名
  * 实现「拼错 key 编译期报错」而不付 i18next 类型机器的成本。
  */
+import type { assistant } from './messages/mobile/assistant'
 import type { auth } from './messages/mobile/auth'
 import type { characters } from './messages/mobile/characters'
 import type { common } from './messages/mobile/common'
@@ -33,7 +34,8 @@ export type AppTranslation = WidenValues<
     (typeof characters)['zh'] &
     (typeof lore)['zh'] &
     (typeof content)['zh'] &
-    (typeof table)['zh']
+    (typeof table)['zh'] &
+    (typeof assistant)['zh']
 >
 
 /** 全部合法文案 key（上游镜像 + 移动端 df 簇） */
