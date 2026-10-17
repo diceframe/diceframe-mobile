@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, configureApiClient } from './client'
 import { credentialKey } from '@/lib/seat-credentials'
-import { setLuckTimeout, setNarrativePerspective } from './game-settings'
+import { fetchSessionPreferences, patchSessionPreferences, setLuckTimeout, setNarrativePerspective } from './game-settings'
 import type { NarrativePerspective } from '@/lib/game-settings'
 
 const fetchMock = vi.fn<typeof fetch>()
@@ -129,5 +129,23 @@ describe('独立对局设置 API', () => {
     await expect(setNarrativePerspective(' ', 'auto')).rejects.toThrow('validationFailed')
     await expect(setLuckTimeout('', 60)).rejects.toThrow('validationFailed')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('本局偏好', () => {
+  it('POST 只带 preferences 补丁并带确认头', async () => {
+    respond({ ok: true, push_supported: true, preferences: { push_enabled: false, story_mode: 'dialogue' } })
+    const result = await patchSessionPreferences('g/1', { push_enabled: false })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/games/g%2F1/preferences')
+    expect(init?.method).toBe('POST')
+    expect(JSON.parse(String(init?.body))).toEqual({ preferences: { push_enabled: false } })
+    expect(new Headers(init?.headers).get('X-TRPG-Confirm')).toBe('true')
+    expect(result.preferences.story_mode).toBe('dialogue')
+  })
+
+  it('200 + ok:false 抛 ApiError 并带错误码', async () => {
+    respond({ ok: false, error: 'bad', error_code: 'INVALID_PREFERENCES' })
+    await expect(fetchSessionPreferences('g')).rejects.toMatchObject({ code: 'INVALID_PREFERENCES' })
   })
 })

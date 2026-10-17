@@ -65,6 +65,7 @@ import {
 import { appLayoutForWidth } from '@/lib/layout'
 import { levelUpAttributes, levelUpPoints } from '@/lib/level-up'
 import { pendingPostChecks } from '@/lib/push-decision'
+import { quickActionsVisible, quickActionVisibilityKey } from '@/lib/quick-action-visibility'
 import { isStoredPlayerMember } from '@/lib/player-identity'
 import { createPlayShareScope } from '@/lib/play-share-scope'
 import { joinBounceKey, shouldBounceToJoin } from '@/lib/join-bounce'
@@ -177,6 +178,10 @@ export default function GameScreen() {
   // server 引擎跟随服务器 TTS 配置 serverTtsEnabled）；首次加载只记基线不回放历史
   const ttsEngine = useSettingsStore((s) => s.ttsEngine)
   const ttsAuto = useSettingsStore((s) => s.ttsAuto)
+  const baseUrl = useSettingsStore((s) => s.baseUrl)
+  const quickActionKey = quickActionVisibilityKey(baseUrl, gameKey, userId)
+  const personalQuickActions = useSettingsStore((s) => s.quickActionVisibility[quickActionKey])
+  const showQuickActions = quickActionsVisible(personalQuickActions, detail?.quick_actions_enabled)
   const ttsAvailable = ttsAvailableOf(ttsEngine, serverTtsEnabled)
   useAutoSpeak(ttsAuto && ttsAvailable, log, (text) => void speaker.speak(text))
   // 叙事落地/检定结果/私密感知的震动反馈（开关在设置页，默认开启）
@@ -683,6 +688,9 @@ export default function GameScreen() {
               disabled={composerDisabled}
               disabledReason={composerDisabledReason}
               quickActions={detail?.quick_actions ?? []}
+              quickActionsVisible={showQuickActions}
+              onToggleQuickActions={() =>
+                useSettingsStore.getState().setQuickActionVisibility(quickActionKey, !showQuickActions)}
               voice={voice}
               topControls={composerTopControls}
             />

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   currentNarrativePerspective,
   isLuckTimeoutSeconds,
+  parseSessionPreferences,
   isNarrativePerspective,
   NARRATIVE_PERSPECTIVES,
   parseLuckTimeoutInput,
@@ -53,5 +54,34 @@ describe('幸运超时输入', () => {
 
   it.each([-1, 3601, 0.5, NaN, Infinity, '60', '', null, undefined, true])('API 数值边界拒绝 %s', (value) => {
     expect(isLuckTimeoutSeconds(value)).toBe(false)
+  })
+})
+
+describe('本局偏好投影', () => {
+  it('完整响应按字段取值', () => {
+    expect(parseSessionPreferences({
+      ok: true,
+      push_supported: true,
+      preferences: { push_enabled: false, quick_actions_enabled: false, dice_reveal_mode: 'click', story_mode: 'dialogue', luck_timeout_seconds: 30 },
+    })).toEqual({
+      preferences: { push_enabled: false, quick_actions_enabled: false, dice_reveal_mode: 'click', story_mode: 'dialogue' },
+      pushSupported: true,
+      resumeFailed: false,
+    })
+  })
+
+  it('旧服务端缺 quick_actions_enabled 时标为不支持；未知枚举回落缺省', () => {
+    expect(parseSessionPreferences({ ok: true, preferences: { dice_reveal_mode: 'drag', story_mode: 'comic' } })).toEqual({
+      preferences: { push_enabled: true, quick_actions_enabled: null, dice_reveal_mode: 'auto', story_mode: 'prose' },
+      pushSupported: false,
+      resumeFailed: false,
+    })
+    expect(parseSessionPreferences({ ok: true, preferences: {}, resume: { ok: false } })?.resumeFailed).toBe(true)
+  })
+
+  it('ok 不是 true 或缺 preferences 视为失败', () => {
+    expect(parseSessionPreferences({ ok: false, error: 'x' })).toBeNull()
+    expect(parseSessionPreferences({ ok: true })).toBeNull()
+    expect(parseSessionPreferences(null)).toBeNull()
   })
 })

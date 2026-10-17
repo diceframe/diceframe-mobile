@@ -22,6 +22,8 @@ export function ActionComposer({
   disabled,
   disabledReason,
   quickActions,
+  quickActionsVisible = true,
+  onToggleQuickActions,
   voice,
   topControls,
 }: {
@@ -32,6 +34,9 @@ export function ActionComposer({
   disabled?: boolean
   disabledReason?: string
   quickActions: string[]
+  /** 个人显隐（桌面默认 + 本人选择，见 lib/quick-action-visibility） */
+  quickActionsVisible?: boolean
+  onToggleQuickActions?: () => void
   voice?: VoiceInputState
   topControls?: React.ReactNode
 }) {
@@ -48,7 +53,19 @@ export function ActionComposer({
   return (
     <View className="gap-2 pb-2">
       {topControls}
-      {quickActions.length > 0 && (
+      {quickActions.length > 0 && onToggleQuickActions ? (
+        <Pressable
+          onPress={onToggleQuickActions}
+          className="mx-3 mt-1 self-start active:opacity-70"
+          accessibilityRole="button"
+          accessibilityHint={t('dfQuickActionsPersonalHint')}
+        >
+          <Text variant="small" className="text-muted-foreground">
+            {quickActionsVisible ? t('dfQuickActionsHide') : t('dfQuickActionsShow')}
+          </Text>
+        </Pressable>
+      ) : null}
+      {quickActions.length > 0 && quickActionsVisible && (
         <ScrollView
           horizontal
           className="mt-2 max-h-9"

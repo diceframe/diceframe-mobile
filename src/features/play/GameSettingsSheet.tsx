@@ -16,6 +16,8 @@ import {
 } from '@/lib/game-settings'
 import { AWAY_CONTROL_POLICIES, normalizeAwayPolicy, type AwayControlPolicy } from '@/lib/player-control'
 
+import { GamePreferencesSection } from './GamePreferencesSection'
+
 export type GameSettingsChange =
   | { narrativePerspective: NarrativePerspective }
   | { luckTimeoutSeconds: number }
@@ -158,7 +160,8 @@ function GameSettingsForm({ onClose, gameKey, narrativePerspective, awayPolicy: 
     <Sheet open onClose={close}>
       <View className="gap-5 pb-2">
         <Text variant="h3">{t('settingsTitle')}</Text>
-        <View className="gap-3">
+        <GamePreferencesSection gameKey={gameKey} />
+        <View className="gap-3 border-t border-border pt-5">
           <View className="gap-1">
             <Text className="font-semibold">{t('narrativePerspective')}</Text>
             <Text variant="muted">{t('narrativeChangeHint')}</Text>
