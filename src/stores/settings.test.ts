@@ -267,6 +267,8 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
       themeMode: 'system',
       language: 'system',
       quickActionVisibility: {},
+      assistantReactions: true,
+      disabledReactionCategories: [],
     }
     expect(useSettingsStore.getState()).toMatchObject({ ...defaults, hydrated: true })
     expect(currentShare()).toBeNull()

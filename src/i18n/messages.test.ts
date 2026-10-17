@@ -11,6 +11,7 @@ import { lore } from './messages/mobile/lore'
 import { overview } from './messages/mobile/overview'
 import { play } from './messages/mobile/play'
 import { profile } from './messages/mobile/profile'
+import { reactions } from './messages/mobile/reactions'
 import { settings } from './messages/mobile/settings'
 import { table } from './messages/mobile/table'
 import { de as webDe } from './messages/web/de'
@@ -31,6 +32,7 @@ const MOBILE_CLUSTERS = {
   content,
   table,
   assistant,
+  reactions,
 } as const
 
 const keysOf = (obj: Record<string, unknown>): string[] => Object.keys(obj).sort()

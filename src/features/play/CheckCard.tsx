@@ -26,6 +26,7 @@ import { useT } from '@/i18n/t'
 import type { TKey } from '@/i18n/keyset'
 import { tensLabel, validPercentileDice } from '@/lib/percentile-dice'
 import { cn } from '@/lib/utils'
+import { useReactionStore } from '@/stores/assistant-reactions'
 import { useGameStore } from '@/stores/game'
 
 import { PushDecisionPanel } from './PushDecisionPanel'
@@ -133,6 +134,11 @@ export function CheckCard({
     return () => subscription?.remove()
   }, [])
 
+  // 只有现场揭示才让骰灵反应（历史卡不重放）：开滚时「掷骰中」，揭晓时按结论
+  React.useEffect(() => {
+    if (animate) useReactionStore.getState().report('diceRoll')
+  }, [animate])
+
   React.useEffect(() => {
     if (!animate || revealed) return
     // 减少动态效果：0ms 揭示；正常：滚动满 720ms 再亮结果
@@ -140,6 +146,7 @@ export function CheckCard({
       () => {
         setRevealed(true)
         setExpanded(true)
+        useReactionStore.getState().report(checkStatusOf(check))
       },
       reduceMotion ? 0 : REVEAL_DURATION_MS,
     )
@@ -181,6 +188,7 @@ export function CheckCard({
     setRevealError('')
     try {
       await useGameStore.getState().revealCheck(String(check.check_id))
+      useReactionStore.getState().report(checkStatusOf(check))
     } catch (cause) {
       setRevealError(errorMessage(cause))
     } finally {
