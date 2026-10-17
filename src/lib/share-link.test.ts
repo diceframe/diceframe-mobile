@@ -158,3 +158,13 @@ describe('实机：深链带来的接管链接点「解析链接」时丢了席�
     expect(linkToParse('http://h/#/join?game=x&share=1', '')).toBe('http://h/#/join?game=x&share=1')
   })
 })
+
+describe('邀请二维码内容可被「扫码加入」还原', () => {
+  it('邀请链接与带席位凭证的接管链接 build → parse 往返一致', () => {
+    const invite = parseShareLink(buildShareLink('web|abc|bot', 'http://192.168.1.10:18000', undefined, 'http://192.168.1.10:18000'))
+    expect(invite).toMatchObject({ game: 'web|abc|bot' })
+    const takeover = parseShareLink(buildShareLink('web|abc|bot', 'https://df.example.com', 'seat-token-1', 'http://192.168.1.10:18000'))
+    expect(takeover).toMatchObject({ game: 'web|abc|bot' })
+    expect(JSON.stringify(takeover)).toContain('seat-token-1')
+  })
+})

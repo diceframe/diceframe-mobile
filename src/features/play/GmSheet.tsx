@@ -41,6 +41,8 @@ interface GmSheetProps {
   onRecap: () => void
   onBotBind: () => void
   onInvite: () => void
+  /** 点了邀请后在按钮下方就地展开的二维码卡片 */
+  inviteCard?: React.ReactNode
   onToggleMode: () => void
   onToggleAccess: () => void
   onRoomPassword: () => void
@@ -69,6 +71,7 @@ export function GmSheet({
   onRecap,
   onBotBind,
   onInvite,
+  inviteCard,
   onToggleMode,
   onToggleAccess,
   onRoomPassword,
@@ -178,6 +181,7 @@ export function GmSheet({
             <Text>{t('dfPlayBotBind')}</Text>
           </Button>
         </View>
+        {inviteCard}
       </View>
 
       {/* 多人状态 */}

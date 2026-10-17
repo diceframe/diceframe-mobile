@@ -31,6 +31,8 @@ interface MultiplayerPanelProps {
   hostingUid?: string
   /** 传入即允许 GM 就地「快速调整」（经典规则局）；专业规则局不传 */
   adjustGameKey?: string
+  /** 刚复制的接管链接二维码，挂在对应成员卡下 */
+  linkCard?: { uid: string; node: React.ReactNode }
 }
 
 const ACTED_TONE = '#22c55e'
@@ -83,6 +85,7 @@ export function MultiplayerPanel({
   onCopyLink,
   hostingUid,
   adjustGameKey,
+  linkCard,
 }: MultiplayerPanelProps) {
   const [adjustingUid, setAdjustingUid] = React.useState('')
   const awaySet = new Set((detail.multiplayer?.away_players ?? []).map((p) => p.user_id))
@@ -191,6 +194,7 @@ export function MultiplayerPanel({
                     </Button>
                   )}
                 </View>
+                {linkCard?.uid === player.user_id ? linkCard.node : null}
                 {adjustGameKey && adjustingUid === player.user_id ? (
                   <QuickAdjustPanel key={player.user_id} gameKey={adjustGameKey} player={player} />
                 ) : null}

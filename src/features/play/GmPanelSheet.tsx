@@ -18,6 +18,8 @@ import { awayControlPolicy } from '@/lib/player-control'
 import { resolveTakeoverToken } from '@/lib/seat-credentials'
 import { buildShareLink } from '@/lib/share-link'
 import { shareExportBlob } from '@/lib/share-export'
+
+import { ShareQrCard } from './ShareQrCard'
 import { useGameStore } from '@/stores/game'
 import { useSettingsStore } from '@/stores/settings'
 
@@ -85,6 +87,9 @@ export function GmPanelSheet({
   onOpenWorldSwitch,
   onOpenPaymentComposer,
 }: GmPanelSheetProps) {
+  // 链接复制后同时就地展示二维码，方便同桌手机玩家直接扫（切局时随组件重挂载清空）
+  const [inviteLink, setInviteLink] = React.useState('')
+  const [seatLink, setSeatLink] = React.useState<{ uid: string; link: string } | null>(null)
   const t = useT()
   // 控制权切换请求在途的席位：只用于列表上的「AI 正在接管…」提示。
   const [hostingUid, setHostingUid] = React.useState('')
@@ -135,6 +140,7 @@ export function GmPanelSheet({
         settings.baseUrl,
       )
       await copyToClipboard(link)
+      setInviteLink(link)
     } catch {
       // 静默失败
     }
@@ -264,6 +270,7 @@ export function GmPanelSheet({
         settings.baseUrl,
       )
       await copyToClipboard(link)
+      setSeatLink({ uid, link })
     } catch {
       // 静默失败
     }
@@ -322,6 +329,9 @@ export function GmPanelSheet({
             onRecap={() => void handleRecap()}
             onBotBind={() => void handleBotBind()}
             onInvite={() => void handleInvite()}
+            inviteCard={inviteLink ? (
+              <ShareQrCard link={inviteLink} hint={t('dfQrInviteHint')} onClose={() => setInviteLink('')} />
+            ) : null}
             onToggleMode={() =>
               void runGm(() => useGameStore.getState().toggleMode())
             }
@@ -360,6 +370,10 @@ export function GmPanelSheet({
             onSetAway={(uid, away) => void handleSetAway(uid, away)}
             onSetControl={(uid, mode) => void handleSetControl(uid, mode)}
             onCopyLink={(uid) => void handleCopyLink(uid)}
+            linkCard={seatLink ? {
+              uid: seatLink.uid,
+              node: <ShareQrCard link={seatLink.link} hint={t('dfQrSeatHint')} onClose={() => setSeatLink(null)} />,
+            } : undefined}
             hostingUid={hostingUid}
             adjustGameKey={
               isGm && detail?.ruleset_runtime?.capabilities?.character_lifecycle !== 'rules_aware' ? gameKey : undefined
