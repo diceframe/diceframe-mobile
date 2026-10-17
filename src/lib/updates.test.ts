@@ -24,9 +24,14 @@ describe('GitHub APK 更新检查', () => {
     expect(compareVersions('1.2.0', '1.2.1')).toBe(-1)
   })
 
-  it('非数字段按 0 处理：rc/beta 后缀与正式版视为相等（latest 端点不返回预发布版）', () => {
-    expect(compareVersions('1.2.0-rc1', '1.2.0')).toBe(0)
-    expect(compareVersions('1.2.0-beta', '1.2.0')).toBe(0)
+  it('预发布版低于同号正式版，预发布之间按序号比；构建元数据不参与', () => {
+    expect(compareVersions('1.2.0-rc1', '1.2.0')).toBe(-1)
+    expect(compareVersions('1.2.0', '1.2.0-beta')).toBe(1)
+    expect(compareVersions('0.6.0', '0.6.0-beta.1')).toBe(1)
+    expect(compareVersions('0.6.0-beta.2', '0.6.0-beta.1')).toBe(1)
+    expect(compareVersions('0.6.0-beta.1', '0.5.5')).toBe(1)
+    expect(compareVersions('0.6.0-beta.1', '0.6.0-beta.1')).toBe(0)
+    expect(compareVersions('1.2.0+build.7', '1.2.0')).toBe(0)
   })
 
   it('从 GitHub Release 中提取 APK 下载信息', () => {
