@@ -16,6 +16,7 @@ import type { lore } from './messages/mobile/lore'
 import type { overview } from './messages/mobile/overview'
 import type { play } from './messages/mobile/play'
 import type { profile } from './messages/mobile/profile'
+import type { reactions } from './messages/mobile/reactions'
 import type { settings } from './messages/mobile/settings'
 import type { table } from './messages/mobile/table'
 import type { zhCN as webZhCN } from './messages/web/zh-CN'
@@ -35,7 +36,8 @@ export type AppTranslation = WidenValues<
     (typeof lore)['zh'] &
     (typeof content)['zh'] &
     (typeof table)['zh'] &
-    (typeof assistant)['zh']
+    (typeof assistant)['zh'] &
+    (typeof reactions)['zh']
 >
 
 /** 全部合法文案 key（上游镜像 + 移动端 df 簇） */

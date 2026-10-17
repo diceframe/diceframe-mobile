@@ -114,6 +114,14 @@ export default function ProfileScreen() {
             <MenuRow icon={Languages} label={t('dfSettingsLanguage')} detail={languageLabel} onPress={() => openSetting('language')} />
             <MenuRow icon={Volume2} label={t('dfSettingsSpeech')} detail={`${settings.ttsRate.toFixed(2)}x`} onPress={() => openSetting('speech')} />
             <MenuRow icon={Vibrate} label={t('dfSettingsHaptics')} detail={settings.hapticsEnabled ? t('dfProfileHapticsOn') : t('dfProfileHapticsOff')} onPress={() => openSetting('haptics')} />
+            {settings.token ? (
+              <MenuRow
+                icon={Sparkles}
+                label={t('dfFamiliarSettings')}
+                detail={settings.assistantReactions ? t('dfProfileHapticsOn') : t('dfProfileHapticsOff')}
+                onPress={() => openSetting('familiar')}
+              />
+            ) : null}
             <MenuRow icon={RefreshCw} label={t('dfUpdatesTitle')} detail={`v${Constants.expoConfig?.version ?? '-'}`} onPress={() => openSetting('updates')} />
           </MenuGroup>
         </View>

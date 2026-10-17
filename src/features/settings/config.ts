@@ -15,7 +15,7 @@ import {
 import type { T } from '@/i18n/t'
 import type { LocalePreference } from '@/lib/locale'
 
-export const SECTIONS = ['server', 'identity', 'appearance', 'language', 'speech', 'haptics', 'updates'] as const
+export const SECTIONS = ['server', 'identity', 'appearance', 'language', 'speech', 'haptics', 'familiar', 'updates'] as const
 
 /** 「我的」页菜单等处复用此类型，避免手写联合类型与 SECTIONS 漂移 */
 export type SettingsSection = (typeof SECTIONS)[number]
@@ -34,6 +34,8 @@ export function sectionMeta(section: SettingsSection, t: T): { title: string; su
       return { title: t('dfSettingsSpeech'), subtitle: t('dfSettingsSpeechHint') }
     case 'haptics':
       return { title: t('dfSettingsHaptics'), subtitle: t('dfSettingsHapticsHint') }
+    case 'familiar':
+      return { title: t('dfFamiliarSettings'), subtitle: t('dfFamiliarSettingsHint') }
     case 'updates':
       return { title: t('dfUpdatesTitle'), subtitle: t('dfUpdatesSubtitle') }
   }

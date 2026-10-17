@@ -32,6 +32,7 @@ import { GameContextRow } from '@/features/play/GameContextRow'
 import { GameTimeline } from '@/features/play/GameTimeline'
 import { ActionRecoveryBanner } from '@/features/play/ActionRecoveryBanner'
 import { ActionSkillPicker } from '@/features/play/ActionSkillPicker'
+import { PlayFamiliar, usePlayReactions } from '@/features/assistant/PlayFamiliar'
 import { CheckModesTool } from '@/features/play/CheckModesTool'
 import { StoryPortraitsTool } from '@/features/play/StoryPortraitsTool'
 import { GameSettingsSheet } from '@/features/play/GameSettingsSheet'
@@ -194,6 +195,8 @@ export default function GameScreen() {
   const ttsAuto = useSettingsStore((s) => s.ttsAuto)
   const baseUrl = useSettingsStore((s) => s.baseUrl)
   const ownerToken = useSettingsStore((s) => s.token)
+  // 状态变化 → 骰灵反应；非房主时骰灵不显示，上报会被设置或无人订阅自然忽略
+  usePlayReactions(gameKey, userId)
   const quickActionKey = quickActionVisibilityKey(baseUrl, gameKey, userId)
   const personalQuickActions = useSettingsStore((s) => s.quickActionVisibility[quickActionKey])
   const showQuickActions = quickActionsVisible(personalQuickActions, detail?.quick_actions_enabled)
@@ -728,7 +731,10 @@ export default function GameScreen() {
                 isGm={isGm}
                 onSwipeTo={handleSwipeTo}
                 onReroll={handleRerollSwipe}
+                bottomInset={ownerToken && isGm ? 56 : 0}
               />
+              {/* 骰灵跟随 DF Agent：只对房主出现（点按打开助手） */}
+              {ownerToken && isGm ? <PlayFamiliar gameKey={gameKey} /> : null}
             </View>
 
             {recovery ? (

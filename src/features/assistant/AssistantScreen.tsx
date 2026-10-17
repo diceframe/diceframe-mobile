@@ -23,6 +23,7 @@ import {
   type AssistantNavigation,
 } from '@/lib/assistant-agent'
 import { mobileRouteOf } from '@/lib/assistant-routes'
+import type { AvatarMood } from '@/lib/assistant-reactions'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import { cn } from '@/lib/utils'
 import { useAssistantStore } from '@/stores/assistant'
@@ -33,6 +34,7 @@ import { AgentDraftCard } from './AgentDraftCard'
 import { AgentMarkdown } from './AgentMarkdown'
 import { agentRouteLabel, agentStatusLabel, agentToolLabel } from './agentLabels'
 import { ConversationSheet } from './ConversationSheet'
+import { DiceFamiliar } from './DiceFamiliar'
 
 /** Agent 结果里的生成图：鉴权资源经 data URI 显示，过期 / 失败时只留文字结果 */
 function ResultImage({ assetId, gameKey }: { assetId: string; gameKey?: string }) {
@@ -218,6 +220,8 @@ export function AssistantScreen() {
           ? t('dfAgentDrafts', { count: draftList.length })
           : t('dfAgentStatusIdle')
   const busy = streaming || actionBusy
+  // 骰灵表情跟随助手状态（同上游入口）：处理中托腮、待确认举手、出错着急
+  const headerMood: AvatarMood = streaming || actionBusy ? 'thinking' : pendingApproval ? 'attention' : actionError ? 'worried' : 'idle'
 
   function send(text: string) {
     const value = text.trim()
@@ -271,9 +275,12 @@ export function AssistantScreen() {
         subtitle={t('assistantSubtitle')}
         onBack={() => router.back()}
         right={
-          <Button variant="ghost" size="icon" onPress={() => setHistoryOpen(true)} accessibilityLabel={t('dfAgentHistory')}>
-            <Icon as={History} size={18} />
-          </Button>
+          <View className="flex-row items-center gap-1">
+            {messages.length ? <DiceFamiliar mood={headerMood} size={36} hands={false} /> : null}
+            <Button variant="ghost" size="icon" onPress={() => setHistoryOpen(true)} accessibilityLabel={t('dfAgentHistory')}>
+              <Icon as={History} size={18} />
+            </Button>
+          </View>
         }
       />
       <ScrollView
@@ -281,13 +288,15 @@ export function AssistantScreen() {
         className="flex-1"
         contentContainerClassName="gap-3 px-4 pb-4"
         keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+        // 有对话才跟随到底部；空状态从顶部看（骰灵和引导在上面）
+        onContentSizeChange={() => {
+          if (messages.length) scrollRef.current?.scrollToEnd({ animated: true })
+          else scrollRef.current?.scrollTo({ y: 0, animated: false })
+        }}
       >
         {!messages.length ? (
           <View className="items-center gap-3 py-8">
-            <View className="h-14 w-14 items-center justify-center rounded-full bg-primary/15">
-              <Icon as={Sparkles} size={26} className="text-primary" />
-            </View>
+            <DiceFamiliar mood={headerMood === 'idle' ? 'happy' : headerMood} size={96} />
             <Text className="text-center font-semibold">{t('assistantEmpty')}</Text>
             <Text variant="muted" className="text-center">{t('assistantEmptyHint')}</Text>
             <View className="w-full gap-2">

@@ -16,6 +16,7 @@ import {
   type PlayerIdentity,
 } from '@/lib/player-identity'
 import type { LocalePreference } from '@/lib/locale'
+import type { ReactionCategory } from '@/lib/assistant-reactions'
 import { rememberQuickActionVisibility } from '@/lib/quick-action-visibility'
 import { updateRecentServers } from '@/lib/recent-servers'
 import {
@@ -51,6 +52,8 @@ interface PersistedSettings {
   themeMode: ThemeMode
   language: LocalePreference
   quickActionVisibility: Record<string, boolean>
+  assistantReactions: boolean
+  disabledReactionCategories: ReactionCategory[]
 }
 
 /** 新安装与数据版本重置使用同一套默认值，不转换旧数据。 */
@@ -72,6 +75,8 @@ function defaultSettings(): PersistedSettings {
     themeMode: 'system',
     language: 'system',
     quickActionVisibility: {},
+    assistantReactions: true,
+    disabledReactionCategories: [],
   }
 }
 
@@ -119,6 +124,9 @@ interface SettingsState {
    * persist 浅合并，旧数据里没有它就取初值 {}
    */
   quickActionVisibility: Record<string, boolean>
+  /** 骰灵跑团反应总开关与按类别关闭（同上游 useAssistantPreferences；新增字段，浅合并无需升版本） */
+  assistantReactions: boolean
+  disabledReactionCategories: ReactionCategory[]
   /** 主题偏好；system 表示跟随设备主题 */
   themeMode: ThemeMode
   /** 界面语言偏好；system 表示跟随设备语言 */
@@ -155,6 +163,8 @@ interface SettingsState {
   setTtsAuto: (enabled: boolean) => void
   setHapticsEnabled: (enabled: boolean) => void
   setQuickActionVisibility: (key: string, visible: boolean) => void
+  setAssistantReactions: (enabled: boolean) => void
+  setReactionCategory: (category: ReactionCategory, on: boolean) => void
   setThemeMode: (mode: ThemeMode) => void
   setLanguage: (language: LocalePreference) => void
   setSystemTheme: (theme: ResolvedTheme) => void
@@ -318,6 +328,11 @@ export const useSettingsStore = create<SettingsState>()(
       setTtsEngine: (ttsEngine) => set({ ttsEngine }),
       setTtsAuto: (ttsAuto) => set({ ttsAuto }),
       setHapticsEnabled: (hapticsEnabled) => set({ hapticsEnabled }),
+      setAssistantReactions: (assistantReactions) => set({ assistantReactions }),
+      setReactionCategory: (category, on) => {
+        const next = get().disabledReactionCategories.filter((item) => item !== category)
+        set({ disabledReactionCategories: on ? next : [...next, category] })
+      },
       setQuickActionVisibility: (key, visible) =>
         set({ quickActionVisibility: rememberQuickActionVisibility(get().quickActionVisibility, key, visible) }),
       setThemeMode: (themeMode) => set({ themeMode }),
@@ -345,6 +360,8 @@ export const useSettingsStore = create<SettingsState>()(
         ttsAuto: state.ttsAuto,
         hapticsEnabled: state.hapticsEnabled,
         quickActionVisibility: state.quickActionVisibility,
+        assistantReactions: state.assistantReactions,
+        disabledReactionCategories: state.disabledReactionCategories,
         themeMode: state.themeMode,
         language: state.language,
       }),
