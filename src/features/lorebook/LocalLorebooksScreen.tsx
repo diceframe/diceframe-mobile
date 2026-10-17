@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { FlatList, Pressable, ScrollView, View } from 'react-native'
 import { BookMarked, Plus } from 'lucide-react-native'
-import { useRouter } from 'expo-router'
 
 import { errorMessage } from '@/api/client'
 import { PageHeader } from '@/components/page-header'
@@ -34,6 +33,7 @@ import {
   type EntryForm,
 } from '@/lib/local-library/lorebook-edit'
 import type { LorebookEntry } from '@/lib/portable/lorebook-v3'
+import { useBackNavigation } from '@/hooks/use-back-navigation'
 
 type BookSheet = { mode: 'create' } | { mode: 'rename'; book: LocalLorebookView }
 
@@ -43,7 +43,7 @@ type BookSheet = { mode: 'create' } | { mode: 'rename'; book: LocalLorebookView 
  */
 export default function LocalLorebooksScreen() {
   const t = useT()
-  const router = useRouter()
+  const goBack = useBackNavigation('/lorebook')
   const { books, loading, error, refresh, createBook, renameBook, duplicateBook, deleteBook } = useLocalLorebooks()
   const [openId, setOpenId] = React.useState<string | null>(null)
   const [sheet, setSheet] = React.useState<BookSheet | null>(null)
@@ -115,7 +115,7 @@ export default function LocalLorebooksScreen() {
       <PageHeader
         title={t('dfLocalLorebooksTitle')}
         subtitle={t('dfLocalLorebooksSubtitle', { count: books?.length ?? 0 })}
-        onBack={() => router.back()}
+        onBack={goBack}
         className="px-0"
         right={books ? (
           <Button size="sm" onPress={() => openSheet({ mode: 'create' })}>

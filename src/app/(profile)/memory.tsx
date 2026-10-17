@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { FlatList, View } from 'react-native'
 import { Brain, Search, X } from 'lucide-react-native'
-import { useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { fetchGames } from '@/api/games'
@@ -34,9 +33,10 @@ import {
   memoryPageMeta,
   memoryPaginationReducer,
 } from '@/lib/memory-pagination'
+import { useBackNavigation } from '@/hooks/use-back-navigation'
 
 export default function MemoryScreen() {
-  const router = useRouter()
+  const goBack = useBackNavigation('/profile')
   const t = useT()
   const keyboardHeight = useKeyboardHeight()
   const insets = useSafeAreaInsets()
@@ -181,7 +181,7 @@ export default function MemoryScreen() {
       <PageHeader
         title={t('dfMemoryTitle')}
         subtitle={t('dfMemorySubtitle')}
-        onBack={() => router.back()}
+        onBack={goBack}
         className="px-0"
       />
       {error ? (

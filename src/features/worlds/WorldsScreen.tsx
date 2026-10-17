@@ -22,6 +22,7 @@ import { useT, type T } from '@/i18n/t'
 import { errorMessage } from '@/api/client'
 import { appLayoutForWidth } from '@/lib/layout'
 import { confirmDestructive } from '@/lib/confirm'
+import { useBackNavigation } from '@/hooks/use-back-navigation'
 
 /** 模块级常量只存 key，渲染时经 t() 取文案 */
 const SOURCE_LABEL_KEYS = {
@@ -42,6 +43,7 @@ function cardMeta(card: WorldGalleryCard, t: T): string {
 
 export default function WorldsScreen() {
   const router = useRouter()
+  const goBack = useBackNavigation('/profile')
   const t = useT()
   const { width } = useWindowDimensions()
   const { gameListColumns: columns } = appLayoutForWidth(width)
@@ -133,7 +135,7 @@ export default function WorldsScreen() {
       <PageHeader
         title={t('stepWorld')}
         subtitle={t('dfWorldsSubtitle')}
-        onBack={() => router.back()}
+        onBack={goBack}
         className="px-0"
       />
 

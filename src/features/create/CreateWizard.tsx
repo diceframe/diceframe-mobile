@@ -39,6 +39,7 @@ import { contentLanguage, useT } from '@/i18n/t'
 import { errorMessage } from '@/api/client'
 import { UserFacingError } from '@/lib/user-facing-error'
 import { cn } from '@/lib/utils'
+import { useBackNavigation } from '@/hooks/use-back-navigation'
 
 const STEP_KEYS = ['stepWorld', 'stepGameSettings', 'stepCharacters', 'stepConfirm'] as const
 
@@ -143,6 +144,7 @@ function applyCatalog(
 
 export function CreateWizard({ preselectedWorldId }: { preselectedWorldId?: string | null }) {
   const router = useRouter()
+  const goBack = useBackNavigation('/overview')
   const t = useT()
   const insets = useSafeAreaInsets()
 
@@ -392,7 +394,7 @@ export function CreateWizard({ preselectedWorldId }: { preselectedWorldId?: stri
       {/* 页头 */}
       <View className="mb-2 flex-row items-center gap-2">
         <Pressable
-          onPress={() => router.back()}
+          onPress={goBack}
           className="rounded-md p-1.5 active:bg-accent"
           accessibilityRole="button"
           accessibilityLabel={t('dfCommonCancel')}

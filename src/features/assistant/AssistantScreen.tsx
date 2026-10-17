@@ -28,6 +28,7 @@ import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import { cn } from '@/lib/utils'
 import { useAssistantStore } from '@/stores/assistant'
 import { useSettingsStore } from '@/stores/settings'
+import { useBackNavigation } from '@/hooks/use-back-navigation'
 
 import { AgentApprovalCard } from './AgentApprovalCard'
 import { AgentDraftCard } from './AgentDraftCard'
@@ -171,6 +172,7 @@ function MessageBubble({
 export function AssistantScreen() {
   const t = useT()
   const router = useRouter()
+  const goBack = useBackNavigation('/profile')
   const keyboardHeight = useKeyboardHeight()
   // Screen 不含底边安全区；键盘高度不含导航条，两者相加才落在键盘上方（同对局页输入区）
   const insets = useSafeAreaInsets()
@@ -249,7 +251,7 @@ export function AssistantScreen() {
   if (!ownerToken) {
     return (
       <Screen>
-        <PageHeader title={t('assistantTitle')} onBack={() => router.back()} />
+        <PageHeader title={t('assistantTitle')} onBack={goBack} />
         <View className="gap-4 px-4">
           <Text variant="muted">{t('dfAgentOwnerOnly')}</Text>
           <Button className="self-start" onPress={() => router.push('/login')}>
@@ -273,7 +275,7 @@ export function AssistantScreen() {
       <PageHeader
         title={t('assistantTitle')}
         subtitle={t('assistantSubtitle')}
-        onBack={() => router.back()}
+        onBack={goBack}
         right={
           <View className="flex-row items-center gap-1">
             {messages.length ? <DiceFamiliar mood={headerMood} size={36} hands={false} /> : null}

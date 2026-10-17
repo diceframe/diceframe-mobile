@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { FlatList, View } from 'react-native'
 import { CopyPlus, Gavel, Plus, Star } from 'lucide-react-native'
-import { useRouter } from 'expo-router'
 
 import { PageHeader } from '@/components/page-header'
 import { Sheet } from '@/components/patterns/sheet'
@@ -15,9 +14,10 @@ import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
 import { useT } from '@/i18n/t'
 import { useRules } from '@/hooks/useRules'
+import { useBackNavigation } from '@/hooks/use-back-navigation'
 
 export default function RulesScreen() {
-  const router = useRouter()
+  const goBack = useBackNavigation('/profile')
   const t = useT()
   const { rules, loading, error, refresh, addRule, deleteRule } = useRules()
   const [editorOpen, setEditorOpen] = React.useState(false)
@@ -39,7 +39,7 @@ export default function RulesScreen() {
 
   return (
     <Screen className="px-4" style={{ width: '100%', maxWidth: 840, alignSelf: 'center' }}>
-      <PageHeader title={t('dfRulesTitle')} subtitle={loading ? t('dfRulesSyncing') : t('dfRulesCount', { count: rules.length })} onBack={() => router.back()} className="px-0" right={<Button size="sm" onPress={() => setEditorOpen(true)}><Icon as={Plus} size={16} /><Text>{t('dfRulesCopyAction')}</Text></Button>} />
+      <PageHeader title={t('dfRulesTitle')} subtitle={loading ? t('dfRulesSyncing') : t('dfRulesCount', { count: rules.length })} onBack={goBack} className="px-0" right={<Button size="sm" onPress={() => setEditorOpen(true)}><Icon as={Plus} size={16} /><Text>{t('dfRulesCopyAction')}</Text></Button>} />
       {error ? <View className="mb-3 flex-row items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3"><Text className="flex-1 text-destructive">{error}</Text><Button size="sm" variant="outline" onPress={() => void refresh()}><Text>{t('dfCommonRetry')}</Text></Button></View> : null}
       <View className="mb-3 flex-row items-center gap-3 rounded-xl border border-border bg-card p-4"><View className="h-10 w-10 items-center justify-center rounded-full bg-primary/15"><Icon as={CopyPlus} size={19} /></View><View className="flex-1"><Text className="font-semibold">{t('dfRulesCopyHeading')}</Text><Text variant="small">{t('dfRulesCopyHint')}</Text></View></View>
       <FlatList

@@ -19,6 +19,7 @@ import {
 import { useT } from '@/i18n/t'
 import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
 import { ServerCompatBlocked, checkServerCompatibility, serverCompatErrorText } from '@/lib/server-compat'
+import { resetTo } from '@/hooks/use-back-navigation'
 
 export default function ServerSettingsScreen() {
   const router = useRouter()
@@ -80,7 +81,7 @@ export default function ServerSettingsScreen() {
       // 服务器改为免密时清掉过期密码，保持密码本真实
       settings.rememberServerPassword(url, needsPassword ? saved : '')
       switchClientRestoreRef.current = null
-      router.replace('/overview')
+      resetTo('/overview')
     } catch (e) {
       if (switchClientRestoreRef.current) configureApiClient(switchClientRestoreRef.current)
       switchClientRestoreRef.current = null
