@@ -87,10 +87,11 @@ export async function fetchPlayerContext(gameKey: string): Promise<PlayerContext
   }
 }
 
-export function submitAction(gameKey: string, text: string): Promise<ActionSubmitResponse> {
+/** selectedSkill 为空时不带该字段（服务端按行动文本自动判断技能） */
+export function submitAction(gameKey: string, text: string, selectedSkill = ''): Promise<ActionSubmitResponse> {
   return api<ActionSubmitResponse>(gamePath(gameKey, '/action'), {
     method: 'POST',
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, ...(selectedSkill ? { selected_skill: selectedSkill } : {}) }),
   })
 }
 

@@ -6,6 +6,10 @@
  */
 export const table = {
   zh: {
+    dfActionSkillTitle: '本次使用的技能（可选）',
+    dfActionSkillShort: '本次技能',
+    dfActionSkillAuto: '自动判断',
+    dfActionSkillHint: '明确选择后优先用于本次检定；加值仍由服务端按角色卡和规则计算，不会指定骰面或绕过规则。',
     dfRecoveryRolledBack: '本轮处理失败，已退回行动阶段。你可以修改行动后重试。',
     dfRecoveryPostCommit: '本轮可能已经推进，请刷新查看结果；不要重复提交这条行动。',
     dfRecoveryNotProcessed: '本轮状态在处理前已变化，请刷新确认当前结果。',
@@ -60,6 +64,10 @@ export const table = {
     dfPostCheckWaiting: '请先处理骰子卡片上的检定选择，再继续叙事。',
   },
   en: {
+    dfActionSkillTitle: 'Skill for this action (optional)',
+    dfActionSkillShort: 'Action skill',
+    dfActionSkillAuto: 'Choose automatically',
+    dfActionSkillHint: 'An explicit choice takes priority for this check. The server still calculates modifiers from the character and rules; this never specifies dice or bypasses rules.',
     dfRecoveryRolledBack: 'Round processing failed and returned to the action phase. Revise your action and try again.',
     dfRecoveryPostCommit: 'The round may already have advanced. Refresh to see the result; do not submit this action again.',
     dfRecoveryNotProcessed: 'The round state changed before this action was processed. Refresh to confirm the current result.',
@@ -114,6 +122,10 @@ export const table = {
     dfPostCheckWaiting: 'Resolve the choices on the dice cards before continuing the story.',
   },
   ja: {
+    dfActionSkillTitle: 'この行動で使う技能（任意）',
+    dfActionSkillShort: '使用技能',
+    dfActionSkillAuto: '自動判定',
+    dfActionSkillHint: '選んだ技能はこの判定で優先されます。修正値はサーバーがキャラクターとルールに基づいて計算し、出目の指定やルールの回避はできません。',
     dfRecoveryRolledBack: 'ターン処理に失敗し、行動フェーズへ戻りました。行動を修正して再試行できます。',
     dfRecoveryPostCommit: 'ターンはすでに進んだ可能性があります。再送信せず、再読み込みして結果を確認してください。',
     dfRecoveryNotProcessed: '処理前にターン状態が変わりました。再読み込みして現在の結果を確認してください。',
@@ -168,6 +180,10 @@ export const table = {
     dfPostCheckWaiting: '物語を続ける前に、ダイスカードの判定選択を完了してください。',
   },
   de: {
+    dfActionSkillTitle: 'Fertigkeit für diese Aktion (optional)',
+    dfActionSkillShort: 'Fertigkeit',
+    dfActionSkillAuto: 'Automatisch wählen',
+    dfActionSkillHint: 'Eine ausdrückliche Wahl hat bei dieser Probe Vorrang. Modifikatoren berechnet weiterhin der Server aus Figur und Regeln; Würfelergebnisse lassen sich nicht vorgeben.',
     dfRecoveryRolledBack: 'Die Rundenverarbeitung ist fehlgeschlagen und wurde zur Aktionsphase zurückgesetzt. Überarbeite die Aktion und versuche es erneut.',
     dfRecoveryPostCommit: 'Die Runde könnte bereits fortgesetzt worden sein. Aktualisiere das Spiel und sende diese Aktion nicht erneut.',
     dfRecoveryNotProcessed: 'Der Rundenstatus hat sich vor der Verarbeitung geändert. Aktualisiere das Spiel, um das Ergebnis zu prüfen.',

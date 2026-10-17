@@ -31,6 +31,7 @@ import { CharacterPortraitSheet } from '@/features/play/CharacterPortraitSheet'
 import { GameContextRow } from '@/features/play/GameContextRow'
 import { GameTimeline } from '@/features/play/GameTimeline'
 import { ActionRecoveryBanner } from '@/features/play/ActionRecoveryBanner'
+import { ActionSkillPicker } from '@/features/play/ActionSkillPicker'
 import { GameSettingsSheet } from '@/features/play/GameSettingsSheet'
 import { KpQuestionSheet } from '@/features/play/KpQuestionSheet'
 import { TableTalkPanel } from '@/features/play/TableTalkPanel'
@@ -66,6 +67,7 @@ import {
 import { appLayoutForWidth } from '@/lib/layout'
 import { levelUpAttributes, levelUpPoints } from '@/lib/level-up'
 import { actionRecoveryOf, afterRecoveryRefresh, type ActionRecovery } from '@/lib/action-recovery'
+import { actionSkillNames, reconcileActionSkill } from '@/lib/action-skill'
 import { pendingPostChecks } from '@/lib/push-decision'
 import { quickActionsVisible, quickActionVisibilityKey } from '@/lib/quick-action-visibility'
 import { isStoredPlayerMember } from '@/lib/player-identity'
@@ -139,6 +141,8 @@ export default function GameScreen() {
   // 行动提交失败后的恢复态：结果不确定时先锁输入、要求刷新核对，避免把已入账的行动再发一遍
   const [recovery, setRecovery] = React.useState<ActionRecovery | null>(null)
   const [recoveryRefreshing, setRecoveryRefreshing] = React.useState(false)
+  // 本次行动指定的技能：只在内存里随草稿走，提交成功或切局即清空
+  const [pickedSkill, setPickedSkill] = React.useState('')
   const [characterOpen, setCharacterOpen] = React.useState(false)
   const [menuOpen, setMenuOpen] = React.useState(false)
   const [gmPanelTab, setGmPanelTab] = React.useState<
@@ -199,6 +203,8 @@ export default function GameScreen() {
   const privateMessages = useGameStore((s) => s.privateMessages)
   const myPlayer = players.find((player) => player.user_id === userId) ?? null
   const mySheet = myPlayer?.character_sheet ?? null
+  // 技能从卡上消失（换卡、改卡）时选择自动失效，渲染期派生而不是 effect 里回写
+  const selectedSkill = reconcileActionSkill(pickedSkill, mySheet)
   const allocationRules = ruleAttrs.length ? ruleAttrs : ruleMeta?.attributes ?? []
   const availablePoints = levelUpPoints(mySheet)
   const canAllocatePoints = availablePoints > 0
@@ -292,12 +298,13 @@ export default function GameScreen() {
         && !isNonBlockingPersonalPurchase(proposal, String(current.detail?.run_id || '')),
     )) throw new UserFacingError('apiErrors.economy_decision_pending')
     try {
-      await current.submit(text)
+      await current.submit(text, selectedSkill)
     } catch (error) {
       setRecovery(actionRecoveryOf(error))
       throw error
     }
     setRecovery(null)
+    setPickedSkill('')
     void playGameHaptic('submit')
   }
 
@@ -305,8 +312,9 @@ export default function GameScreen() {
     const text = draft.trim()
     if (!text) return
     try {
-      await useGameStore.getState().submit(text)
+      await useGameStore.getState().submit(text, selectedSkill)
       setDraft('')
+      setPickedSkill('')
       setRecovery(null)
       void playGameHaptic('submit')
     } catch (error) {
@@ -735,6 +743,14 @@ export default function GameScreen() {
                 useSettingsStore.getState().setQuickActionVisibility(quickActionKey, !showQuickActions)}
               voice={voice}
               topControls={composerTopControls}
+              accessory={
+                <ActionSkillPicker
+                  skills={actionSkillNames(mySheet)}
+                  value={selectedSkill}
+                  disabled={busy || composerDisabled}
+                  onChange={setPickedSkill}
+                />
+              }
             />
           </View>
 

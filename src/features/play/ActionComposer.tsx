@@ -26,6 +26,7 @@ export function ActionComposer({
   onToggleQuickActions,
   voice,
   topControls,
+  accessory,
 }: {
   value: string
   onChangeText: (text: string) => void
@@ -39,6 +40,8 @@ export function ActionComposer({
   onToggleQuickActions?: () => void
   voice?: VoiceInputState
   topControls?: React.ReactNode
+  /** 输入框上方与建议开关同行的附加控件（本次技能选择） */
+  accessory?: React.ReactNode
 }) {
   const t = useT()
   const locked = busy || !!disabled
@@ -53,17 +56,22 @@ export function ActionComposer({
   return (
     <View className="gap-2 pb-2">
       {topControls}
-      {quickActions.length > 0 && onToggleQuickActions ? (
-        <Pressable
-          onPress={onToggleQuickActions}
-          className="mx-3 mt-1 self-start active:opacity-70"
-          accessibilityRole="button"
-          accessibilityHint={t('dfQuickActionsPersonalHint')}
-        >
-          <Text variant="small" className="text-muted-foreground">
-            {quickActionsVisible ? t('dfQuickActionsHide') : t('dfQuickActionsShow')}
-          </Text>
-        </Pressable>
+      {accessory || (quickActions.length > 0 && onToggleQuickActions) ? (
+        <View className="mx-3 mt-1 flex-row flex-wrap items-center gap-3">
+          {accessory}
+          {quickActions.length > 0 && onToggleQuickActions ? (
+            <Pressable
+              onPress={onToggleQuickActions}
+              className="active:opacity-70"
+              accessibilityRole="button"
+              accessibilityHint={t('dfQuickActionsPersonalHint')}
+            >
+              <Text variant="small" className="text-muted-foreground">
+                {quickActionsVisible ? t('dfQuickActionsHide') : t('dfQuickActionsShow')}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
       {quickActions.length > 0 && quickActionsVisible && (
         <ScrollView

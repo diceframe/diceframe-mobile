@@ -156,7 +156,8 @@ interface GameStore {
   resume: () => void
   refresh: () => Promise<void>
   loadOlderLog: () => Promise<void>
-  submit: (text: string) => Promise<void>
+  /** selectedSkill：玩家为本次行动指定的角色卡技能（可选，见 lib/action-skill） */
+  submit: (text: string, selectedSkill?: string) => Promise<void>
   decideLuck: (checkId: string, spend: boolean) => Promise<void>
   /** 孤注一掷决议：错误抛给面板就地展示（不占顶部横幅），成功或撞上过期 revision 都刷新权威状态 */
   decidePush: (checkId: string, operation: PushOperation, body: PushRequestBody) => Promise<void>
@@ -659,12 +660,12 @@ export const useGameStore = create<GameStore>((set, get) => {
       }
     },
 
-    async submit(text) {
+    async submit(text, selectedSkill = '') {
       const { gameKey } = get()
       if (!gameKey || !text.trim()) return
       set({ actionBusy: true })
       try {
-        await submitAction(gameKey, text.trim())
+        await submitAction(gameKey, text.trim(), selectedSkill)
         // 提交成功就结束发送态；全量刷新包含地图等慢请求，不能继续挡住输入/语音浮层。
         if (get().gameKey === gameKey) void get().refresh()
       } catch (error) {
