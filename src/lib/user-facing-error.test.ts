@@ -47,7 +47,7 @@ describe('面向用户的错误提示', () => {
     const timeout = new Error('native abort detail')
     timeout.name = 'AbortError'
     expect(errorMessage(timeout)).toBe(getT()('dfErrorsTimeout'))
-    expect(errorMessage(new ApiError('internal detail', 409, 'ROUND_PROCESSING'))).toBe(getT()('apiErrors.round_processing'))
+    expect(errorMessage(new ApiError('internal detail', 409, 'ROUND_PROCESSING'))).toBe(getT()('apiErrors.ROUND_PROCESSING'))
     expect(errorMessage(new UserFacingError('dfErrorsEmptyRecording'))).toBe(getT()('dfErrorsEmptyRecording'))
   })
 

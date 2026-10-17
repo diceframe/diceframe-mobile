@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * 上游文案镜像同步：node scripts/sync-upstream-i18n.mjs
- * 路径相对本脚本定位（上游默认在 ../diceframe/frontend-v2），可从任意目录运行。
+ * 路径相对本脚本定位（上游默认在 ../diceframe/frontend-v2），可从任意目录运行；
+ * 上游检出在别处（如 upstream/main 的独立 worktree）时用 DICEFRAME_UPSTREAM 指向其仓库根。
  *
  * 把 frontend-v2/src/i18n/messages/*.ts 重拷为 src/i18n/messages/web/*.ts，
  * 机械替换固定三步（与各镜像文件头注释一致）：
@@ -20,7 +21,10 @@ import { fileURLToPath } from 'node:url'
 
 const LANGS = ['zh-CN', 'en', 'ja', 'de']
 const mobileRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const upstreamDir = path.resolve(mobileRoot, '../diceframe/frontend-v2/src/i18n/messages')
+const upstreamRoot = process.env.DICEFRAME_UPSTREAM
+  ? path.resolve(process.env.DICEFRAME_UPSTREAM)
+  : path.resolve(mobileRoot, '../diceframe')
+const upstreamDir = path.join(upstreamRoot, 'frontend-v2/src/i18n/messages')
 const mirrorDir = path.join(mobileRoot, 'src/i18n/messages/web')
 
 const header = (file, patched) => `/**

@@ -7,7 +7,7 @@ export interface CharacterIdentity { [key: string]: string | number | undefined 
 /** `effect` is player-authored skill description: display / AI context only, never mechanics. */
 export interface CharacterSkill { name: string; value?: number; effect?: string }
 
-export interface CharacterItem { name?: string; type?: string; damage?: number; slot?: string; quality?: string; qty?: number; effect?: string; category?: string; note?: string; [key: string]: unknown }
+export interface CharacterItem { name?: string; type?: string; damage?: number; damage_dice?: string; slot?: string; quality?: string; qty?: number; effect?: string; category?: string; note?: string; [key: string]: unknown }
 
 export type GeneratedImagePurpose = 'scene' | 'avatar' | 'item' | 'map' | 'freeform'
 
@@ -31,6 +31,22 @@ export interface CharacterPortrait {
   asset_id?: string
   plugin_id?: string
   path?: string
+}
+
+export type StoryMode = 'prose' | 'dialogue'
+
+export interface StorySegment {
+  id: string
+  kind: 'narration' | 'dialogue'
+  text: string
+  speaker_id?: string
+  speaker_name?: string
+  portrait?: CharacterPortrait | null
+}
+
+export interface StorySequence {
+  version: 1
+  segments: StorySegment[]
 }
 
 export interface SceneImageRef {
@@ -154,6 +170,8 @@ export interface Player {
   character_sheet?: CharacterSheet
   /** 谁在玩这个角色：真人 / 服务器 AI / 尚未认领（AI 队友控制契约）。 */
   control?: PlayerControl
+  /** 席位已行动过：之后只有 GM 能为它套用角色卡或删除它。 */
+  has_acted?: boolean
   [key: string]: unknown
 }
 
@@ -181,13 +199,21 @@ export interface CheckRequest {
   planner_source?: string
 }
 
+export interface PercentileDice {
+  units: number; tens: number[]; candidates: number[]; taken_index: number; bonus_dice: number; penalty_dice: number
+}
 export interface CheckResult {
+  push?: { schema_version: number; revision: number; status: 'pending' | 'requested' | 'offered' | 'resolved' | 'declined' | 'rejected';
+    run_id: string; round: number; reason: string; consequence: string; decision_reason?: string; failed?: boolean; original?: CheckResult }
+  dice_mechanic?: string
+  percentile_dice?: PercentileDice
   check_id?: string
   label?: string
   actor_uid?: string
   actor_name?: string
   dice?: string
   attribute?: string | null
+  attribute_key?: string
   skill?: string
   roll?: number
   rolls?: number[]
@@ -325,6 +351,7 @@ export interface GameDetail {
   language?: string
   solo_mode?: boolean
   narrative_perspective?: 'auto' | 'immersive' | 'third_person' | string
+  story_mode?: StoryMode
   advancement?: LiveAdvancementStatus
   rest_session?: RestSessionStatus
   player_access_open?: boolean
@@ -341,9 +368,11 @@ export interface GameDetail {
   }
   multiplayer?: Multiplayer
   quick_actions?: string[]
+  quick_actions_enabled?: boolean
   economy_proposals?: PendingPayment[]
   run_id?: string
   pending_luck_decisions?: CheckResult[]
+  pending_push_decisions?: CheckResult[]
   round_check_results?: CheckResult[]
   manual_rolls?: ManualRollTimelineEntry[]
   adventure_binding?: {
@@ -428,6 +457,7 @@ export interface LogEntry {
   tags_summary?: LogTagsSummary
   check_results?: CheckResult[]
   story_recaps?: StoryRecap[]
+  story?: StorySequence
   scene_image?: RoundSceneImage
   [key: string]: unknown
 }
@@ -482,6 +512,8 @@ export interface MapDefinition {
 export interface MapData {
   schema_version?: number
   map_mode?: 'graph' | string
+  /** Server-side empty-view hint; see services/maps.py. */
+  visibility_hint?: '' | 'no_visible_locations' | 'players_see_no_locations'
   locations: MapLocation[]
   current_scene?: string
   current_location_id?: string
@@ -519,6 +551,33 @@ export interface LoreEntry {
 export interface LorebookResponse {
   entries?: LoreEntry[]
   [key: string]: unknown
+}
+
+export interface LorebookUsageBook {
+  id: string
+  name: string
+  enabled: boolean
+  scope: string
+  entry_count: number
+}
+
+export interface LorebookUsageResponse {
+  ok: boolean
+  error?: string
+  library: {
+    total: number
+    enabled: number
+    disabled: number
+    books: LorebookUsageBook[]
+  }
+  game: {
+    status: 'none' | 'ready' | 'unavailable'
+    game_key: string
+    world_id: string
+    world_name: string
+    count: number | null
+    books: LorebookUsageBook[]
+  }
 }
 
 export interface LoreProjection {
@@ -600,6 +659,7 @@ export interface GamesResponse {
 }
 
 export interface GameMutationResponse {
+  story_mode?: StoryMode
   ok?: boolean
   error?: string
   error_code?: string
@@ -1096,6 +1156,7 @@ export interface RulesetCombatTarget {
   death_saves?: Record<string, number>
   /** Server-projected class resources of this actor (id, localized name, current/max). */
   class_resources?: CharacterClassResource[]
+  spells?: Array<{ spell_ref: string; name: string; blocked_reason: string }>
 }
 
 /** One user-visible price of a server-provided combat capability. */
@@ -1127,6 +1188,7 @@ export interface RulesetCombatSpell extends JsonObject {
   range: number
   mode: string
   available_slot_levels: number[]
+  trigger_target_id?: string
 }
 
 export interface RulesetPendingDecision extends JsonObject {
@@ -1289,6 +1351,9 @@ export interface RulesetCombatEvent extends JsonObject {
   text?: string
   round?: number
   natural?: number
+  rolls?: number[]
+  advantage_mode?: 'advantage' | 'disadvantage' | ''
+  advantage_sources?: { code: string; mode: 'advantage' | 'disadvantage'; reason?: string }[]
   modifier?: number
   total?: number
   target?: number
@@ -1473,6 +1538,7 @@ export interface ActionSubmitResponse {
   check_result?: CheckResult
   check_results?: CheckResult[]
   pending_luck_decisions?: CheckResult[]
+  pending_push_decisions?: CheckResult[]
   advanced?: boolean
   roll?: {
     ok?: boolean
@@ -1541,6 +1607,8 @@ export interface WorldTemplateSummary {
   default_rule?: string
   recommended_rules?: string[]
   scene_image?: SceneImageRef
+  /** Optional pool of content-provided defaults; scene_image remains the legacy primary. */
+  scene_images?: SceneImageRef[]
   language?: string
   active_locale?: string
   lorebook_count?: number
@@ -1561,6 +1629,8 @@ export interface WorldSummary {
   entry_count?: number
   language?: string
   scene_image?: SceneImageRef
+  /** Optional pool of content-provided defaults; scene_image remains the legacy primary. */
+  scene_images?: SceneImageRef[]
   gm_style?: GmStyle | null
   [key: string]: unknown
 }
@@ -1573,12 +1643,31 @@ export interface WorldCloneResponse {
   language?: string
 }
 
+export interface WorldDefinition {
+  world_id: string
+  world_name: string
+  description: string
+  world_setting: string
+  starter_scene: string
+  language: string
+  source: 'builtin' | 'user' | 'plugin'
+  editable: boolean
+}
+
+export interface WorldDefinitionResponse {
+  ok: boolean
+  error?: string
+  world?: WorldDefinition
+}
+
 export interface WorldTemplatesResponse {
   templates?: WorldTemplateSummary[]
 }
 
 export interface AdventureSummary {
   adventure_id: string
+  source_kind?: 'builtin' | 'user' | 'plugin'
+  source_id?: string
   version: string
   format: string
   world_policy: 'fixed' | 'portable' | 'agnostic'
@@ -1652,6 +1741,8 @@ export interface RuleSummary {
   file?: string
   source_rule_id?: string
   scene_image?: SceneImageRef
+  /** Optional pool of content-provided defaults; scene_image remains the legacy primary. */
+  scene_images?: SceneImageRef[]
   ruleset_runtime?: RulesetRuntimeMeta
   [key: string]: unknown
 }
@@ -1673,11 +1764,20 @@ export interface CharacterSchemaResponse {
   ruleset_runtime?: RulesetRuntimeMeta
 }
 
+export interface RuleSpecialStat extends JsonObject {
+  key: string
+  name?: string
+  max?: number
+  initial?: number
+}
+
 export interface RuleTemplate extends JsonObject {
   rule_id?: string
   rule_name?: string
   source_rule_id?: string
   scene_image?: SceneImageRef
+  /** Optional pool of content-provided defaults; scene_image remains the legacy primary. */
+  scene_images?: SceneImageRef[]
   description?: string
   dice_system?: string
   combat_model?: string
@@ -1689,6 +1789,7 @@ export interface RuleTemplate extends JsonObject {
   currency?: string
   currency_system?: CurrencySystem
   hp_formula?: string
+  special_stats?: RuleSpecialStat[]
   gm_prompt_appendix?: string
   attributes?: RuleAttributeEdit[]
   skill_pool?: SkillSpec[]
@@ -1722,6 +1823,7 @@ export interface RuleForm {
   currency_symbol: string
   currency_simple_editable: boolean
   hp_formula: string
+  special_stats: RuleSpecialStat[]
   gm_prompt_appendix: string
   attributes: RuleAttributeEdit[]
 }
@@ -2059,7 +2161,20 @@ export interface BotTokenResponse {
   regenerated: boolean
 }
 
+export interface GamePreferences {
+  push_enabled: boolean
+  quick_actions_enabled: boolean
+  dice_reveal_mode: 'auto' | 'click'
+  luck_timeout_seconds: number
+  narrative_perspective: 'auto' | 'immersive' | 'third_person'
+  story_mode: StoryMode
+  gm_style_override: GmStyle | null
+  advancement_mode: 'milestone' | 'xp'
+  advancement_authority: 'ai_gm' | 'gm'
+}
+
 export interface AppConfig {
+  game_defaults?: GamePreferences
   /** 服务器版本（/api/config 公开下发，供客户端做版本兼容提示） */
   server_version?: string
   /** 服务器仍能正确服务的最低客户端版本；客户端版本低于它应提示升级 App */
@@ -2086,6 +2201,12 @@ export interface AppConfig {
   brief_max_tokens?: number
   analysis_max_tokens?: number
   text_gen_max_tokens?: number
+  assistant_agent_max_tokens?: number
+  llm_generation_options?: Partial<Record<'temperature' | 'top_p' | 'frequency_penalty' | 'presence_penalty', number>>
+  context_recent_rounds?: number
+  check_model_enabled?: boolean
+  check_provider_ref?: string
+  check_model?: string
   proxy_enabled?: boolean
   proxy_url?: string
   proxy_source?: string
@@ -2255,6 +2376,7 @@ export interface UpdateSelfUpdateInfo {
 }
 export interface UpdateStatusResponse {
   state:'idle' | 'downloading' | 'verifying' | 'staged' | 'applying' | 'restarting' | 'done' | 'rolled-back' | 'failed'
+  operation?:'update' | 'rollback'
   version?:string
   kind?:'source' | 'portable' | 'docker'
   asset?:string
@@ -2268,6 +2390,13 @@ export interface UpdateStatusResponse {
   restart_needed?:boolean
   candidate_dir?:string
   backup_dir?:string
+  rollback?: {
+    available:boolean
+    mode?:'portable' | 'docker' | 'source' | 'development' | ''
+    target_version?:string
+    reason?:string
+    restores_data?: boolean
+  }
   current_version:string
   self_update:UpdateSelfUpdateInfo
 }
@@ -2330,6 +2459,7 @@ export interface UpdateApplyResponse {
   error?:string
   state?:string
   version?:string
+  operation?:'update' | 'rollback'
 }
 export interface ApplicationRestartResponse {
   ok:boolean
@@ -2370,6 +2500,7 @@ export interface PairedDeviceListResponse {
   ok: boolean
   devices: PairedDevice[]
 }
+
 
 // ===========================================================================
 // 移动端扩展段（上游 frontend-v2/src/api/types.ts 没有的契约）。
