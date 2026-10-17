@@ -611,6 +611,19 @@ export async function allocateCharacterPoints(
   if (result.ok === false || result.error) throw new Error(result.error || getT()('saveFailed'))
 }
 
+/**
+ * GM 快速调整（经典规则局）：PUT /character/{uid} 只提交要改的字段，补丁由 lib/quick-adjust 构造
+ * （resources / currency / inventory 已与当前角色卡合并，服务端整字段覆盖）。
+ * 200 + ok:false 也按失败抛出，错误码交给界面区分「专业规则局不支持」与「GM 正在重写历史」。
+ */
+export async function updateCharacterSheet(gameKey: string, userId: string, patch: Record<string, unknown>): Promise<void> {
+  const result = await api<{ ok?: boolean; error?: string; error_code?: string; code?: string }>(
+    gamePath(gameKey, `/character/${encodeURIComponent(userId)}`),
+    { method: 'PUT', body: JSON.stringify(patch) },
+  )
+  if (result.ok === false) throw new ApiError(result.error || getT()('saveFailed'), 200, errorCodeOf(result))
+}
+
 // ---------- 角色肖像 ----------
 
 export async function updateCharacterPortrait(gameKey: string, userId: string, portrait: CharacterSheet['portrait']): Promise<void> {

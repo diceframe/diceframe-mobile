@@ -361,6 +361,9 @@ export function GmPanelSheet({
             onSetControl={(uid, mode) => void handleSetControl(uid, mode)}
             onCopyLink={(uid) => void handleCopyLink(uid)}
             hostingUid={hostingUid}
+            adjustGameKey={
+              isGm && detail?.ruleset_runtime?.capabilities?.character_lifecycle !== 'rules_aware' ? gameKey : undefined
+            }
           />
         </TabsContent>
         <TabsContent value="health" className="min-h-0 flex-1 pt-2">
