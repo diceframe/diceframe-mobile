@@ -731,6 +731,7 @@ export default function GameScreen() {
                 isGm={isGm}
                 onSwipeTo={handleSwipeTo}
                 onReroll={handleRerollSwipe}
+                bottomInset={ownerToken && isGm ? 56 : 0}
               />
               {/* 骰灵跟随 DF Agent：只对房主出现（点按打开助手） */}
               {ownerToken && isGm ? <PlayFamiliar gameKey={gameKey} /> : null}

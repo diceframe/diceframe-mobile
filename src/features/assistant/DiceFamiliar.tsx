@@ -40,9 +40,11 @@ const FACETS = [
   [83, 71, 91, 26.5], [83, 71, 91, 73.5], [83, 71, 50, 97],
   [17, 71, 50, 97], [17, 71, 9, 73.5], [17, 71, 9, 26.5],
 ] as const
-/** 面罩里的眼睛中心（viewBox 单位） */
-const EYE_CENTER_Y = 54
-const EYE_GAP = 13
+/** 面罩里的眼睛中心（viewBox 单位）：偏下放在三角面罩较宽处，宽眼型（笑 / 哭）才放得下 */
+const EYE_CENTER_Y = 57
+const EYE_GAP = 11
+/** 上游的眼睛尺寸是相对整张脸的，原生面罩比例略小，统一缩放 */
+const EYE_SCALE = 0.8
 /** 上游的面罩与眼睛是固定的深色 / 亮白，不随主题切换（玻璃壳才跟主题色） */
 const VISOR_FILL = THEME.dark.background
 const EYE_COLOR = '#f4fbff'
@@ -56,9 +58,11 @@ function Eye({ pose, side, size, blink, look }: {
   blink: boolean
   look: [number, number]
 }) {
-  const unit = size / 100
+  const unit = (size / 100) * EYE_SCALE
+  const pos = size / 100
   const height = pose.h * (side === 1 ? pose.rightScale ?? 1 : 1)
-  const offsetX = (side === 0 ? -1 : 1) * (EYE_GAP / 2 + pose.w / 2) * 0.55
+  // 两眼中心各离中线 gap/2 + 半个眼宽：宽眼型不会在中间重叠
+  const offsetX = (side === 0 ? -1 : 1) * (EYE_GAP / 2 + pose.w / 2)
   const lookX = (pose.look?.[0] ?? 0) + look[0]
   const lookY = (pose.look?.[1] ?? 0) + look[1]
   const animated = useAnimatedStyle(() => ({
@@ -73,8 +77,8 @@ function Eye({ pose, side, size, blink, look }: {
   }))
   const base = {
     position: 'absolute' as const,
-    left: 50 * unit,
-    top: EYE_CENTER_Y * unit,
+    left: 50 * pos,
+    top: EYE_CENTER_Y * pos,
     marginLeft: (-pose.w * unit) / 2,
     marginTop: (-height * unit) / 2,
   }

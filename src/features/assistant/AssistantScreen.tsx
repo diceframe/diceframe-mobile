@@ -288,7 +288,11 @@ export function AssistantScreen() {
         className="flex-1"
         contentContainerClassName="gap-3 px-4 pb-4"
         keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+        // 有对话才跟随到底部；空状态从顶部看（骰灵和引导在上面）
+        onContentSizeChange={() => {
+          if (messages.length) scrollRef.current?.scrollToEnd({ animated: true })
+          else scrollRef.current?.scrollTo({ y: 0, animated: false })
+        }}
       >
         {!messages.length ? (
           <View className="items-center gap-3 py-8">

@@ -115,7 +115,10 @@ export function GameTimeline({
   onDecideLuck,
   onSwipeTo,
   onReroll,
+  bottomInset = 0,
 }: {
+  /** 时间线底部要让出的高度（左下角浮着骰灵时），最新内容不被它盖住 */
+  bottomInset?: number
   gameKey: string
   log: LogEntry[]
   players: Player[]
@@ -197,7 +200,7 @@ export function GameTimeline({
   ) : null
 
   const header = (
-    <View className="gap-3 px-4 pb-3">
+    <View className="gap-3 px-4 pb-3" style={bottomInset ? { paddingBottom: 12 + bottomInset } : undefined}>
       {/* 空时间线：冒险尚未开幕时的引导卡 */}
       {!loading && log.length === 0 && liveIdle ? (
         <View className="items-center gap-3 py-10">
