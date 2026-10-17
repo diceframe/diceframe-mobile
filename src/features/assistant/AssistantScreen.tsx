@@ -2,7 +2,7 @@ import * as React from 'react'
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native'
 import { Image } from 'expo-image'
 import { useRouter, type Href } from 'expo-router'
-import { ChevronDown, ChevronUp, FileText, RefreshCw, Send, Sparkles, Square, Trash2 } from 'lucide-react-native'
+import { ChevronDown, ChevronUp, FileText, History, RefreshCw, Send, Sparkles, Square } from 'lucide-react-native'
 
 import { assetSource } from '@/api/assets'
 import { PageHeader } from '@/components/page-header'
@@ -14,10 +14,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { useAssetUri } from '@/features/play/useAssetUri'
 import { contentLanguage, useT } from '@/i18n/t'
 import {
-  eventResultText,
+  actionNavigationOf,
+  messageActions,
   resultAssetId,
   type AssistantEventRecord,
   type AssistantMessage,
+  type AssistantNavigation,
 } from '@/lib/assistant-agent'
 import { mobileRouteOf } from '@/lib/assistant-routes'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
@@ -28,7 +30,8 @@ import { useSettingsStore } from '@/stores/settings'
 import { AgentApprovalCard } from './AgentApprovalCard'
 import { AgentDraftCard } from './AgentDraftCard'
 import { AgentMarkdown } from './AgentMarkdown'
-import { agentStatusLabel, agentToolLabel } from './agentLabels'
+import { agentRouteLabel, agentStatusLabel, agentToolLabel } from './agentLabels'
+import { ConversationSheet } from './ConversationSheet'
 
 /** Agent 结果里的生成图：鉴权资源经 data URI 显示，过期 / 失败时只留文字结果 */
 function ResultImage({ assetId, gameKey }: { assetId: string; gameKey?: string }) {
@@ -40,31 +43,43 @@ function ResultImage({ assetId, gameKey }: { assetId: string; gameKey?: string }
   return <Image source={{ uri }} style={{ width: '100%', aspectRatio: 16 / 9, borderRadius: 8 }} contentFit="cover" />
 }
 
-function ToolResult({ event, gameKey }: { event: AssistantEventRecord; gameKey?: string }) {
+/**
+ * 回复下方的操作标签（上游 PR #549）：✓/✕ + 操作名；导航结果带「前往」，生成图直接显示。
+ * 不再把原始 JSON 堆在工作区里。
+ */
+function ActionChip({
+  event,
+  gameKey,
+  onGo,
+}: {
+  event: AssistantEventRecord
+  gameKey?: string
+  onGo: (target: AssistantNavigation) => void
+}) {
   const t = useT()
-  const [open, setOpen] = React.useState(false)
   const { payload } = event
   const failed = payload.ok === false
+  const target = actionNavigationOf(event)
   const assetId = resultAssetId(payload.result)
-  const summary = eventResultText(payload.result) || (typeof payload.error === 'string' ? payload.error : '')
+  const label = target
+    ? t('dfAgentGoTo', { page: agentRouteLabel(t, target.route) })
+    : `${agentToolLabel(t, payload.tool)}${failed ? ` · ${t('dfAgentFailure')}` : payload.partial ? ` · ${t('dfAgentPartial')}` : ''}`
   return (
-    <View className="gap-1.5 border-t border-border pt-2">
-      <Text variant="small">
-        <Text variant="small" className={cn('font-semibold', failed ? 'text-destructive' : 'text-success')}>
-          {failed ? t('dfAgentFailure') : payload.partial ? t('dfAgentPartial') : t('dfAgentSuccess')}
-        </Text>
-        {' · '}{agentToolLabel(t, payload.tool)}
-      </Text>
-      {summary ? <Text variant="small" className="text-muted-foreground" numberOfLines={3}>{summary}</Text> : null}
+    <View className="gap-1.5">
+      {/* 导航标签整颗可点（点了才前往）；其余操作标签只是记录 */}
+      <Pressable
+        disabled={!target}
+        onPress={() => target && onGo(target)}
+        className={cn(
+          'flex-row items-center gap-1.5 self-start rounded-full border px-2.5 py-1',
+          target ? 'border-primary active:bg-accent' : 'border-border',
+        )}
+        accessibilityRole={target ? 'button' : undefined}
+      >
+        <Text variant="small" className={failed ? 'text-destructive' : 'text-success'}>{failed ? '✕' : '✓'}</Text>
+        <Text variant="small" className={target ? 'text-primary' : 'text-muted-foreground'}>{label}</Text>
+      </Pressable>
       {assetId ? <ResultImage assetId={assetId} gameKey={gameKey} /> : null}
-      {payload.result !== undefined ? (
-        <>
-          <Pressable onPress={() => setOpen(!open)} className="self-start active:opacity-70">
-            <Text variant="small" className="text-muted-foreground">{open ? t('dfAgentHideDetails') : t('dfAgentDetails')}</Text>
-          </Pressable>
-          {open ? <Text selectable className="font-mono text-xs text-muted-foreground">{eventResultText(payload.result, true)}</Text> : null}
-        </>
-      ) : null}
     </View>
   )
 }
@@ -74,13 +89,17 @@ function MessageBubble({
   last,
   streaming,
   awaitingApproval,
+  gameKey,
   onRetry,
+  onGo,
 }: {
   message: AssistantMessage
   last: boolean
   streaming: boolean
   awaitingApproval: boolean
+  gameKey?: string
   onRetry: () => void
+  onGo: (target: AssistantNavigation) => void
 }) {
   const t = useT()
   const [showSources, setShowSources] = React.useState(false)
@@ -110,6 +129,9 @@ function MessageBubble({
             </Text>
           </View>
         ) : null}
+        {messageActions(message).map((event, index) => (
+          <ActionChip key={index} event={event} gameKey={gameKey} onGo={onGo} />
+        ))}
         {message.sources?.length ? (
           <View className="gap-1">
             <Pressable onPress={() => setShowSources(!showSources)} className="flex-row items-center gap-1 self-start active:opacity-70">
@@ -160,7 +182,7 @@ export function AssistantScreen() {
   const context = useAssistantStore((s) => s.context)
   const [draft, setDraft] = React.useState('')
   const [workspaceOpen, setWorkspaceOpen] = React.useState(true)
-  const [resultsOpen, setResultsOpen] = React.useState(false)
+  const [historyOpen, setHistoryOpen] = React.useState(false)
   const [navigationMissing, setNavigationMissing] = React.useState(false)
   const scrollRef = React.useRef<ScrollView>(null)
   const language = contentLanguage()
@@ -172,9 +194,9 @@ export function AssistantScreen() {
   }, [baseUrl, ownerToken])
 
   const draftList = Object.values(drafts)
-  const toolResults = messages.flatMap((message) => message.events ?? []).filter((event) => event.event === 'tool_result')
-  const hasTasks = draftList.length > 0 || !!pendingApproval || !!actionError || !!navigation || toolResults.length > 0
-  const workspaceVisible = hasTasks || streaming || messages.length > 0
+  // 上游 #549：工作区只在有事要处理时出现——草稿、待确认、出错、有待前往的页面、或执行中有进度
+  const hasTasks = draftList.length > 0 || !!pendingApproval || !!actionError || !!navigation
+  const workspaceVisible = hasTasks || (streaming && !!status)
   const attention = !!actionError || !!pendingApproval?.expired || !!pendingApproval?.recovery_required
   const workspaceStatus = attention
     ? t('dfAgentAttention')
@@ -195,13 +217,17 @@ export function AssistantScreen() {
     void useAssistantStore.getState().send(value, language)
   }
 
-  function followNavigation() {
-    if (!navigation) return
-    const href = mobileRouteOf(navigation)
+  /**
+   * 前往 Agent 打开的页面。上游悬浮窗会在回答中自动跳转；移动端助手是全屏页，自动跳走会
+   * 打断正在看的回复，所以保持显式按钮，用户点了才走。
+   */
+  function go(target: AssistantNavigation) {
+    const href = mobileRouteOf(target)
     if (!href) {
       setNavigationMissing(true)
       return
     }
+    setNavigationMissing(false)
     useAssistantStore.getState().clearNavigation()
     router.push(href as Href)
   }
@@ -235,14 +261,8 @@ export function AssistantScreen() {
         subtitle={t('assistantSubtitle')}
         onBack={() => router.back()}
         right={
-          <Button
-            variant="ghost"
-            size="icon"
-            disabled={!messages.length}
-            onPress={() => void useAssistantStore.getState().clear()}
-            accessibilityLabel={t('assistantClear')}
-          >
-            <Icon as={Trash2} size={18} />
+          <Button variant="ghost" size="icon" onPress={() => setHistoryOpen(true)} accessibilityLabel={t('dfAgentHistory')}>
+            <Icon as={History} size={18} />
           </Button>
         }
       />
@@ -283,7 +303,9 @@ export function AssistantScreen() {
             last={index === messages.length - 1}
             streaming={streaming}
             awaitingApproval={!!pendingApproval}
+            gameKey={context?.game_key}
             onRetry={() => void useAssistantStore.getState().retryLast(language)}
+            onGo={go}
           />
         ))}
 
@@ -304,7 +326,6 @@ export function AssistantScreen() {
 
             {workspaceOpen ? (
               <View className="gap-2.5">
-                {!hasTasks ? <Text variant="small" className="text-muted-foreground">{t('dfAgentWorkspaceHint')}</Text> : null}
                 {pendingApproval || (streaming && status) ? (
                   <Text variant="small" className="text-muted-foreground">
                     {t('dfAgentStatus')}: {pendingApproval ? t('dfAgentStatusApproval') : agentStatusLabel(t, status)}
@@ -324,31 +345,13 @@ export function AssistantScreen() {
 
                 {actionError ? <Text variant="small" className="text-destructive" accessibilityRole="alert">{actionError}</Text> : null}
 
-                {toolResults.length ? (
-                  <View className="gap-2">
-                    <Pressable onPress={() => setResultsOpen(!resultsOpen)} className="flex-row items-center gap-1 active:opacity-70">
-                      <Text variant="small" className="font-semibold">{t('dfAgentTool')} ({toolResults.length})</Text>
-                      <Icon as={resultsOpen ? ChevronUp : ChevronDown} size={14} className="text-muted-foreground" />
-                    </Pressable>
-                    {resultsOpen ? toolResults.map((event, index) => (
-                      <ToolResult key={index} event={event} gameKey={context?.game_key} />
-                    )) : null}
-                  </View>
-                ) : null}
-
                 {navigation ? (
                   <View className="gap-1">
-                    <Button size="sm" variant="outline" className="self-start" onPress={followNavigation}>
-                      <Text>{navigation.route === 'play' ? t('dfAgentOpenGame') : t('dfAgentOpenPage')}</Text>
+                    <Button size="sm" variant="outline" className="self-start" onPress={() => go(navigation)}>
+                      <Text>{navigation.route === 'play' ? t('dfAgentOpenGame') : t('dfAgentGoTo', { page: agentRouteLabel(t, navigation.route) })}</Text>
                     </Button>
                     {navigationMissing ? <Text variant="small" className="text-muted-foreground">{t('dfAgentPageUnavailable')}</Text> : null}
                   </View>
-                ) : null}
-
-                {messages.length && !streaming && !pendingApproval ? (
-                  <Button size="sm" variant="ghost" className="self-start" onPress={() => send(t('dfAgentContinue'))}>
-                    <Text>{t('dfAgentContinue')}</Text>
-                  </Button>
                 ) : null}
 
                 {pendingApproval ? (
@@ -384,6 +387,7 @@ export function AssistantScreen() {
           </Button>
         )}
       </View>
+      <ConversationSheet open={historyOpen} onClose={() => setHistoryOpen(false)} />
     </Screen>
   )
 }

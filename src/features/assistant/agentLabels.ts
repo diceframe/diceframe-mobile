@@ -19,6 +19,7 @@ const TOOL_KEYS: Record<string, TKey> = {
   edit_world: 'dfAgentToolEditWorld',
   write_lorebook_entries: 'dfAgentToolWriteLorebookEntries',
   edit_character_card: 'dfAgentToolEditCharacterCard',
+  search_documentation: 'dfAgentToolSearchDocumentation',
 }
 
 /** 工具名本地化；服务端新加、本端还没登记的工具原样显示 id */
@@ -46,4 +47,29 @@ export function agentStatusLabel(t: T, status: string): string {
   if (status === 'idle') return t('dfAgentStatusIdle')
   if (status === 'approval_required') return t('dfAgentStatusApproval')
   return status
+}
+
+const ROUTE_KEYS: Record<string, TKey> = {
+  overview: 'dfAgentRouteOverview',
+  create: 'dfAgentRouteCreate',
+  play: 'dfAgentRoutePlay',
+  characters: 'dfAgentRouteCharacters',
+  library: 'dfAgentRouteLibrary',
+  creator: 'dfAgentRouteCreator',
+  map: 'dfAgentRouteMap',
+  lorebook: 'dfAgentRouteLorebook',
+  worlds: 'dfAgentRouteWorlds',
+  adventures: 'dfAgentRouteAdventures',
+  modules: 'dfAgentRouteModules',
+  memory: 'dfAgentRouteMemory',
+  logs: 'dfAgentRouteLogs',
+  rules: 'dfAgentRouteRules',
+  settings: 'dfAgentRouteSettings',
+  plugins: 'dfAgentRoutePlugins',
+}
+
+/** Agent 页面名的显示名（上游 workspaceCopy.routes），不认识的原样 */
+export function agentRouteLabel(t: T, route: string): string {
+  const key = ROUTE_KEYS[route]
+  return key ? t(key) : route
 }

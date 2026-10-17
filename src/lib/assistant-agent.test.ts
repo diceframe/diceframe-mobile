@@ -145,3 +145,22 @@ describe('Agent 页面 → 移动端路由', () => {
     expect(mobileRouteOf({ route: 'creator' })).toBeNull()
   })
 })
+
+describe('内联操作标签', () => {
+  it('只取 tool_result；导航结果带出页面，失败的导航不给前往', async () => {
+    const { actionNavigationOf, messageActions } = await import('./assistant-agent')
+    const message = {
+      role: 'assistant' as const,
+      content: '',
+      events: [
+        { event: 'status', payload: {} },
+        { event: 'tool_result', payload: { tool: 'navigate', ok: true, result: { navigation: { route: 'lorebook' } } } },
+        { event: 'tool_result', payload: { tool: 'navigate', ok: false, result: { navigation: { route: 'worlds' } } } },
+      ],
+    }
+    const actions = messageActions(message)
+    expect(actions).toHaveLength(2)
+    expect(actionNavigationOf(actions[0])).toEqual({ route: 'lorebook' })
+    expect(actionNavigationOf(actions[1])).toBeNull()
+  })
+})

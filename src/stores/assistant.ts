@@ -5,7 +5,8 @@
  * - 会改数据的操作停在 pendingApproval，用户确认 / 取消才调 /agent/confirm；
  * - 确认请求网络失败时，先拉会话快照看回执——服务端可能已经执行，避免重复执行或误报失败；
  * - 草稿本地改过后，基于旧草稿的批准被围栏（dirtyDraftIds），必须先重审拿到新 plan_digest；
- * - 历史与 session_id 按服务器地址分别存本机（切服务器不串会话），上限同上游。
+ * - 会话存档（对齐上游 PR #549）：多段会话按服务器地址存本机，每段记住自己的 session_id，
+ *   切回时按 session_id 拉回草稿与待确认操作；最多 30 段，空会话不保留。
  *
  * 用 generation 代际号丢弃过期回调：清空、重发、切服务器后，旧请求的回包一律不落地。
  */
@@ -24,8 +25,6 @@ import {
   AgentStreamError,
   fenceDirtyApproval,
   findReceipt,
-  isStoredMessage,
-  messagesForStorage,
   normaliseApproval,
   receiptResponse,
   requestMessagesOf,
@@ -41,6 +40,15 @@ import {
   type AssistantMessage,
   type AssistantNavigation,
 } from '@/lib/assistant-agent'
+import {
+  newConversationId,
+  parseArchive,
+  removeConversation as removeFromArchive,
+  renameConversation as renameInArchive,
+  syncConversation,
+  type AssistantConversation,
+  type ConversationArchive,
+} from '@/lib/assistant-conversations'
 
 export interface AssistantDeps {
   stream: typeof streamAssistantAgent
@@ -50,13 +58,15 @@ export interface AssistantDeps {
   storage: {
     get: (key: string) => Promise<string | null>
     set: (key: string, value: string) => Promise<void>
-    remove: (key: string) => Promise<void>
   }
 }
 
 export interface AssistantState {
   /** 当前会话所属服务器；为空表示尚未加载 */
   serverKey: string
+  /** 会话存档（不含尚未发过消息的空会话） */
+  conversations: AssistantConversation[]
+  activeId: string
   messages: AssistantMessage[]
   streaming: boolean
   status: string
@@ -69,8 +79,13 @@ export interface AssistantState {
   actionError: string
   /** 打开助手的页面（例如对局里打开会带上 game_key），随每轮请求发给服务端 */
   context: AssistantContext | null
-  /** 切换服务器：重置内存态并读入该服务器的本机历史 */
+  /** 切换服务器：重置内存态并读入该服务器的会话存档，恢复上次的当前会话 */
   load: (serverKey: string) => Promise<void>
+  /** 新建会话（当前会话先存档）；进行中不可切换 */
+  startNew: () => Promise<boolean>
+  openConversation: (id: string) => Promise<boolean>
+  removeConversation: (id: string) => Promise<boolean>
+  renameConversation: (id: string, title: string) => Promise<void>
   setContext: (context: AssistantContext | null) => void
   send: (text: string, language: string) => Promise<void>
   stop: () => void
@@ -83,10 +98,9 @@ export interface AssistantState {
   /** 草稿表单一有改动就作废旧批准（服务端也撤回），防止确认的是改动前的内容 */
   invalidateApproval: (draftId?: string) => Promise<void>
   clearNavigation: () => void
-  clear: () => Promise<void>
 }
 
-const STORAGE_PREFIX = 'diceframe-assistant:v1:'
+const STORAGE_PREFIX = 'diceframe-assistant-conversations:v1:'
 
 export function storageKeyOf(serverKey: string): string {
   return STORAGE_PREFIX + encodeURIComponent(serverKey)
@@ -126,14 +140,48 @@ export function createAssistantStore(deps: AssistantDeps) {
   const dirtyDraftIds = new Set<string>()
 
   return create<AssistantState>((set, get) => {
-    async function persist() {
-      const { serverKey, messages, sessionId } = get()
+    function archiveOf(): ConversationArchive {
+      return { activeId: get().activeId, items: get().conversations }
+    }
+
+    async function save(archive: ConversationArchive) {
+      set({ conversations: archive.items, activeId: archive.activeId })
+      const { serverKey } = get()
       if (!serverKey) return
       try {
-        await deps.storage.set(storageKeyOf(serverKey), JSON.stringify({ sessionId, messages: messagesForStorage(messages) }))
+        await deps.storage.set(storageKeyOf(serverKey), JSON.stringify(archive))
       } catch {
-        // 本机历史只是便利，写不进去不影响当前会话
+        // 本机存档只是便利，写不进去不影响当前会话
       }
+    }
+
+    /** 当前会话写回存档（静止点调用：一轮结束、确认、重审之后，不在每个流式字符上写） */
+    async function persist() {
+      const { activeId, messages, sessionId } = get()
+      if (!activeId) return
+      await save(syncConversation(archiveOf(), { id: activeId, messages, sessionId }))
+    }
+
+    function resetRuntime() {
+      generation += 1
+      controller?.abort()
+      controller = null
+      dirtyDraftIds.clear()
+    }
+
+    async function activate(conversation: AssistantConversation | null) {
+      resetRuntime()
+      set({
+        ...EMPTY,
+        activeId: conversation?.id ?? newConversationId(),
+        messages: conversation?.messages ?? [],
+        sessionId: conversation?.sessionId?.trim() || null,
+      })
+      if (conversation?.sessionId) await get().restoreSession()
+    }
+
+    function busy(): boolean {
+      return get().streaming || get().actionBusy
     }
 
     function updateLastAssistant(update: (message: AssistantMessage) => AssistantMessage) {
@@ -183,16 +231,15 @@ export function createAssistantStore(deps: AssistantDeps) {
 
     return {
       serverKey: '',
+      conversations: [],
+      activeId: '',
       ...EMPTY,
       context: null,
 
       async load(serverKey) {
         if (serverKey === get().serverKey) return
-        generation += 1
-        controller?.abort()
-        controller = null
-        dirtyDraftIds.clear()
-        set({ serverKey, ...EMPTY })
+        resetRuntime()
+        set({ serverKey, conversations: [], activeId: '', ...EMPTY })
         if (!serverKey) return
         const current = generation
         let raw: string | null = null
@@ -202,15 +249,44 @@ export function createAssistantStore(deps: AssistantDeps) {
           raw = null
         }
         if (current !== generation) return
-        try {
-          const parsed = JSON.parse(raw || 'null') as { sessionId?: unknown; messages?: unknown } | null
-          set({
-            sessionId: typeof parsed?.sessionId === 'string' && parsed.sessionId.trim() ? parsed.sessionId : null,
-            messages: Array.isArray(parsed?.messages) ? parsed.messages.filter(isStoredMessage).slice(-20) : [],
-          })
-        } catch {
-          // 坏数据当没有历史
+        const archive = parseArchive(raw)
+        set({ conversations: archive.items })
+        await activate(archive.items.find((item) => item.id === archive.activeId) ?? null)
+      },
+
+      async startNew() {
+        if (busy()) return false
+        await persist()
+        await activate(null)
+        await save(archiveOf())
+        return true
+      },
+
+      async openConversation(id) {
+        if (busy() || id === get().activeId) return false
+        const target = get().conversations.find((item) => item.id === id)
+        if (!target) return false
+        await persist()
+        await activate(target)
+        await save(archiveOf())
+        return true
+      },
+
+      async removeConversation(id) {
+        if (id !== get().activeId) {
+          await save(removeFromArchive(archiveOf(), id))
+          return true
         }
+        if (busy()) return false
+        const remaining = removeFromArchive(archiveOf(), id)
+        set({ conversations: remaining.items })
+        await activate(remaining.items[0] ?? null)
+        await save(archiveOf())
+        return true
+      },
+
+      async renameConversation(id, title) {
+        await save(renameInArchive(archiveOf(), id, title))
       },
 
       setContext(context) {
@@ -401,21 +477,6 @@ export function createAssistantStore(deps: AssistantDeps) {
       clearNavigation() {
         set({ navigation: null })
       },
-
-      async clear() {
-        generation += 1
-        controller?.abort()
-        controller = null
-        dirtyDraftIds.clear()
-        set({ ...EMPTY })
-        const { serverKey } = get()
-        if (!serverKey) return
-        try {
-          await deps.storage.remove(storageKeyOf(serverKey))
-        } catch {
-          // 同 persist
-        }
-      },
     }
   })
 }
@@ -428,6 +489,5 @@ export const useAssistantStore = createAssistantStore({
   storage: {
     get: (key) => AsyncStorage.getItem(key),
     set: (key, value) => AsyncStorage.setItem(key, value),
-    remove: (key) => AsyncStorage.removeItem(key),
   },
 })

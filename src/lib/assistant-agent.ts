@@ -435,3 +435,20 @@ export function isStoredMessage(value: unknown): value is AssistantMessage {
   if ((record.role !== 'user' && record.role !== 'assistant') || typeof record.content !== 'string' || record.content.length > 12_000) return false
   return record.events === undefined || (Array.isArray(record.events) && record.events.every((event) => !!event && typeof event === 'object'))
 }
+
+/**
+ * 回复下方的内联操作标签（上游 PR #549 起替代工作区里的原始结果列表）：
+ * 只列这条回复里的 tool_result；navigate 工具结果带出它打开的页面，用于「前往」。
+ */
+export function messageActions(message: AssistantMessage): AssistantEventRecord[] {
+  return (message.events ?? []).filter((event) => event.event === 'tool_result')
+}
+
+export function actionNavigationOf(event: AssistantEventRecord): AssistantNavigation | null {
+  if (event.payload.tool !== 'navigate' || event.payload.ok === false) return null
+  const result = event.payload.result
+  const raw = result && typeof result === 'object' && !Array.isArray(result)
+    ? (result as Record<string, unknown>).navigation
+    : null
+  return safeNavigation(raw)
+}

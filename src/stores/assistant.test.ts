@@ -18,7 +18,6 @@ function setup(script?: (handlers: AgentStreamHandlers) => void | Promise<void>)
     storage: {
       get: async (key: string) => storage.get(key) ?? null,
       set: async (key: string, value: string) => { storage.set(key, value) },
-      remove: async (key: string) => { storage.delete(key) },
     },
   } satisfies AssistantDeps
   return { store: createAssistantStore(deps as unknown as AssistantDeps), deps, storage }
@@ -45,7 +44,7 @@ describe('DF Agent 会话', () => {
     expect(state.navigation).toEqual({ route: 'lorebook' })
     expect(state.streaming).toBe(false)
     expect((deps.stream.mock.calls[0] as unknown[])[3]).toMatchObject({ context: { route: 'play', game_key: 'g' } })
-    expect(JSON.parse(storage.get(storageKeyOf('http://a'))!).sessionId).toBe('s1')
+    expect(JSON.parse(storage.get(storageKeyOf('http://a'))!).items[0]).toMatchObject({ sessionId: 's1', title: '写个世界书' })
   })
 
   it('确认成功：清掉待批准、记回执、结果进事件；同一批准不会再执行第二次', async () => {
@@ -117,18 +116,57 @@ describe('DF Agent 会话', () => {
     expect(store.getState().messages.at(-1)?.stopped).toBe(true)
   })
 
-  it('历史按服务器隔离；会话失效（404）时丢掉本地会话 id', async () => {
+  it('会话按服务器隔离；当前会话丢失（404）时丢掉会话 id', async () => {
     const { store, deps, storage } = setup()
-    storage.set(storageKeyOf('http://b'), JSON.stringify({ sessionId: 'sb', messages: [{ role: 'user', content: 'hi' }, { bad: true }] }))
+    storage.set(storageKeyOf('http://b'), JSON.stringify({ activeId: 'c1', items: [
+      { id: 'c1', title: 'hi', createdAt: 1, updatedAt: 1, sessionId: 'sb', messages: [{ role: 'user', content: 'hi' }, { bad: true }] },
+    ] }))
     await store.getState().load('http://a')
     expect(store.getState().messages).toEqual([])
+    deps.session.mockRejectedValueOnce(new (await import('@/api/client')).ApiError('gone', 404))
     await store.getState().load('http://b')
     expect(store.getState().messages).toEqual([{ role: 'user', content: 'hi' }])
-    const { ApiError } = await import('@/api/client')
-    deps.session.mockRejectedValueOnce(new ApiError('gone', 404))
-    await store.getState().restoreSession()
+    expect(deps.session).toHaveBeenCalledWith('sb')
     expect(store.getState().sessionId).toBeNull()
-    await store.getState().clear()
-    expect(storage.has(storageKeyOf('http://b'))).toBe(false)
+  })
+
+  it('新建 / 切换 / 重命名 / 删除会话；切回时按该会话的 session 恢复', async () => {
+    const { store, deps, storage } = setup((h) => {
+      h.onAgentEvent?.('session', { session_id: 'sA' })
+      h.onDelta('ok')
+    })
+    await store.getState().load('http://a')
+    await store.getState().send('第一段', 'zh-CN')
+    const first = store.getState().activeId
+    expect(await store.getState().startNew()).toBe(true)
+    expect(store.getState().messages).toEqual([])
+    expect(store.getState().sessionId).toBeNull()
+    deps.stream.mockImplementationOnce(async (_m, _l, h: AgentStreamHandlers) => {
+      h.onAgentEvent?.('session', { session_id: 'sB' })
+      h.onDelta('ok2')
+    })
+    await store.getState().send('第二段', 'zh-CN')
+    expect(store.getState().conversations.map((item) => item.title)).toEqual(['第二段', '第一段'])
+
+    deps.session.mockResolvedValueOnce({ session_id: 'sA', pending: approval, drafts: {}, receipts: [] } as never)
+    expect(await store.getState().openConversation(first)).toBe(true)
+    expect(deps.session).toHaveBeenLastCalledWith('sA')
+    expect(store.getState().messages[0].content).toBe('第一段')
+    expect(store.getState().pendingApproval?.approval_id).toBe('a1')
+
+    await store.getState().renameConversation(first, '世界书草稿')
+    expect(store.getState().conversations.find((item) => item.id === first)?.title).toBe('世界书草稿')
+    expect(JSON.parse(storage.get(storageKeyOf('http://a'))!).activeId).toBe(first)
+
+    expect(await store.getState().removeConversation(first)).toBe(true)
+    expect(store.getState().conversations.map((item) => item.title)).toEqual(['第二段'])
+    expect(store.getState().messages[0].content).toBe('第二段')
+  })
+
+  it('进行中不能切换会话', async () => {
+    const { store } = setup()
+    await store.getState().load('http://a')
+    store.setState({ streaming: true })
+    expect(await store.getState().startNew()).toBe(false)
   })
 })
