@@ -248,6 +248,8 @@ export function TimelineItem({
           canDecideLuck={canDecideLuckOf(check, currentUserId, isGm)}
           busy={!!luckBusy}
           onDecideLuck={onDecideLuck}
+          actorId={currentUserId}
+          isGm={!!isGm}
         />
       ))}
 

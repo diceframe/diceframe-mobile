@@ -2768,3 +2768,16 @@ export interface ContentListResponse {
   next_cursor: string | null
   server_instance_id?: string
 }
+
+/**
+ * POST /games/{key}/checks/{id}/push/{op} 的响应（上游 Web 只读 ok/error，未建类型）。
+ * 没有待决项时服务端会顺带推进本轮，并把回合载荷（叙事等）合并进同一响应，
+ * 所以继承 ActionSubmitResponse；叙事本身照常经 SSE narration_delta 下发。
+ */
+export interface PushDecisionResponse extends ActionSubmitResponse {
+  ok?: boolean
+  error?: string
+  phase?: 'done' | 'luck' | 'ready'
+  ready_to_resolve?: boolean
+  round_already_resolved?: boolean
+}

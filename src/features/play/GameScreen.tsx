@@ -64,6 +64,7 @@ import {
 } from '@/lib/economy-prompts'
 import { appLayoutForWidth } from '@/lib/layout'
 import { levelUpAttributes, levelUpPoints } from '@/lib/level-up'
+import { pendingPostChecks } from '@/lib/push-decision'
 import { isStoredPlayerMember } from '@/lib/player-identity'
 import { createPlayShareScope } from '@/lib/play-share-scope'
 import { joinBounceKey, shouldBounceToJoin } from '@/lib/join-bounce'
@@ -274,7 +275,7 @@ export default function GameScreen() {
       throw new UserFacingError('dfPlayGameEnded')
     }
     if (current.actionBusy || current.gmBusy) throw new UserFacingError('dfPlayVoiceSendBusy')
-    if (current.detail?.pending_luck_decisions?.length) throw new UserFacingError('dfPlayResolveLuckFirst')
+    if (pendingPostChecks(current.detail).length) throw new UserFacingError('dfPostCheckWaiting')
     if (economyProposalList(current.detail).some(
       (proposal) => proposal.status === 'pending'
         && !isNonBlockingPersonalPurchase(proposal, String(current.detail?.run_id || '')),
@@ -425,15 +426,19 @@ export default function GameScreen() {
     setPaymentComposerOpen(false)
   }
 
-  const stateLabel = pendingLuck.length
+  // 运气与孤注一掷都会让叙事停在骰子卡上；只有运气时沿用上游的「运气决定」状态名
+  const pendingChecks = pendingPostChecks(detail)
+  const stateLabel = pendingChecks.some((check) => check.push)
+    ? t('dfPostCheckWaiting')
+    : pendingChecks.length
     ? t('luckDecisionState')
     : gmThinking
       ? t('dfPlayGmThinking')
       : stateLabelOf(detail?.state, t)
   const composerDisabled =
-    pendingLuck.length > 0 || hasBlockingEconomyProposal || detail?.state === 'ended'
-  const composerDisabledReason = pendingLuck.length
-    ? t('dfPlayResolveLuckFirst')
+    pendingChecks.length > 0 || hasBlockingEconomyProposal || detail?.state === 'ended'
+  const composerDisabledReason = pendingChecks.length
+    ? t('dfPostCheckWaiting')
     : hasBlockingEconomyProposal
       ? t('apiErrors.economy_decision_pending')
       : detail?.state === 'ended'

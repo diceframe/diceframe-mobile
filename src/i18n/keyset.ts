@@ -16,6 +16,7 @@ import type { overview } from './messages/mobile/overview'
 import type { play } from './messages/mobile/play'
 import type { profile } from './messages/mobile/profile'
 import type { settings } from './messages/mobile/settings'
+import type { table } from './messages/mobile/table'
 import type { zhCN as webZhCN } from './messages/web/zh-CN'
 
 type WidenValues<T> = { [K in keyof T]: T[K] extends string ? string : never }
@@ -31,7 +32,8 @@ export type AppTranslation = WidenValues<
     (typeof play)['zh'] &
     (typeof characters)['zh'] &
     (typeof lore)['zh'] &
-    (typeof content)['zh']
+    (typeof content)['zh'] &
+    (typeof table)['zh']
 >
 
 /** 全部合法文案 key（上游镜像 + 移动端 df 簇） */

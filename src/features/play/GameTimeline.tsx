@@ -17,6 +17,7 @@ import { canDecideLuckOf, checkKeyOf, mergePendingLuck } from '@/lib/check-detai
 import { useGameStore, selectPendingLuck } from '@/stores/game'
 
 import { CheckCard } from './CheckCard'
+import { PushDecisionPanel } from './PushDecisionPanel'
 import { GmNarration } from './GmNarration'
 import { TimelineItem } from './TimelineItem'
 import type { SpeechControl } from './useSpeaker'
@@ -36,11 +37,15 @@ function LuckCard({
   busy,
   canDecide,
   onDecide,
+  actorId,
+  isGm,
 }: {
   check: CheckResult
   busy: boolean
   canDecide: boolean
   onDecide: (check: CheckResult, spend: boolean) => void
+  actorId: string
+  isGm: boolean
 }) {
   const t = useT()
   return (
@@ -79,6 +84,10 @@ function LuckCard({
             {t('waitLuckDecision', { name: check.actor_name || check.actor_uid || '' })}
           </Text>
         )}
+        {/* 运气与孤注一掷可同时待决：申请孤注一掷会让服务端自动放弃运气 */}
+        {check.push ? (
+          <PushDecisionPanel key={check.push.run_id} check={check} actorId={actorId} isGm={isGm} />
+        ) : null}
       </Card>
     </NativeOnlyAnimatedView>
   )
@@ -138,10 +147,20 @@ export function GameTimeline({
   const roundCheckResults = useGameStore(
     (state) => state.detail?.round_check_results ?? NO_CHECKS,
   )
+  const pendingPush = useGameStore(
+    (state) => state.detail?.pending_push_decisions ?? NO_CHECKS,
+  )
   const pendingKeys = new Set(pendingChecks.map(checkKeyOf))
   const revealChecks = roundCheckResults.filter(
     (check) => check.luck_decision !== 'pending' && !pendingKeys.has(checkKeyOf(check)),
   )
+  // 待孤注一掷的检定离开结算阶段后可能不在 round_check_results 里（对齐 Web：
+  // revealChecks 回退到待决并集），补进来，否则面板无处挂载、回合卡住
+  const revealKeys = new Set(revealChecks.map(checkKeyOf))
+  for (const check of pendingPush) {
+    const key = checkKeyOf(check)
+    if (!pendingKeys.has(key) && !revealKeys.has(key)) revealChecks.push(check)
+  }
   const hasOlder = logPage < logTotalPages
   const liveIdle = !gmThinking && submittedActions.length === 0 && pendingChecks.length === 0
 
@@ -198,6 +217,8 @@ export function GameTimeline({
           busy={luckBusy}
           canDecide={canDecideLuckOf(check, currentUserId, isGm)}
           onDecide={onDecideLuck}
+          actorId={currentUserId}
+          isGm={!!isGm}
         />
       ))}
 
@@ -210,6 +231,8 @@ export function GameTimeline({
           canDecideLuck={canDecideLuckOf(check, currentUserId, isGm)}
           busy={luckBusy}
           onDecideLuck={onDecideLuck}
+          actorId={currentUserId}
+          isGm={!!isGm}
         />
       ))}
 

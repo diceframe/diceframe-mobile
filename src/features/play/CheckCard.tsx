@@ -24,6 +24,8 @@ import { useT } from '@/i18n/t'
 import type { TKey } from '@/i18n/keyset'
 import { cn } from '@/lib/utils'
 
+import { PushDecisionPanel } from './PushDecisionPanel'
+
 /** 揭示动画时长：对齐 Web CheckRevealCard 的 720ms 骰子滚动 */
 const REVEAL_DURATION_MS = 720
 
@@ -40,6 +42,7 @@ const STATUS_TONE: Record<CheckStatus, StatusTone> = {
  * - 揭示动画（仅当前回合揭示卡传入 animate）：骰面滚动 720ms 后亮出结果
  * - 可展开明细：骰面、成功线、加值分解、优势说明、协助玩家
  * - 内嵌运气按钮：pending 时可当场花费/拒绝，已决议显示状态标记
+ * - 孤注一掷区：check.push 存在即展示（含历史卡的「原出目 → 重掷」记录）
  */
 export function CheckCard({
   check,
@@ -48,6 +51,8 @@ export function CheckCard({
   canDecideLuck = false,
   busy = false,
   onDecideLuck,
+  actorId = '',
+  isGm = false,
 }: {
   check: CheckResult
   className?: string
@@ -57,6 +62,9 @@ export function CheckCard({
   canDecideLuck?: boolean
   busy?: boolean
   onDecideLuck?: (check: CheckResult, spend: boolean) => void
+  /** 本端身份：孤注一掷按归属者 / GM 分别给按钮 */
+  actorId?: string
+  isGm?: boolean
 }) {
   const t = useT()
   // 「减少动态效果」开启时跳过滚动直接揭示，初始值 false 只影响首帧
@@ -278,6 +286,10 @@ export function CheckCard({
             <Text variant="small" className="ml-12 text-muted-foreground">
               {t('luckDeclined')}
             </Text>
+          ) : null}
+
+          {check.push ? (
+            <PushDecisionPanel key={check.push.run_id} check={check} actorId={actorId} isGm={isGm} />
           ) : null}
         </>
       ) : null}

@@ -45,6 +45,7 @@ import {
   gmCommand,
   kickPlayer,
   resolveHealthEvent,
+  decidePush,
   resolveLuck,
   resolvePayment,
   resetGame,
@@ -95,6 +96,7 @@ import { isFinalClaimFailure } from '@/lib/seat-credentials'
 import { buildLevelUpAttributes } from '@/lib/level-up'
 import { UserFacingError } from '@/lib/user-facing-error'
 import { mergePendingLuck } from '@/lib/check-details'
+import type { PushOperation, PushRequestBody } from '@/lib/push-decision'
 import {
   economyProposalList,
   isEconomyProposalActionable,
@@ -152,6 +154,8 @@ interface GameStore {
   loadOlderLog: () => Promise<void>
   submit: (text: string) => Promise<void>
   decideLuck: (checkId: string, spend: boolean) => Promise<void>
+  /** 孤注一掷决议：错误抛给面板就地展示（不占顶部横幅），成功或撞上过期 revision 都刷新权威状态 */
+  decidePush: (checkId: string, operation: PushOperation, body: PushRequestBody) => Promise<void>
   advance: () => Promise<CommandResponse>
   rollback: () => Promise<CommandResponse>
   command: (text: string) => Promise<void>
@@ -678,6 +682,18 @@ export const useGameStore = create<GameStore>((set, get) => {
       } catch (error) {
         if (get().gameKey === gameKey) set({ error: errorMessage(error) })
         throw error
+      }
+    },
+
+    async decidePush(checkId, operation, body) {
+      const { gameKey } = get()
+      if (!gameKey) return
+      try {
+        const result = await decidePush(gameKey, checkId, operation, body)
+        if (result.ok === false) throw new UserFacingError('dfPushRollError')
+      } finally {
+        // 失败多半是 revision 过期（别人刚改过）：拉最新状态让面板按新 revision 重来
+        if (get().gameKey === gameKey) await get().refresh()
       }
     },
 

@@ -29,12 +29,14 @@ import type {
   PlayerCreateResponse,
   PlayerContextResponse,
   PrivateLogResponse,
+  PushDecisionResponse,
   RulesResponse,
   SceneImageRef,
   WorldCandidate,
   WorldTemplatesResponse,
 } from './types'
 import { contentLanguage, getT } from '@/i18n/t'
+import type { PushOperation, PushRequestBody } from '@/lib/push-decision'
 import { UserFacingError } from '@/lib/user-facing-error'
 import { worldContentLocale } from '@/lib/world-language'
 import { SEAT_TOKEN_HEADER } from '@/lib/seat-credentials'
@@ -124,6 +126,19 @@ export function regenerateSwipe(gameKey: string, round: number): Promise<{ ok?: 
     method: 'PUT',
     body: '{}',
   })
+}
+
+/** CoC 孤注一掷决议；body 由 lib/push-decision 的 pushRequestBody 生成（服务端只认那几个字段）。 */
+export function decidePush(
+  gameKey: string,
+  checkId: string,
+  operation: PushOperation,
+  body: PushRequestBody,
+): Promise<PushDecisionResponse> {
+  return api<PushDecisionResponse>(
+    gamePath(gameKey, `/checks/${encodeURIComponent(checkId)}/push/${operation}`),
+    { method: 'POST', body: JSON.stringify(body) },
+  )
 }
 
 export function resolveLuck(

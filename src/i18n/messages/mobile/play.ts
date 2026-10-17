@@ -55,7 +55,6 @@ export const play = {
     dfPlayVoiceEdit: '点击编辑识别文字',
     dfPlayMicReady: '麦克风已授权，请重新按住说话',
     dfPlayRecordingHint: '按住说话，松手发送；滑向左侧取消，滑向右侧转文字编辑',
-    dfPlayResolveLuckFirst: '请先处理本轮运气决定',
     dfPlayGameEnded: '对局已结束，不能继续提交行动',
     // 时间线
     dfPlayRoundShort: '回合',
@@ -249,7 +248,6 @@ export const play = {
     dfPlayVoiceEdit: 'Tap to edit the transcription',
     dfPlayMicReady: 'Microphone enabled. Hold to talk again.',
     dfPlayRecordingHint: 'Hold to talk, release to send; slide left to cancel or right to edit text',
-    dfPlayResolveLuckFirst: "Resolve this round's Luck decision first",
     dfPlayGameEnded: 'The game has ended; no further actions can be submitted.',
     // Timeline
     dfPlayRoundShort: 'Round',
@@ -441,7 +439,6 @@ export const play = {
     dfPlayVoiceEdit: 'タップして認識した文字を編集',
     dfPlayMicReady: 'マイクを許可しました。もう一度長押しして話してください',
     dfPlayRecordingHint: '長押しで話し、指を離して送信。左へスライドでキャンセル、右へスライドで文字を編集',
-    dfPlayResolveLuckFirst: 'まずこのラウンドの幸運の判定を処理してください',
     dfPlayGameEnded: 'セッションは終了したため、これ以上アクションを送信できません',
     // タイムライン
     dfPlayRoundShort: 'ラウンド',
@@ -633,7 +630,6 @@ export const play = {
     dfPlayVoiceEdit: 'Tippen, um den erkannten Text zu bearbeiten',
     dfPlayMicReady: 'Mikrofon freigegeben. Zum Sprechen erneut gedrückt halten.',
     dfPlayRecordingHint: 'Zum Sprechen halten, zum Senden loslassen; nach links ziehen zum Abbrechen, nach rechts zum Bearbeiten',
-    dfPlayResolveLuckFirst: 'Schließe zuerst die Glücksentscheidung dieser Runde ab',
     dfPlayGameEnded: 'Das Spiel ist beendet. Es können keine weiteren Aktionen gesendet werden.',
     // 时间线
     dfPlayRoundShort: 'Runde',
