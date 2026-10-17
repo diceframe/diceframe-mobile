@@ -6,6 +6,7 @@ import { X } from 'lucide-react-native'
 import { Button } from '@/components/ui/button'
 import { Text } from '@/components/ui/text'
 import { useT } from '@/i18n/t'
+import { useOverlayHold } from '@/lib/overlay-focus'
 import { useThemeToken } from '@/lib/theme'
 
 /**
@@ -36,6 +37,7 @@ export function QrScannerSheet({
   onScanned: (value: string) => void
   onClose: () => void
 }) {
+  useOverlayHold(visible)
   const t = useT()
   const [permission, requestPermission] = useCameraPermissions()
   const scannedRef = React.useRef(false)

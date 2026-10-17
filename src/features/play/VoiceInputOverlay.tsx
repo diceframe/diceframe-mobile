@@ -17,6 +17,7 @@ import { Icon } from '@/components/ui/icon'
 import { Text } from '@/components/ui/text'
 import { useT } from '@/i18n/t'
 import { THEME, useThemeToken } from '@/lib/theme'
+import { useOverlayHold } from '@/lib/overlay-focus'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import { recordingTime, recordingWaveform, voiceOverlayLayout } from '@/lib/voice-gesture'
 import { cn } from '@/lib/utils'
@@ -166,6 +167,8 @@ function VoiceTextReview({ voice }: { voice: VoiceInputState }) {
   const [editing, setEditing] = React.useState(false)
   const editorRef = React.useRef<TextInput | null>(null)
   const usableHeight = height - keyboardHeight - insets.top - insets.bottom
+  // 复核浮层是独立窗口：挂载期间别让对局页把焦点丢失当成离开（见 lib/overlay-focus）
+  useOverlayHold(true)
 
   return (
     <Modal

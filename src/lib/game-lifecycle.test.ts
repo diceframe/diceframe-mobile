@@ -76,3 +76,22 @@ describe('合并锁屏与焦点通知', () => {
     expect(handlers.resume).toHaveBeenCalledOnce()
   })
 })
+
+describe('本应用浮层抢焦点', () => {
+  it('浮层打开期间的 blur 不暂停；真正切后台照常暂停、回前台恢复', () => {
+    const handlers = { pause: vi.fn(), resume: vi.fn() }
+    let overlay = true
+    const lifecycle = createGameLifecycle('active', handlers, () => overlay)
+    lifecycle.blur()
+    lifecycle.focus()
+    expect(handlers.pause).not.toHaveBeenCalled()
+    expect(handlers.resume).not.toHaveBeenCalled()
+    lifecycle.change('background')
+    lifecycle.change('active')
+    expect(handlers.pause).toHaveBeenCalledTimes(1)
+    expect(handlers.resume).toHaveBeenCalledTimes(1)
+    overlay = false
+    lifecycle.blur()
+    expect(handlers.pause).toHaveBeenCalledTimes(2)
+  })
+})

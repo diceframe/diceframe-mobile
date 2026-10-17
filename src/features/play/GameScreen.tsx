@@ -60,6 +60,7 @@ import { useT, type T } from '@/i18n/t'
 import { confirmDestructive } from '@/lib/confirm'
 import { toastNotice } from '@/components/patterns/toast'
 import { createGameLifecycle } from '@/lib/game-lifecycle'
+import { overlayOpen } from '@/lib/overlay-focus'
 import {
   economyCurrencyLabel,
   economyProposalList,
@@ -246,7 +247,7 @@ export default function GameScreen() {
     const lifecycle = createGameLifecycle(AppState.currentState, {
       pause: () => useGameStore.getState().pause(),
       resume: () => useGameStore.getState().resume(),
-    })
+    }, overlayOpen)
     const subscription = AppState.addEventListener('change', lifecycle.change)
     // Android 锁屏/遮挡可能只通知焦点变化；Web 唤醒也不保证触发 visibilitychange。
     const blur = Platform.OS === 'android' ? AppState.addEventListener('blur', lifecycle.blur) : null

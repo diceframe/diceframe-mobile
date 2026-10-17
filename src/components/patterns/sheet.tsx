@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { appLayoutForWidth } from '@/lib/layout'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
+import { useOverlayHold } from '@/lib/overlay-focus'
 import { cn } from '@/lib/utils'
 
 type SheetProps = {
@@ -34,6 +35,8 @@ export function Sheet({
   const keyboardHeight = useKeyboardHeight()
   const { width } = useWindowDimensions()
   const { isTablet } = appLayoutForWidth(width)
+  // 打开期间主窗口的 blur 是本面板造成的，对局页据此不暂停实时连接（见 lib/overlay-focus）
+  useOverlayHold(open)
   return (
     <Modal
       visible={open}
