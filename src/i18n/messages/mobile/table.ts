@@ -6,6 +6,7 @@
  */
 export const table = {
   zh: {
+    dfRevealFailed: '揭示失败，请稍后重试',
     dfSpeakerMerge: '合并重复人物',
     dfSpeakerMergeChoose: '选择确认为同一人的记录',
     dfSpeakerMergeInto: '合并到 {{name}}',
@@ -105,6 +106,7 @@ export const table = {
     dfPostCheckWaiting: '请先处理骰子卡片上的检定选择，再继续叙事。',
   },
   en: {
+    dfRevealFailed: 'Could not reveal the dice. Try again.',
     dfSpeakerMerge: 'Merge duplicate speaker',
     dfSpeakerMergeChoose: 'Choose the same person',
     dfSpeakerMergeInto: 'Merge into {{name}}',
@@ -204,6 +206,7 @@ export const table = {
     dfPostCheckWaiting: 'Resolve the choices on the dice cards before continuing the story.',
   },
   ja: {
+    dfRevealFailed: 'ダイスを公開できませんでした。もう一度お試しください。',
     dfSpeakerMerge: '重複した人物を統合',
     dfSpeakerMergeChoose: '同一人物と確認できる記録を選択',
     dfSpeakerMergeInto: '{{name}} に統合',
@@ -303,6 +306,7 @@ export const table = {
     dfPostCheckWaiting: '物語を続ける前に、ダイスカードの判定選択を完了してください。',
   },
   de: {
+    dfRevealFailed: 'Würfel konnten nicht aufgedeckt werden. Bitte erneut versuchen.',
     dfSpeakerMerge: 'Doppelte Person zusammenführen',
     dfSpeakerMergeChoose: 'Eintrag derselben Person wählen',
     dfSpeakerMergeInto: 'Zusammenführen mit {{name}}',

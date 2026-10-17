@@ -47,6 +47,7 @@ import {
   resolveHealthEvent,
   decidePush,
   resolveLuck,
+  revealCheck,
   resolvePayment,
   resetGame,
   restartGame,
@@ -66,6 +67,7 @@ import type {
   CharacterCardsResponse,
   CharacterSheet,
   CheckResult,
+  CheckRevealRecord,
   CommandResponse,
   GameDetail,
   GeneratedImageItem,
@@ -135,6 +137,10 @@ interface GameStore {
   liveNarration: string
   /** 角色对话模式的流式剧情快照；与 liveNarration 同生命周期（reset / 新回合落库时清空） */
   liveStory: StorySequence | null
+  /** 点击揭示模式下已揭开的检定（check_id → 揭示人/时间），随 /log 下发 */
+  checkReveals: Record<string, CheckRevealRecord>
+  /** 'click' = 检定结果先遮住，等 GM 或行动者揭示；其余按自动揭示处理 */
+  diceRevealMode: string
   cursor: string
   streamStatus: StreamStatus
   asrEnabled: boolean
@@ -161,6 +167,8 @@ interface GameStore {
   decideLuck: (checkId: string, spend: boolean) => Promise<void>
   /** 孤注一掷决议：错误抛给面板就地展示（不占顶部横幅），成功或撞上过期 revision 都刷新权威状态 */
   decidePush: (checkId: string, operation: PushOperation, body: PushRequestBody) => Promise<void>
+  /** 点击揭示：先就地记上揭示标记，再刷新取权威状态 */
+  revealCheck: (checkId: string) => Promise<void>
   advance: () => Promise<CommandResponse>
   rollback: () => Promise<CommandResponse>
   command: (text: string) => Promise<void>
@@ -219,6 +227,8 @@ const initial = {
   map: null,
   liveNarration: '',
   liveStory: null,
+  checkReveals: {},
+  diceRevealMode: '',
   cursor: '',
   streamStatus: 'idle',
   asrEnabled: false,
@@ -552,6 +562,8 @@ export const useGameStore = create<GameStore>((set, get) => {
           log: newLog,
           logPage: 1,
           logTotalPages: log.total_pages ?? 1,
+          checkReveals: log.check_reveals ?? {},
+          diceRevealMode: log.dice_reveal_mode ?? '',
           privateMessages: privateLog.messages ?? privateLog.private_log ?? [],
           map,
           health,
@@ -695,6 +707,16 @@ export const useGameStore = create<GameStore>((set, get) => {
         if (get().gameKey === gameKey) set({ error: errorMessage(error) })
         throw error
       }
+    },
+
+    async revealCheck(checkId) {
+      const { gameKey } = get()
+      if (!gameKey) return
+      const result = await revealCheck(gameKey, checkId)
+      if (result.ok === false || result.error) throw new UserFacingError('dfRevealFailed')
+      if (get().gameKey !== gameKey) return
+      if (result.reveal?.by) set({ checkReveals: { ...get().checkReveals, [checkId]: result.reveal } })
+      await get().refresh()
     },
 
     async decidePush(checkId, operation, body) {

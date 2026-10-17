@@ -13,17 +13,20 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Icon } from '@/components/ui/icon'
 import { Text } from '@/components/ui/text'
+import { errorMessage } from '@/api/client'
 import type { CheckResult, PercentileDice } from '@/api/types'
 import { checkStatusOf, type CheckStatus } from '@/lib/check-status'
 import {
   checkAccentOf,
   checkDetailOf,
+  isCheckMasked,
   statusLabelKeyOf,
 } from '@/lib/check-details'
 import { useT } from '@/i18n/t'
 import type { TKey } from '@/i18n/keyset'
 import { tensLabel, validPercentileDice } from '@/lib/percentile-dice'
 import { cn } from '@/lib/utils'
+import { useGameStore } from '@/stores/game'
 
 import { PushDecisionPanel } from './PushDecisionPanel'
 
@@ -159,6 +162,32 @@ export function CheckCard({
     return () => loop.stop()
   }, [rolling, reduceMotion, roll])
 
+  // 点击揭示模式：结果先遮住，GM 或行动者揭开后所有人可见（纯展示，不阻断回合）
+  const diceRevealMode = useGameStore((state) => state.diceRevealMode)
+  const checkReveals = useGameStore((state) => state.checkReveals)
+  const players = useGameStore((state) => state.players)
+  const [revealBusy, setRevealBusy] = React.useState(false)
+  const [revealError, setRevealError] = React.useState('')
+  const masked = isCheckMasked(diceRevealMode, check, checkReveals)
+  const revealRecord = check.check_id ? checkReveals[String(check.check_id)] : undefined
+  const canReveal = isGm || (!!actorId && actorId === check.actor_uid)
+  const revealerName = revealRecord
+    ? players.find((player) => player.user_id === revealRecord.by)?.character_name || revealRecord.by
+    : ''
+
+  async function reveal() {
+    if (!check.check_id || revealBusy) return
+    setRevealBusy(true)
+    setRevealError('')
+    try {
+      await useGameStore.getState().revealCheck(String(check.check_id))
+    } catch (cause) {
+      setRevealError(errorMessage(cause))
+    } finally {
+      setRevealBusy(false)
+    }
+  }
+
   const status = checkStatusOf(check)
   const statusKey = statusLabelKeyOf(status)
   const accent = checkAccentOf(status)
@@ -199,6 +228,35 @@ export function CheckCard({
 
   const luckPending = check.luck_decision === 'pending'
   const luckDecidedByMe = luckPending && canDecideLuck
+
+  if (masked) {
+    return (
+      <Card className={cn('gap-1.5 rounded-xl border border-l-4 border-l-border p-4', className)} accessibilityLabel={t('checkCardLabel', { name: actorLabel })}>
+        <View className="flex-row items-center gap-2.5">
+          <View className="h-10 w-10 items-center justify-center rounded-lg border border-border bg-muted">
+            <Text className="font-mono text-base text-muted-foreground">✦</Text>
+          </View>
+          <View className="min-w-0 flex-1 gap-0.5">
+            <Text variant="small" numberOfLines={1}>
+              {check.label || check.skill || check.attribute || t('dfCheckDefaultLabel')}
+            </Text>
+            {actorLabel ? (
+              <Text variant="small" className="text-muted-foreground" numberOfLines={1}>{actorLabel}</Text>
+            ) : null}
+          </View>
+          <StatusBadge tone="warning">{t('checkRevealPending')}</StatusBadge>
+        </View>
+        {canReveal ? (
+          <Button size="sm" className="ml-12 self-start" disabled={revealBusy} onPress={() => void reveal()}>
+            <Text>{t('checkRevealAction')}</Text>
+          </Button>
+        ) : (
+          <Text variant="small" className="ml-12 text-muted-foreground">{t('checkRevealWaiting')}</Text>
+        )}
+        {revealError ? <Text variant="small" className="ml-12 text-destructive">{revealError}</Text> : null}
+      </Card>
+    )
+  }
 
   return (
     <Card
@@ -323,6 +381,12 @@ export function CheckCard({
           ) : check.luck_decision === 'declined' ? (
             <Text variant="small" className="ml-12 text-muted-foreground">
               {t('luckDeclined')}
+            </Text>
+          ) : null}
+
+          {diceRevealMode === 'click' && revealRecord ? (
+            <Text variant="small" className="ml-12 text-muted-foreground">
+              {t('checkRevealBy', { name: revealerName })}
             </Text>
           ) : null}
 

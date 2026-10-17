@@ -7,6 +7,7 @@ import type {
   BotBindTokenResponse,
   CharacterCard,
   CharacterCardsResponse,
+  CheckRevealRecord,
   CharacterListResponse,
   CharacterSheet,
   CommandResponse,
@@ -139,6 +140,17 @@ export function decidePush(
   return api<PushDecisionResponse>(
     gamePath(gameKey, `/checks/${encodeURIComponent(checkId)}/push/${operation}`),
     { method: 'POST', body: JSON.stringify(body) },
+  )
+}
+
+/**
+ * 点击揭示骰子（dice_reveal_mode = click）：纯展示标记，结果早已入账且公开，
+ * 只记录谁在何时揭开；服务端只允许 GM 或检定归属者调用。
+ */
+export function revealCheck(gameKey: string, checkId: string): Promise<{ ok?: boolean; error?: string; reveal?: CheckRevealRecord }> {
+  return api<{ ok?: boolean; error?: string; reveal?: CheckRevealRecord }>(
+    gamePath(gameKey, `/checks/${encodeURIComponent(checkId)}/reveal`),
+    { method: 'POST', body: '{}' },
   )
 }
 
