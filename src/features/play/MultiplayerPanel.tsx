@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { ScrollView, View } from 'react-native'
-import { Bot, Link, LogOut, UserMinus, UserRound } from 'lucide-react-native'
+import { Bot, Link, LogOut, SlidersHorizontal, UserMinus, UserRound } from 'lucide-react-native'
 
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
@@ -16,6 +16,8 @@ import {
 } from '@/lib/player-control'
 import { cn } from '@/lib/utils'
 
+import { QuickAdjustPanel } from './QuickAdjustPanel'
+
 interface MultiplayerPanelProps {
   players: Player[]
   detail: GameDetail
@@ -27,6 +29,8 @@ interface MultiplayerPanelProps {
   onCopyLink: (uid: string) => void
   /** 服务器正在为这个席位接管：控制权切换请求还没回来 */
   hostingUid?: string
+  /** 传入即允许 GM 就地「快速调整」（经典规则局）；专业规则局不传 */
+  adjustGameKey?: string
 }
 
 const ACTED_TONE = '#22c55e'
@@ -78,7 +82,9 @@ export function MultiplayerPanel({
   onSetControl,
   onCopyLink,
   hostingUid,
+  adjustGameKey,
 }: MultiplayerPanelProps) {
+  const [adjustingUid, setAdjustingUid] = React.useState('')
   const awaySet = new Set((detail.multiplayer?.away_players ?? []).map((p) => p.user_id))
   const canKick = isGm && players.length > 1
   const t = useT()
@@ -167,6 +173,17 @@ export function MultiplayerPanel({
                       </Text>
                     </Button>
                   )}
+                  {adjustGameKey ? (
+                    <Button
+                      size="sm"
+                      variant={adjustingUid === player.user_id ? 'secondary' : 'outline'}
+                      onPress={() => setAdjustingUid(adjustingUid === player.user_id ? '' : player.user_id)}
+                      accessibilityState={{ expanded: adjustingUid === player.user_id }}
+                    >
+                      <Icon as={SlidersHorizontal} size={12} />
+                      <Text variant="small">{t('dfAdjustTitle')}</Text>
+                    </Button>
+                  ) : null}
                   {canKick && !isSelf && !isGmPlayer && (
                     <Button size="sm" variant="destructive" onPress={() => onKick(player.user_id)}>
                       <Icon as={UserMinus} size={12} />
@@ -174,6 +191,9 @@ export function MultiplayerPanel({
                     </Button>
                   )}
                 </View>
+                {adjustGameKey && adjustingUid === player.user_id ? (
+                  <QuickAdjustPanel key={player.user_id} gameKey={adjustGameKey} player={player} />
+                ) : null}
               </>
             )}
           </View>
