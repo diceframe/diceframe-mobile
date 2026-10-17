@@ -32,6 +32,7 @@ import { GameContextRow } from '@/features/play/GameContextRow'
 import { GameTimeline } from '@/features/play/GameTimeline'
 import { ActionRecoveryBanner } from '@/features/play/ActionRecoveryBanner'
 import { ActionSkillPicker } from '@/features/play/ActionSkillPicker'
+import { CheckModesTool } from '@/features/play/CheckModesTool'
 import { GameSettingsSheet } from '@/features/play/GameSettingsSheet'
 import { KpQuestionSheet } from '@/features/play/KpQuestionSheet'
 import { TableTalkPanel } from '@/features/play/TableTalkPanel'
@@ -744,12 +745,15 @@ export default function GameScreen() {
               voice={voice}
               topControls={composerTopControls}
               accessory={
-                <ActionSkillPicker
-                  skills={actionSkillNames(mySheet)}
-                  value={selectedSkill}
-                  disabled={busy || composerDisabled}
-                  onChange={setPickedSkill}
-                />
+                <>
+                  <CheckModesTool key={gameKey} gameKey={gameKey} actorId={userId} isGm={isGm} />
+                  <ActionSkillPicker
+                    skills={actionSkillNames(mySheet)}
+                    value={selectedSkill}
+                    disabled={busy || composerDisabled}
+                    onChange={setPickedSkill}
+                  />
+                </>
               }
             />
           </View>
