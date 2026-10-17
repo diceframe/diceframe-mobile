@@ -30,6 +30,7 @@ import { CharacterPanel } from '@/features/play/CharacterPanel'
 import { CharacterPortraitSheet } from '@/features/play/CharacterPortraitSheet'
 import { GameContextRow } from '@/features/play/GameContextRow'
 import { GameTimeline } from '@/features/play/GameTimeline'
+import { ActionRecoveryBanner } from '@/features/play/ActionRecoveryBanner'
 import { GameSettingsSheet } from '@/features/play/GameSettingsSheet'
 import { KpQuestionSheet } from '@/features/play/KpQuestionSheet'
 import { TableTalkPanel } from '@/features/play/TableTalkPanel'
@@ -64,6 +65,7 @@ import {
 } from '@/lib/economy-prompts'
 import { appLayoutForWidth } from '@/lib/layout'
 import { levelUpAttributes, levelUpPoints } from '@/lib/level-up'
+import { actionRecoveryOf, afterRecoveryRefresh, type ActionRecovery } from '@/lib/action-recovery'
 import { pendingPostChecks } from '@/lib/push-decision'
 import { quickActionsVisible, quickActionVisibilityKey } from '@/lib/quick-action-visibility'
 import { isStoredPlayerMember } from '@/lib/player-identity'
@@ -134,6 +136,9 @@ export default function GameScreen() {
   const seatCredentialLost = useGameStore((s) => s.seatCredentialLost)
 
   const [draft, setDraft] = React.useState('')
+  // 行动提交失败后的恢复态：结果不确定时先锁输入、要求刷新核对，避免把已入账的行动再发一遍
+  const [recovery, setRecovery] = React.useState<ActionRecovery | null>(null)
+  const [recoveryRefreshing, setRecoveryRefreshing] = React.useState(false)
   const [characterOpen, setCharacterOpen] = React.useState(false)
   const [menuOpen, setMenuOpen] = React.useState(false)
   const [gmPanelTab, setGmPanelTab] = React.useState<
@@ -280,12 +285,19 @@ export default function GameScreen() {
       throw new UserFacingError('dfPlayGameEnded')
     }
     if (current.actionBusy || current.gmBusy) throw new UserFacingError('dfPlayVoiceSendBusy')
+    if (recovery?.kind === 'refresh') throw new UserFacingError('dfRecoveryLocked')
     if (pendingPostChecks(current.detail).length) throw new UserFacingError('dfPostCheckWaiting')
     if (economyProposalList(current.detail).some(
       (proposal) => proposal.status === 'pending'
         && !isNonBlockingPersonalPurchase(proposal, String(current.detail?.run_id || '')),
     )) throw new UserFacingError('apiErrors.economy_decision_pending')
-    await current.submit(text)
+    try {
+      await current.submit(text)
+    } catch (error) {
+      setRecovery(actionRecoveryOf(error))
+      throw error
+    }
+    setRecovery(null)
     void playGameHaptic('submit')
   }
 
@@ -295,9 +307,27 @@ export default function GameScreen() {
     try {
       await useGameStore.getState().submit(text)
       setDraft('')
+      setRecovery(null)
       void playGameHaptic('submit')
-    } catch {
-      // 弱网失败时保留草稿，错误由 game store 显示在顶部横幅。
+    } catch (error) {
+      // 失败保留草稿，错误由 game store 显示在顶部横幅；需要核对的失败另给恢复提示。
+      setRecovery(actionRecoveryOf(error))
+    }
+  }
+
+  async function refreshForRecovery() {
+    const current = recovery
+    if (!current || recoveryRefreshing) return
+    setRecoveryRefreshing(true)
+    try {
+      await useGameStore.getState().refresh()
+      // 刷新本身失败时 store 会写 error 而不抛：此时仍要求再刷新一次
+      if (useGameStore.getState().error) return
+      const outcome = afterRecoveryRefresh(current)
+      if (outcome.clearDraft) setDraft('')
+      setRecovery(outcome.next)
+    } finally {
+      setRecoveryRefreshing(false)
     }
   }
 
@@ -440,9 +470,12 @@ export default function GameScreen() {
     : gmThinking
       ? t('dfPlayGmThinking')
       : stateLabelOf(detail?.state, t)
+  const recoveryLocked = recovery?.kind === 'refresh'
   const composerDisabled =
-    pendingChecks.length > 0 || hasBlockingEconomyProposal || detail?.state === 'ended'
-  const composerDisabledReason = pendingChecks.length
+    recoveryLocked || pendingChecks.length > 0 || hasBlockingEconomyProposal || detail?.state === 'ended'
+  const composerDisabledReason = recoveryLocked
+    ? t('dfRecoveryLocked')
+    : pendingChecks.length
     ? t('dfPostCheckWaiting')
     : hasBlockingEconomyProposal
       ? t('apiErrors.economy_decision_pending')
@@ -678,6 +711,15 @@ export default function GameScreen() {
                 onReroll={handleRerollSwipe}
               />
             </View>
+
+            {recovery ? (
+              <ActionRecoveryBanner
+                recovery={recovery}
+                refreshing={recoveryRefreshing}
+                onRefresh={() => void refreshForRecovery()}
+                onEdit={() => setRecovery(null)}
+              />
+            ) : null}
 
             {/* 输入区 */}
             <ActionComposer
