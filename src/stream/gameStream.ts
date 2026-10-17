@@ -25,7 +25,7 @@ import EventSource from 'react-native-sse'
 import { buildPlaySseUrl, errorMessage } from '@/api/client'
 import { requestSseTicket } from '@/api/games'
 
-export type GameSseEffect = 'baseline' | 'narration-delta' | 'narration-reset' | 'refresh'
+export type GameSseEffect = 'baseline' | 'narration-delta' | 'narration-reset' | 'story-update' | 'refresh'
 
 export interface GameSsePayload {
   type?: string
@@ -81,6 +81,8 @@ export function gameSseEffect(payload: GameSsePayload | null): GameSseEffect {
   if (type === 'baseline') return 'baseline'
   if (type === 'narration_delta') return 'narration-delta'
   if (type === 'narration_reset') return 'narration-reset'
+  // 角色对话模式：生成中下发整份剧情快照（替换而非追加），见 lib/story
+  if (type === 'story_update') return 'story-update'
   return 'refresh'
 }
 

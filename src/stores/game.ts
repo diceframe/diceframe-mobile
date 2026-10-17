@@ -79,6 +79,7 @@ import type {
   PrivateMessage,
   RuleAttribute,
   RuleMeta,
+  StorySequence,
   TableTalkExchange,
   WorldCandidate,
 } from '@/api/types'
@@ -97,6 +98,7 @@ import { buildLevelUpAttributes } from '@/lib/level-up'
 import { UserFacingError } from '@/lib/user-facing-error'
 import { mergePendingLuck } from '@/lib/check-details'
 import type { PushOperation, PushRequestBody } from '@/lib/push-decision'
+import { isStorySequence } from '@/lib/story'
 import {
   economyProposalList,
   isEconomyProposalActionable,
@@ -131,6 +133,8 @@ interface GameStore {
   clearKpQuestion: () => void
   map: MapData | null
   liveNarration: string
+  /** 角色对话模式的流式剧情快照；与 liveNarration 同生命周期（reset / 新回合落库时清空） */
+  liveStory: StorySequence | null
   cursor: string
   streamStatus: StreamStatus
   asrEnabled: boolean
@@ -213,6 +217,7 @@ const initial = {
   kpQuestionSupported: null,
   map: null,
   liveNarration: '',
+  liveStory: null,
   cursor: '',
   streamStatus: 'idle',
   asrEnabled: false,
@@ -321,7 +326,12 @@ export const useGameStore = create<GameStore>((set, get) => {
             return
           }
           if (effect === 'narration-reset') {
-            set({ cursor, liveNarration: '' })
+            set({ cursor, liveNarration: '', liveStory: null })
+            return
+          }
+          if (effect === 'story-update') {
+            if (isStorySequence(payload.story)) set({ cursor, liveStory: payload.story })
+            else set({ cursor })
             return
           }
           if (effect === 'baseline') {
@@ -547,6 +557,7 @@ export const useGameStore = create<GameStore>((set, get) => {
           error: '',
           loading: false,
           liveNarration: clearNarration ? '' : get().liveNarration,
+          liveStory: clearNarration ? null : get().liveStory,
         })
         // 远端重开也换 run_id；旧频道请求与新 run 不可混用，须重取当前记录。
         if (runChanged && !playerRemoved) await get().refreshTableTalk()
@@ -1073,7 +1084,7 @@ export function selectCanAskKp(state: GameStore): boolean {
 
 /** “GM 思考中”：判定阶段 或 正在流式输出 */
 export function selectGmThinking(state: GameStore) {
-  return state.detail?.state === 'active_judgment' || state.liveNarration.length > 0
+  return state.detail?.state === 'active_judgment' || state.liveNarration.length > 0 || state.liveStory !== null
 }
 
 /**

@@ -11,12 +11,14 @@ import type { CharacterSheet, CheckResult, LogEntry, Player } from '@/api/types'
 import type { AssetSource } from '@/api/assets'
 import { avatarSource } from '@/api/assets'
 import { canDecideLuckOf } from '@/lib/check-details'
+import { isStorySequence } from '@/lib/story'
 import { useT } from '@/i18n/t'
 import { errorMessage } from '@/api/client'
 import { useAssetUri } from './useAssetUri'
 
 import { CheckCard } from './CheckCard'
 import { GmNarration } from './GmNarration'
+import { StorySequenceView } from './StorySequenceView'
 import { playerColor, playerColorSoft } from './playerColor'
 import { roundSceneImageSource } from './sceneImage'
 import type { SpeechControl } from './useSpeaker'
@@ -280,15 +282,23 @@ export function TimelineItem({
               </Pressable>
             ) : null}
           </View>
-          {/* 场景图嵌在叙事段与状态卡之间（对齐 Web SceneImageBlock 的位置） */}
-          <GmNarration
-            text={entry.gm_response}
-            image={
-              scene ? (
-                <SceneImageFigure source={scene} prompt={entry.scene_image?.prompt} />
-              ) : undefined
-            }
-          />
+          {/* 角色对话模式：服务端给了合法剧情序列就按旁白/台词渲染（场景图置顶），否则照旧解析 GM 文本 */}
+          {isStorySequence(entry.story) ? (
+            <View className="gap-3">
+              {scene ? <SceneImageFigure source={scene} prompt={entry.scene_image?.prompt} /> : null}
+              <StorySequenceView story={entry.story} gameKey={gameKey} ttsAvailable={ttsAvailable} speech={speech} />
+            </View>
+          ) : (
+            // 场景图嵌在叙事段与状态卡之间（对齐 Web SceneImageBlock 的位置）
+            <GmNarration
+              text={entry.gm_response}
+              image={
+                scene ? (
+                  <SceneImageFigure source={scene} prompt={entry.scene_image?.prompt} />
+                ) : undefined
+              }
+            />
+          )}
           {isGm && onSwipeTo && onReroll ? (
             <>
               <SwipeBar
