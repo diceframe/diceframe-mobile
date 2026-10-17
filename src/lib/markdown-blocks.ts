@@ -1,6 +1,6 @@
 /**
  * 轻量 markdown 分块（DF Agent 回复用）：标题、列表、代码块、段落。
- * 刻意只认常见形态、不支持表格 / 链接 / HTML——回复来自模型，宁可原样显示也不解释未知语法。
+ * 刻意只认常见形态（含 GFM 管道表格），不支持链接 / HTML——回复来自模型，宁可原样显示也不解释未知语法。
  * 行内标记（粗体 / 斜体 / 行内代码）交给 components/patterns/inline-markdown。
  */
 export type MarkdownBlock =
@@ -8,11 +8,18 @@ export type MarkdownBlock =
   | { kind: 'paragraph'; text: string }
   | { kind: 'list'; ordered: boolean; items: string[] }
   | { kind: 'code'; text: string }
+  | { kind: 'table'; header: string[]; rows: string[][] }
 
 const BULLET = /^\s*[-*+•]\s+(.*)$/
 const ORDERED = /^\s*\d+[.)、]\s+(.*)$/
 const HEADING = /^\s{0,3}#{1,6}\s+(.*)$/
 const FENCE = /^\s*```/
+const TABLE_ROW = /^\s*\|.*\|\s*$/
+const TABLE_SEPARATOR = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/
+
+function tableCells(line: string): string[] {
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim())
+}
 
 export function markdownBlocks(source: string): MarkdownBlock[] {
   const lines = String(source || '').replace(/\r\n/g, '\n').split('\n')
@@ -33,6 +40,17 @@ export function markdownBlocks(source: string): MarkdownBlock[] {
       index += 1
       while (index < lines.length && !FENCE.test(lines[index])) code.push(lines[index++])
       blocks.push({ kind: 'code', text: code.join('\n') })
+      continue
+    }
+    // 管道表格：表头行 + 分隔行（---）起头，后续连续的 | 行都是数据行
+    if (TABLE_ROW.test(line) && TABLE_SEPARATOR.test(lines[index + 1] ?? '')) {
+      flush()
+      const header = tableCells(line)
+      const rows: string[][] = []
+      index += 2
+      while (index < lines.length && TABLE_ROW.test(lines[index])) rows.push(tableCells(lines[index++]))
+      index -= 1
+      blocks.push({ kind: 'table', header, rows })
       continue
     }
     const heading = line.match(HEADING)

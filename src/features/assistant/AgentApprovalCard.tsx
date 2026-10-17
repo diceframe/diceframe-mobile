@@ -36,7 +36,8 @@ export function AgentApprovalCard({
   return (
     <View className="gap-2 rounded-lg border border-warning bg-warning/10 p-3" accessibilityLiveRegion="polite">
       <Text className="font-semibold">{t('dfAgentPending')}</Text>
-      <Text>{approval.label || agentToolLabel(t, approval.tool)}</Text>
+      {/* label 是服务端给模型看的英文工具描述，界面按上游只显示本地化工具名 */}
+      <Text>{agentToolLabel(t, approval.tool)}</Text>
       {target ? <Text variant="small" className="font-semibold">{t('dfAgentTarget')}: {target}</Text> : null}
       {invalid ? <Text variant="small" className="text-destructive">{t('dfAgentApprovalInvalid')}</Text> : null}
       {details !== undefined ? (

@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { View } from 'react-native'
+import { ScrollView, View } from 'react-native'
 
 import { renderInlineMarkdown } from '@/components/patterns/inline-markdown'
 import { Text } from '@/components/ui/text'
@@ -19,6 +19,26 @@ export function AgentMarkdown({ text }: { text: string }) {
             <View key={index} className="rounded-md bg-muted px-2.5 py-2">
               <Text selectable className="font-mono text-xs leading-5">{block.text}</Text>
             </View>
+          )
+        }
+        if (block.kind === 'table') {
+          // 宽表格横向滚动，不撑破气泡（上游 #549 修的同类问题）
+          return (
+            <ScrollView key={index} horizontal showsHorizontalScrollIndicator={false}>
+              <View className="rounded-md border border-border">
+                {[block.header, ...block.rows].map((row, rowIndex) => (
+                  <View key={rowIndex} className={rowIndex ? 'flex-row border-t border-border' : 'flex-row bg-muted'}>
+                    {block.header.map((_, cellIndex) => (
+                      <View key={cellIndex} className="w-36 px-2 py-1.5">
+                        <Text selectable variant="small" className={rowIndex ? undefined : 'font-semibold'}>
+                          {renderInlineMarkdown(row[cellIndex] ?? '')}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
           )
         }
         if (block.kind === 'list') {

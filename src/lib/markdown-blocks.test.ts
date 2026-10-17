@@ -33,3 +33,14 @@ describe('markdown 分块', () => {
     expect(markdownBlocks('')).toEqual([])
   })
 })
+
+describe('markdown 表格', () => {
+  it('表头 + 分隔行起头，连续的管道行为数据行；缺分隔行时按段落', () => {
+    const text = '| ID | 名称 |\n|---|:---:|\n| coc_horror | 克苏鲁 |\n| jp_isekai | 异世界 |\n之后'
+    expect(markdownBlocks(text)).toEqual([
+      { kind: 'table', header: ['ID', '名称'], rows: [['coc_horror', '克苏鲁'], ['jp_isekai', '异世界']] },
+      { kind: 'paragraph', text: '之后' },
+    ])
+    expect(markdownBlocks('| a | b |\n| c | d |')).toEqual([{ kind: 'paragraph', text: '| a | b |\n| c | d |' }])
+  })
+})

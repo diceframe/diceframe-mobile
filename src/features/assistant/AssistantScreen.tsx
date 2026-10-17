@@ -2,6 +2,7 @@ import * as React from 'react'
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native'
 import { Image } from 'expo-image'
 import { useRouter, type Href } from 'expo-router'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronDown, ChevronUp, FileText, History, RefreshCw, Send, Sparkles, Square } from 'lucide-react-native'
 
 import { assetSource } from '@/api/assets'
@@ -169,6 +170,8 @@ export function AssistantScreen() {
   const t = useT()
   const router = useRouter()
   const keyboardHeight = useKeyboardHeight()
+  // Screen 不含底边安全区；键盘高度不含导航条，两者相加才落在键盘上方（同对局页输入区）
+  const insets = useSafeAreaInsets()
   const baseUrl = useSettingsStore((s) => s.baseUrl)
   const ownerToken = useSettingsStore((s) => s.token)
   const messages = useAssistantStore((s) => s.messages)
@@ -195,7 +198,14 @@ export function AssistantScreen() {
 
   const draftList = Object.values(drafts)
   // 上游 #549：工作区只在有事要处理时出现——草稿、待确认、出错、有待前往的页面、或执行中有进度
-  const hasTasks = draftList.length > 0 || !!pendingApproval || !!actionError || !!navigation
+  // 回答里 navigate 的页面已经以「前往」标签挂在那条回复下面，工作区不再重复；
+  // 只有确认操作后带出的跳转（如建局后的「打开游戏」）才放进工作区
+  const lastAssistant = [...messages].reverse().find((message) => message.role === 'assistant')
+  const chipNavigations = lastAssistant ? messageActions(lastAssistant).map(actionNavigationOf) : []
+  const navigationInChip = !!navigation && chipNavigations.some((item) => item
+    && item.route === navigation.route && item.query?.game === navigation.query?.game)
+  const pendingNavigation = navigation && !navigationInChip ? navigation : null
+  const hasTasks = draftList.length > 0 || !!pendingApproval || !!actionError || !!pendingNavigation
   const workspaceVisible = hasTasks || (streaming && !!status)
   const attention = !!actionError || !!pendingApproval?.expired || !!pendingApproval?.recovery_required
   const workspaceStatus = attention
@@ -309,6 +319,9 @@ export function AssistantScreen() {
           />
         ))}
 
+        {/* 标签与工作区的「前往」都可能指向移动端没有的页面，提示放在两者之外 */}
+        {navigationMissing ? <Text variant="small" className="text-muted-foreground">{t('dfAgentPageUnavailable')}</Text> : null}
+
         {workspaceVisible ? (
           <View className="gap-2.5 rounded-xl border border-border bg-card/60 p-3">
             <Pressable
@@ -345,12 +358,11 @@ export function AssistantScreen() {
 
                 {actionError ? <Text variant="small" className="text-destructive" accessibilityRole="alert">{actionError}</Text> : null}
 
-                {navigation ? (
+                {pendingNavigation ? (
                   <View className="gap-1">
-                    <Button size="sm" variant="outline" className="self-start" onPress={() => go(navigation)}>
-                      <Text>{navigation.route === 'play' ? t('dfAgentOpenGame') : t('dfAgentGoTo', { page: agentRouteLabel(t, navigation.route) })}</Text>
+                    <Button size="sm" variant="outline" className="self-start" onPress={() => go(pendingNavigation)}>
+                      <Text>{pendingNavigation.route === 'play' ? t('dfAgentOpenGame') : t('dfAgentGoTo', { page: agentRouteLabel(t, pendingNavigation.route) })}</Text>
                     </Button>
-                    {navigationMissing ? <Text variant="small" className="text-muted-foreground">{t('dfAgentPageUnavailable')}</Text> : null}
                   </View>
                 ) : null}
 
@@ -368,7 +380,7 @@ export function AssistantScreen() {
         ) : null}
       </ScrollView>
 
-      <View className="flex-row items-end gap-2 border-t border-border px-3 pt-2" style={{ paddingBottom: 8 + keyboardHeight }}>
+      <View className="flex-row items-end gap-2 border-t border-border px-3 pt-2" style={{ paddingBottom: 8 + keyboardHeight + insets.bottom }}>
         <Textarea
           value={draft}
           onChangeText={setDraft}
