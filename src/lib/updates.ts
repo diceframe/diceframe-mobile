@@ -56,19 +56,33 @@ export function normalizeReleaseVersion(value: string): string {
   return value.trim().replace(/^v/i, '')
 }
 
-export function compareVersions(left: string, right: string): number {
-  const leftParts = normalizeReleaseVersion(left).split(/[.+-]/).map((part) => Number.parseInt(part, 10))
-  const rightParts = normalizeReleaseVersion(right).split(/[.+-]/).map((part) => Number.parseInt(part, 10))
+function compareNumberParts(left: string, right: string, separator: RegExp): number {
+  const leftParts = left.split(separator).map((part) => Number.parseInt(part, 10))
+  const rightParts = right.split(separator).map((part) => Number.parseInt(part, 10))
   const length = Math.max(leftParts.length, rightParts.length)
-
   for (let index = 0; index < length; index += 1) {
     const leftPart = Number.isFinite(leftParts[index]) ? leftParts[index] : 0
     const rightPart = Number.isFinite(rightParts[index]) ? rightParts[index] : 0
     if (leftPart > rightPart) return 1
     if (leftPart < rightPart) return -1
   }
-
   return 0
+}
+
+/**
+ * 语义版本比较：先比主版本号（x.y.z）；相同时预发布版（-beta.1 / -rc2）低于正式版，
+ * 两个预发布版再按后缀里的数字比。这样装了 0.6.0-beta.1 的人在 0.6.0 正式发布后能收到更新；
+ * 构建元数据（+xxx）不参与比较。
+ */
+export function compareVersions(left: string, right: string): number {
+  const [leftCore, leftPre = ''] = normalizeReleaseVersion(left).split('+')[0].split(/-(.*)/s)
+  const [rightCore, rightPre = ''] = normalizeReleaseVersion(right).split('+')[0].split(/-(.*)/s)
+  const core = compareNumberParts(leftCore, rightCore, /\./)
+  if (core !== 0) return core
+  if (!leftPre && !rightPre) return 0
+  if (!leftPre) return 1
+  if (!rightPre) return -1
+  return compareNumberParts(leftPre.replace(/[^\d.]+/g, '.'), rightPre.replace(/[^\d.]+/g, '.'), /\.+/)
 }
 
 export function getGitHubLatestReleaseUrl(repo: string): string {
