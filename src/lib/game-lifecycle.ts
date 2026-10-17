@@ -15,6 +15,8 @@ export function gameLifecycleAction(
 export function createGameLifecycle(
   initialState: AppVisibility,
   handlers: { pause: () => void; resume: () => void },
+  /** 返回 true 时忽略 blur：本应用自己的浮层（Modal 窗口）抢走了焦点，不是离开对局 */
+  ignoreBlur: () => boolean = () => false,
 ) {
   let state = initialState
   let blurred = false
@@ -28,7 +30,7 @@ export function createGameLifecycle(
       if (action) handlers[action]()
     },
     blur() {
-      if (blurred) return
+      if (blurred || ignoreBlur()) return
       blurred = true
       handlers.pause()
     },

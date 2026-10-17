@@ -7,6 +7,7 @@ import type {
   BotBindTokenResponse,
   CharacterCard,
   CharacterCardsResponse,
+  CheckRevealRecord,
   CharacterListResponse,
   CharacterSheet,
   CommandResponse,
@@ -29,12 +30,14 @@ import type {
   PlayerCreateResponse,
   PlayerContextResponse,
   PrivateLogResponse,
+  PushDecisionResponse,
   RulesResponse,
   SceneImageRef,
   WorldCandidate,
   WorldTemplatesResponse,
 } from './types'
 import { contentLanguage, getT } from '@/i18n/t'
+import type { PushOperation, PushRequestBody } from '@/lib/push-decision'
 import { UserFacingError } from '@/lib/user-facing-error'
 import { worldContentLocale } from '@/lib/world-language'
 import { SEAT_TOKEN_HEADER } from '@/lib/seat-credentials'
@@ -85,10 +88,11 @@ export async function fetchPlayerContext(gameKey: string): Promise<PlayerContext
   }
 }
 
-export function submitAction(gameKey: string, text: string): Promise<ActionSubmitResponse> {
+/** selectedSkill 为空时不带该字段（服务端按行动文本自动判断技能） */
+export function submitAction(gameKey: string, text: string, selectedSkill = ''): Promise<ActionSubmitResponse> {
   return api<ActionSubmitResponse>(gamePath(gameKey, '/action'), {
     method: 'POST',
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, ...(selectedSkill ? { selected_skill: selectedSkill } : {}) }),
   })
 }
 
@@ -124,6 +128,30 @@ export function regenerateSwipe(gameKey: string, round: number): Promise<{ ok?: 
     method: 'PUT',
     body: '{}',
   })
+}
+
+/** CoC 孤注一掷决议；body 由 lib/push-decision 的 pushRequestBody 生成（服务端只认那几个字段）。 */
+export function decidePush(
+  gameKey: string,
+  checkId: string,
+  operation: PushOperation,
+  body: PushRequestBody,
+): Promise<PushDecisionResponse> {
+  return api<PushDecisionResponse>(
+    gamePath(gameKey, `/checks/${encodeURIComponent(checkId)}/push/${operation}`),
+    { method: 'POST', body: JSON.stringify(body) },
+  )
+}
+
+/**
+ * 点击揭示骰子（dice_reveal_mode = click）：纯展示标记，结果早已入账且公开，
+ * 只记录谁在何时揭开；服务端只允许 GM 或检定归属者调用。
+ */
+export function revealCheck(gameKey: string, checkId: string): Promise<{ ok?: boolean; error?: string; reveal?: CheckRevealRecord }> {
+  return api<{ ok?: boolean; error?: string; reveal?: CheckRevealRecord }>(
+    gamePath(gameKey, `/checks/${encodeURIComponent(checkId)}/reveal`),
+    { method: 'POST', body: '{}' },
+  )
 }
 
 export function resolveLuck(

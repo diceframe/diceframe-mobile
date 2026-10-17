@@ -45,7 +45,9 @@ import {
   gmCommand,
   kickPlayer,
   resolveHealthEvent,
+  decidePush,
   resolveLuck,
+  revealCheck,
   resolvePayment,
   resetGame,
   restartGame,
@@ -65,6 +67,7 @@ import type {
   CharacterCardsResponse,
   CharacterSheet,
   CheckResult,
+  CheckRevealRecord,
   CommandResponse,
   GameDetail,
   GeneratedImageItem,
@@ -78,6 +81,7 @@ import type {
   PrivateMessage,
   RuleAttribute,
   RuleMeta,
+  StorySequence,
   TableTalkExchange,
   WorldCandidate,
 } from '@/api/types'
@@ -95,12 +99,14 @@ import { isFinalClaimFailure } from '@/lib/seat-credentials'
 import { buildLevelUpAttributes } from '@/lib/level-up'
 import { UserFacingError } from '@/lib/user-facing-error'
 import { mergePendingLuck } from '@/lib/check-details'
+import { pendingPostChecks, type PushOperation, type PushRequestBody } from '@/lib/push-decision'
+import { isStorySequence } from '@/lib/story'
 import {
   economyProposalList,
   isEconomyProposalActionable,
 } from '@/lib/economy-prompts'
 
-interface GameStore {
+export interface GameStore {
   gameKey: string
   userId: string
   isGm: boolean
@@ -129,6 +135,12 @@ interface GameStore {
   clearKpQuestion: () => void
   map: MapData | null
   liveNarration: string
+  /** 角色对话模式的流式剧情快照；与 liveNarration 同生命周期（reset / 新回合落库时清空） */
+  liveStory: StorySequence | null
+  /** 点击揭示模式下已揭开的检定（check_id → 揭示人/时间），随 /log 下发 */
+  checkReveals: Record<string, CheckRevealRecord>
+  /** 'click' = 检定结果先遮住，等 GM 或行动者揭示；其余按自动揭示处理 */
+  diceRevealMode: string
   cursor: string
   streamStatus: StreamStatus
   asrEnabled: boolean
@@ -150,8 +162,13 @@ interface GameStore {
   resume: () => void
   refresh: () => Promise<void>
   loadOlderLog: () => Promise<void>
-  submit: (text: string) => Promise<void>
+  /** selectedSkill：玩家为本次行动指定的角色卡技能（可选，见 lib/action-skill） */
+  submit: (text: string, selectedSkill?: string) => Promise<void>
   decideLuck: (checkId: string, spend: boolean) => Promise<void>
+  /** 孤注一掷决议：错误抛给面板就地展示（不占顶部横幅），成功或撞上过期 revision 都刷新权威状态 */
+  decidePush: (checkId: string, operation: PushOperation, body: PushRequestBody) => Promise<void>
+  /** 点击揭示：先就地记上揭示标记，再刷新取权威状态 */
+  revealCheck: (checkId: string) => Promise<void>
   advance: () => Promise<CommandResponse>
   rollback: () => Promise<CommandResponse>
   command: (text: string) => Promise<void>
@@ -209,6 +226,9 @@ const initial = {
   kpQuestionSupported: null,
   map: null,
   liveNarration: '',
+  liveStory: null,
+  checkReveals: {},
+  diceRevealMode: '',
   cursor: '',
   streamStatus: 'idle',
   asrEnabled: false,
@@ -317,7 +337,12 @@ export const useGameStore = create<GameStore>((set, get) => {
             return
           }
           if (effect === 'narration-reset') {
-            set({ cursor, liveNarration: '' })
+            set({ cursor, liveNarration: '', liveStory: null })
+            return
+          }
+          if (effect === 'story-update') {
+            if (isStorySequence(payload.story)) set({ cursor, liveStory: payload.story })
+            else set({ cursor })
             return
           }
           if (effect === 'baseline') {
@@ -537,12 +562,15 @@ export const useGameStore = create<GameStore>((set, get) => {
           log: newLog,
           logPage: 1,
           logTotalPages: log.total_pages ?? 1,
+          checkReveals: log.check_reveals ?? {},
+          diceRevealMode: log.dice_reveal_mode ?? '',
           privateMessages: privateLog.messages ?? privateLog.private_log ?? [],
           map,
           health,
           error: '',
           loading: false,
           liveNarration: clearNarration ? '' : get().liveNarration,
+          liveStory: clearNarration ? null : get().liveStory,
         })
         // 远端重开也换 run_id；旧频道请求与新 run 不可混用，须重取当前记录。
         if (runChanged && !playerRemoved) await get().refreshTableTalk()
@@ -644,12 +672,12 @@ export const useGameStore = create<GameStore>((set, get) => {
       }
     },
 
-    async submit(text) {
+    async submit(text, selectedSkill = '') {
       const { gameKey } = get()
       if (!gameKey || !text.trim()) return
       set({ actionBusy: true })
       try {
-        await submitAction(gameKey, text.trim())
+        await submitAction(gameKey, text.trim(), selectedSkill)
         // 提交成功就结束发送态；全量刷新包含地图等慢请求，不能继续挡住输入/语音浮层。
         if (get().gameKey === gameKey) void get().refresh()
       } catch (error) {
@@ -678,6 +706,28 @@ export const useGameStore = create<GameStore>((set, get) => {
       } catch (error) {
         if (get().gameKey === gameKey) set({ error: errorMessage(error) })
         throw error
+      }
+    },
+
+    async revealCheck(checkId) {
+      const { gameKey } = get()
+      if (!gameKey) return
+      const result = await revealCheck(gameKey, checkId)
+      if (result.ok === false || result.error) throw new UserFacingError('dfRevealFailed')
+      if (get().gameKey !== gameKey) return
+      if (result.reveal?.by) set({ checkReveals: { ...get().checkReveals, [checkId]: result.reveal } })
+      await get().refresh()
+    },
+
+    async decidePush(checkId, operation, body) {
+      const { gameKey } = get()
+      if (!gameKey) return
+      try {
+        const result = await decidePush(gameKey, checkId, operation, body)
+        if (result.ok === false) throw new UserFacingError('dfPushRollError')
+      } finally {
+        // 失败多半是 revision 过期（别人刚改过）：拉最新状态让面板按新 revision 重来
+        if (get().gameKey === gameKey) await get().refresh()
       }
     },
 
@@ -1055,9 +1105,13 @@ export function selectCanAskKp(state: GameStore): boolean {
   return canAskKpQuestion(state.gameKey, state.userId, state.players, currentShare(), ownerAuthActive(state.gameKey))
 }
 
-/** “GM 思考中”：判定阶段 或 正在流式输出 */
+/**
+ * “GM 思考中”：判定阶段 或 正在流式输出。判定阶段里还有运气 / 孤注一掷待决时，
+ * 服务端其实在等玩家而不是在生成（对齐上游 serverJudging），不显示思考骨架。
+ */
 export function selectGmThinking(state: GameStore) {
-  return state.detail?.state === 'active_judgment' || state.liveNarration.length > 0
+  const judging = state.detail?.state === 'active_judgment' && pendingPostChecks(state.detail).length === 0
+  return judging || state.liveNarration.length > 0 || state.liveStory !== null
 }
 
 /**

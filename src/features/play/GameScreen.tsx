@@ -30,6 +30,10 @@ import { CharacterPanel } from '@/features/play/CharacterPanel'
 import { CharacterPortraitSheet } from '@/features/play/CharacterPortraitSheet'
 import { GameContextRow } from '@/features/play/GameContextRow'
 import { GameTimeline } from '@/features/play/GameTimeline'
+import { ActionRecoveryBanner } from '@/features/play/ActionRecoveryBanner'
+import { ActionSkillPicker } from '@/features/play/ActionSkillPicker'
+import { CheckModesTool } from '@/features/play/CheckModesTool'
+import { StoryPortraitsTool } from '@/features/play/StoryPortraitsTool'
 import { GameSettingsSheet } from '@/features/play/GameSettingsSheet'
 import { KpQuestionSheet } from '@/features/play/KpQuestionSheet'
 import { TableTalkPanel } from '@/features/play/TableTalkPanel'
@@ -56,6 +60,7 @@ import { useT, type T } from '@/i18n/t'
 import { confirmDestructive } from '@/lib/confirm'
 import { toastNotice } from '@/components/patterns/toast'
 import { createGameLifecycle } from '@/lib/game-lifecycle'
+import { overlayOpen } from '@/lib/overlay-focus'
 import {
   economyCurrencyLabel,
   economyProposalList,
@@ -64,6 +69,10 @@ import {
 } from '@/lib/economy-prompts'
 import { appLayoutForWidth } from '@/lib/layout'
 import { levelUpAttributes, levelUpPoints } from '@/lib/level-up'
+import { actionRecoveryOf, afterRecoveryRefresh, type ActionRecovery } from '@/lib/action-recovery'
+import { actionSkillNames, reconcileActionSkill } from '@/lib/action-skill'
+import { pendingPostChecks } from '@/lib/push-decision'
+import { quickActionsVisible, quickActionVisibilityKey } from '@/lib/quick-action-visibility'
 import { isStoredPlayerMember } from '@/lib/player-identity'
 import { createPlayShareScope } from '@/lib/play-share-scope'
 import { joinBounceKey, shouldBounceToJoin } from '@/lib/join-bounce'
@@ -132,6 +141,12 @@ export default function GameScreen() {
   const seatCredentialLost = useGameStore((s) => s.seatCredentialLost)
 
   const [draft, setDraft] = React.useState('')
+  // 行动提交失败后的恢复态：结果不确定时先锁输入、要求刷新核对，避免把已入账的行动再发一遍
+  const [recovery, setRecovery] = React.useState<ActionRecovery | null>(null)
+  const [recoveryRefreshing, setRecoveryRefreshing] = React.useState(false)
+  // 本次行动指定的技能：只在内存里随草稿走，提交成功或切局即清空
+  const [pickedSkill, setPickedSkill] = React.useState('')
+  const [storyPortraitsOpen, setStoryPortraitsOpen] = React.useState(false)
   const [characterOpen, setCharacterOpen] = React.useState(false)
   const [menuOpen, setMenuOpen] = React.useState(false)
   const [gmPanelTab, setGmPanelTab] = React.useState<
@@ -176,6 +191,10 @@ export default function GameScreen() {
   // server 引擎跟随服务器 TTS 配置 serverTtsEnabled）；首次加载只记基线不回放历史
   const ttsEngine = useSettingsStore((s) => s.ttsEngine)
   const ttsAuto = useSettingsStore((s) => s.ttsAuto)
+  const baseUrl = useSettingsStore((s) => s.baseUrl)
+  const quickActionKey = quickActionVisibilityKey(baseUrl, gameKey, userId)
+  const personalQuickActions = useSettingsStore((s) => s.quickActionVisibility[quickActionKey])
+  const showQuickActions = quickActionsVisible(personalQuickActions, detail?.quick_actions_enabled)
   const ttsAvailable = ttsAvailableOf(ttsEngine, serverTtsEnabled)
   useAutoSpeak(ttsAuto && ttsAvailable, log, (text) => void speaker.speak(text))
   // 叙事落地/检定结果/私密感知的震动反馈（开关在设置页，默认开启）
@@ -188,6 +207,8 @@ export default function GameScreen() {
   const privateMessages = useGameStore((s) => s.privateMessages)
   const myPlayer = players.find((player) => player.user_id === userId) ?? null
   const mySheet = myPlayer?.character_sheet ?? null
+  // 技能从卡上消失（换卡、改卡）时选择自动失效，渲染期派生而不是 effect 里回写
+  const selectedSkill = reconcileActionSkill(pickedSkill, mySheet)
   const allocationRules = ruleAttrs.length ? ruleAttrs : ruleMeta?.attributes ?? []
   const availablePoints = levelUpPoints(mySheet)
   const canAllocatePoints = availablePoints > 0
@@ -226,7 +247,7 @@ export default function GameScreen() {
     const lifecycle = createGameLifecycle(AppState.currentState, {
       pause: () => useGameStore.getState().pause(),
       resume: () => useGameStore.getState().resume(),
-    })
+    }, overlayOpen)
     const subscription = AppState.addEventListener('change', lifecycle.change)
     // Android 锁屏/遮挡可能只通知焦点变化；Web 唤醒也不保证触发 visibilitychange。
     const blur = Platform.OS === 'android' ? AppState.addEventListener('blur', lifecycle.blur) : null
@@ -274,12 +295,20 @@ export default function GameScreen() {
       throw new UserFacingError('dfPlayGameEnded')
     }
     if (current.actionBusy || current.gmBusy) throw new UserFacingError('dfPlayVoiceSendBusy')
-    if (current.detail?.pending_luck_decisions?.length) throw new UserFacingError('dfPlayResolveLuckFirst')
+    if (recovery?.kind === 'refresh') throw new UserFacingError('dfRecoveryLocked')
+    if (pendingPostChecks(current.detail).length) throw new UserFacingError('dfPostCheckWaiting')
     if (economyProposalList(current.detail).some(
       (proposal) => proposal.status === 'pending'
         && !isNonBlockingPersonalPurchase(proposal, String(current.detail?.run_id || '')),
     )) throw new UserFacingError('apiErrors.economy_decision_pending')
-    await current.submit(text)
+    try {
+      await current.submit(text, selectedSkill)
+    } catch (error) {
+      setRecovery(actionRecoveryOf(error))
+      throw error
+    }
+    setRecovery(null)
+    setPickedSkill('')
     void playGameHaptic('submit')
   }
 
@@ -287,11 +316,30 @@ export default function GameScreen() {
     const text = draft.trim()
     if (!text) return
     try {
-      await useGameStore.getState().submit(text)
+      await useGameStore.getState().submit(text, selectedSkill)
       setDraft('')
+      setPickedSkill('')
+      setRecovery(null)
       void playGameHaptic('submit')
-    } catch {
-      // 弱网失败时保留草稿，错误由 game store 显示在顶部横幅。
+    } catch (error) {
+      // 失败保留草稿，错误由 game store 显示在顶部横幅；需要核对的失败另给恢复提示。
+      setRecovery(actionRecoveryOf(error))
+    }
+  }
+
+  async function refreshForRecovery() {
+    const current = recovery
+    if (!current || recoveryRefreshing) return
+    setRecoveryRefreshing(true)
+    try {
+      await useGameStore.getState().refresh()
+      // 刷新本身失败时 store 会写 error 而不抛：此时仍要求再刷新一次
+      if (useGameStore.getState().error) return
+      const outcome = afterRecoveryRefresh(current)
+      if (outcome.clearDraft) setDraft('')
+      setRecovery(outcome.next)
+    } finally {
+      setRecoveryRefreshing(false)
     }
   }
 
@@ -425,15 +473,22 @@ export default function GameScreen() {
     setPaymentComposerOpen(false)
   }
 
-  const stateLabel = pendingLuck.length
+  // 运气与孤注一掷都会让叙事停在骰子卡上；只有运气时沿用上游的「运气决定」状态名
+  const pendingChecks = pendingPostChecks(detail)
+  const stateLabel = pendingChecks.some((check) => check.push)
+    ? t('dfPostCheckWaiting')
+    : pendingChecks.length
     ? t('luckDecisionState')
     : gmThinking
       ? t('dfPlayGmThinking')
       : stateLabelOf(detail?.state, t)
+  const recoveryLocked = recovery?.kind === 'refresh'
   const composerDisabled =
-    pendingLuck.length > 0 || hasBlockingEconomyProposal || detail?.state === 'ended'
-  const composerDisabledReason = pendingLuck.length
-    ? t('dfPlayResolveLuckFirst')
+    recoveryLocked || pendingChecks.length > 0 || hasBlockingEconomyProposal || detail?.state === 'ended'
+  const composerDisabledReason = recoveryLocked
+    ? t('dfRecoveryLocked')
+    : pendingChecks.length
+    ? t('dfPostCheckWaiting')
     : hasBlockingEconomyProposal
       ? t('apiErrors.economy_decision_pending')
       : detail?.state === 'ended'
@@ -541,6 +596,11 @@ export default function GameScreen() {
               <Icon as={ChevronsRight} size={16} />
               <Text>{t('gmForceAdvance')}</Text>
             </Button>
+            {detail?.story_mode === 'dialogue' ? (
+              <Button size="sm" variant="outline" className="shrink-0" onPress={() => setStoryPortraitsOpen(true)}>
+                <Text>{t('storyPortraits')}</Text>
+              </Button>
+            ) : null}
           </>
         ) : null}
         {canAskKp ? (
@@ -669,6 +729,15 @@ export default function GameScreen() {
               />
             </View>
 
+            {recovery ? (
+              <ActionRecoveryBanner
+                recovery={recovery}
+                refreshing={recoveryRefreshing}
+                onRefresh={() => void refreshForRecovery()}
+                onEdit={() => setRecovery(null)}
+              />
+            ) : null}
+
             {/* 输入区 */}
             <ActionComposer
               value={draft}
@@ -678,8 +747,22 @@ export default function GameScreen() {
               disabled={composerDisabled}
               disabledReason={composerDisabledReason}
               quickActions={detail?.quick_actions ?? []}
+              quickActionsVisible={showQuickActions}
+              onToggleQuickActions={() =>
+                useSettingsStore.getState().setQuickActionVisibility(quickActionKey, !showQuickActions)}
               voice={voice}
               topControls={composerTopControls}
+              accessory={
+                <>
+                  <CheckModesTool key={gameKey} gameKey={gameKey} actorId={userId} isGm={isGm} />
+                  <ActionSkillPicker
+                    skills={actionSkillNames(mySheet)}
+                    value={selectedSkill}
+                    disabled={busy || composerDisabled}
+                    onChange={setPickedSkill}
+                  />
+                </>
+              }
             />
           </View>
 
@@ -794,6 +877,15 @@ export default function GameScreen() {
         <Text variant="h3">{t('tableTalkTitle')}</Text>
         <TableTalkPanel gameKey={gameKey} />
       </Sheet>
+      {isGm ? (
+        <StoryPortraitsTool
+          key={gameKey}
+          open={storyPortraitsOpen}
+          onClose={() => setStoryPortraitsOpen(false)}
+          gameKey={gameKey}
+          ruleId={ruleMeta?.rule_id ?? ''}
+        />
+      ) : null}
       {isGm ? (
         <GameSettingsSheet
           key={`${gameKey}:${identityRevision}`}

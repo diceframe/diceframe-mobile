@@ -16,6 +16,7 @@ import {
   type PlayerIdentity,
 } from '@/lib/player-identity'
 import type { LocalePreference } from '@/lib/locale'
+import { rememberQuickActionVisibility } from '@/lib/quick-action-visibility'
 import { updateRecentServers } from '@/lib/recent-servers'
 import {
   withRoomToken,
@@ -49,6 +50,7 @@ interface PersistedSettings {
   hapticsEnabled: boolean
   themeMode: ThemeMode
   language: LocalePreference
+  quickActionVisibility: Record<string, boolean>
 }
 
 /** 新安装与数据版本重置使用同一套默认值，不转换旧数据。 */
@@ -69,6 +71,7 @@ function defaultSettings(): PersistedSettings {
     hapticsEnabled: true,
     themeMode: 'system',
     language: 'system',
+    quickActionVisibility: {},
   }
 }
 
@@ -111,6 +114,11 @@ interface SettingsState {
   ttsAuto: boolean
   /** 对局触觉反馈（受伤/骰子等事件震动）；纯移动端体验，Web 无对应概念 */
   hapticsEnabled: boolean
+  /**
+   * 快捷行动建议的个人显隐，键见 lib/quick-action-visibility。新增字段无需升版本：
+   * persist 浅合并，旧数据里没有它就取初值 {}
+   */
+  quickActionVisibility: Record<string, boolean>
   /** 主题偏好；system 表示跟随设备主题 */
   themeMode: ThemeMode
   /** 界面语言偏好；system 表示跟随设备语言 */
@@ -146,6 +154,7 @@ interface SettingsState {
   setTtsEngine: (engine: TtsEngine) => void
   setTtsAuto: (enabled: boolean) => void
   setHapticsEnabled: (enabled: boolean) => void
+  setQuickActionVisibility: (key: string, visible: boolean) => void
   setThemeMode: (mode: ThemeMode) => void
   setLanguage: (language: LocalePreference) => void
   setSystemTheme: (theme: ResolvedTheme) => void
@@ -309,6 +318,8 @@ export const useSettingsStore = create<SettingsState>()(
       setTtsEngine: (ttsEngine) => set({ ttsEngine }),
       setTtsAuto: (ttsAuto) => set({ ttsAuto }),
       setHapticsEnabled: (hapticsEnabled) => set({ hapticsEnabled }),
+      setQuickActionVisibility: (key, visible) =>
+        set({ quickActionVisibility: rememberQuickActionVisibility(get().quickActionVisibility, key, visible) }),
       setThemeMode: (themeMode) => set({ themeMode }),
       setLanguage: (language) => set({ language }),
       setSystemTheme: (systemTheme) => set({ systemTheme }),
@@ -333,6 +344,7 @@ export const useSettingsStore = create<SettingsState>()(
         ttsEngine: state.ttsEngine,
         ttsAuto: state.ttsAuto,
         hapticsEnabled: state.hapticsEnabled,
+        quickActionVisibility: state.quickActionVisibility,
         themeMode: state.themeMode,
         language: state.language,
       }),

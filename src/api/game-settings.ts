@@ -1,6 +1,13 @@
 import { api, ApiError, errorCodeOf } from './client'
 import { getT } from '@/i18n/t'
-import { isLuckTimeoutSeconds, isNarrativePerspective, type NarrativePerspective } from '@/lib/game-settings'
+import {
+  isLuckTimeoutSeconds,
+  isNarrativePerspective,
+  parseSessionPreferences,
+  type NarrativePerspective,
+  type SessionPreferencesPatch,
+  type SessionPreferencesState,
+} from '@/lib/game-settings'
 import { AWAY_CONTROL_POLICIES, type AwayControlPolicy } from '@/lib/player-control'
 import { UserFacingError } from '@/lib/user-facing-error'
 
@@ -73,4 +80,38 @@ export async function setAwayControlPolicy(
   return result.away_control_policy === 'ai_takeover' || result.away_control_policy === 'pause'
     ? result.away_control_policy
     : policy
+}
+
+function preferencesPath(gameKey: string): string {
+  return `/games/${encodeURIComponent(gameKey)}/preferences`
+}
+
+function parsedPreferences(raw: unknown): SessionPreferencesState {
+  const parsed = parseSessionPreferences(raw)
+  if (!parsed) {
+    const result = (raw ?? {}) as SettingsResponse
+    throw new ApiError(result.error || getT()('settingFailed'), 200, errorCodeOf(result))
+  }
+  return parsed
+}
+
+/** 本局偏好（GM 专属，预览视角会 403）。 */
+export async function fetchSessionPreferences(gameKey: string, signal?: AbortSignal): Promise<SessionPreferencesState> {
+  return parsedPreferences(await api<unknown>(preferencesPath(gameKey), { signal }))
+}
+
+/**
+ * 只提交改动的字段；服务端拒收未知键（INVALID_PREFERENCES）。关掉孤注一掷会顺带
+ * 关闭进行中的申请并尝试继续本轮，所以保存后调用方要刷新对局状态。
+ */
+export async function patchSessionPreferences(
+  gameKey: string,
+  patch: SessionPreferencesPatch,
+  signal?: AbortSignal,
+): Promise<SessionPreferencesState> {
+  return parsedPreferences(await api<unknown>(preferencesPath(gameKey), {
+    method: 'POST',
+    body: JSON.stringify({ preferences: patch }),
+    signal,
+  }))
 }

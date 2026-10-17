@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, configureApiClient, errorMessage, hasRoomToken, hasSeatToken } from '@/api/client'
+import { getT } from '@/i18n/t'
 import { credentialKey } from '@/lib/seat-credentials'
 import type { GameStreamHandlers } from '@/stream/gameStream'
 import { useGameStore } from './game'
@@ -122,6 +123,7 @@ describe('REST 的玩家入口关闭', () => {
   it('带 error_code PLAYER_ACCESS_CLOSED 时给出专门提示；不带码的裸 403 照旧给通用提示', () => {
     const closed = errorMessage(new ApiError('本局玩家入口已关闭', 403, 'PLAYER_ACCESS_CLOSED'))
     expect(closed).not.toBe(errorMessage(new ApiError('本局玩家入口已关闭', 403)))
-    expect(closed).toBe(errorMessage(new ApiError('', 403, 'player_access_closed')))
+    // 错误码先精确命中、再回退小写 key：上游现在为大写码单独提供了「联系 GM 重新开放」的文案。
+    expect(closed).toBe(getT()('apiErrors.PLAYER_ACCESS_CLOSED'))
   })
 })

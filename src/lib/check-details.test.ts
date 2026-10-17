@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { CheckResult } from '@/api/types'
 
 import {
+  isCheckMasked,
   canDecideLuckOf,
   checkAccentOf,
   checkDetailOf,
@@ -179,5 +180,15 @@ describe('checkAccentOf / statusLabelKeyOf', () => {
     expect(statusLabelKeyOf('fumble')).toBe('dfCheckFumble')
     expect(statusLabelKeyOf('success')).toBe('checkSuccess')
     expect(statusLabelKeyOf('failure')).toBe('checkFailure')
+  })
+})
+
+describe('点击揭示遮罩', () => {
+  it('只有 click 模式且未揭示的检定才遮住', () => {
+    const check = { check_id: 'c1', roll: 42 }
+    expect(isCheckMasked('click', check, {})).toBe(true)
+    expect(isCheckMasked('click', check, { c1: { by: 'u', at: 't' } })).toBe(false)
+    expect(isCheckMasked('auto', check, {})).toBe(false)
+    expect(isCheckMasked('click', { roll: 1 }, {})).toBe(false)
   })
 })

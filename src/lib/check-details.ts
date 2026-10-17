@@ -137,3 +137,16 @@ export function statusLabelKeyOf(
   if (status === 'fumble') return 'dfCheckFumble'
   return status === 'success' ? 'checkSuccess' : 'checkFailure'
 }
+
+/**
+ * 点击揭示模式下这张检定卡是否仍遮住结果（对齐上游 CheckRevealCard 的 pendingClickReveal）。
+ * 揭示只是展示仪式：结果早已入账，所以没有 check_id 的旧数据无从记录揭示，直接显示。
+ */
+export function isCheckMasked(
+  mode: string | undefined,
+  check: CheckResult,
+  reveals: Record<string, unknown>,
+): boolean {
+  if (mode !== 'click' || !check.check_id) return false
+  return !reveals[String(check.check_id)]
+}

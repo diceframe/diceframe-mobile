@@ -13,16 +13,56 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Icon } from '@/components/ui/icon'
 import { Text } from '@/components/ui/text'
-import type { CheckResult } from '@/api/types'
+import { errorMessage } from '@/api/client'
+import type { CheckResult, PercentileDice } from '@/api/types'
 import { checkStatusOf, type CheckStatus } from '@/lib/check-status'
 import {
   checkAccentOf,
   checkDetailOf,
+  isCheckMasked,
   statusLabelKeyOf,
 } from '@/lib/check-details'
 import { useT } from '@/i18n/t'
 import type { TKey } from '@/i18n/keyset'
+import { tensLabel, validPercentileDice } from '@/lib/percentile-dice'
 import { cn } from '@/lib/utils'
+import { useGameStore } from '@/stores/game'
+
+import { PushDecisionPanel } from './PushDecisionPanel'
+
+/** CoC 奖励/惩罚骰明细（对齐上游 CocDiceFaces）：共享个位 + 每颗十位骰的组合，标出采用的那组 */
+function PercentileDiceFaces({ dice }: { dice: PercentileDice }) {
+  const t = useT()
+  return (
+    <View className="mt-1 gap-1">
+      <Text variant="small" className="text-muted-foreground">
+        {t('dfCocUnits')}: <Text variant="small" className="font-bold">{dice.units}</Text>
+      </Text>
+      <Text variant="small" className="text-muted-foreground">
+        {t('dfCocBonus')}: {dice.bonus_dice} · {t('dfCocPenalty')}: {dice.penalty_dice}
+      </Text>
+      <View className="flex-row flex-wrap gap-1.5" accessibilityLabel={t('dfCocTens')}>
+        {dice.tens.map((ten, index) => {
+          const taken = index === dice.taken_index
+          return (
+            <View
+              key={index}
+              className={cn(
+                'flex-row items-center gap-1.5 rounded-md border px-2 py-1',
+                taken ? 'border-success bg-success/10' : 'border-border',
+              )}
+            >
+              <Text variant="small" className="font-mono">
+                {tensLabel(ten)} + {dice.units} = {dice.candidates[index]}
+              </Text>
+              {taken ? <Text variant="small" className="text-success">{t('dfCocTaken')}</Text> : null}
+            </View>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
 
 /** 揭示动画时长：对齐 Web CheckRevealCard 的 720ms 骰子滚动 */
 const REVEAL_DURATION_MS = 720
@@ -40,6 +80,7 @@ const STATUS_TONE: Record<CheckStatus, StatusTone> = {
  * - 揭示动画（仅当前回合揭示卡传入 animate）：骰面滚动 720ms 后亮出结果
  * - 可展开明细：骰面、成功线、加值分解、优势说明、协助玩家
  * - 内嵌运气按钮：pending 时可当场花费/拒绝，已决议显示状态标记
+ * - 孤注一掷区：check.push 存在即展示（含历史卡的「原出目 → 重掷」记录）
  */
 export function CheckCard({
   check,
@@ -48,6 +89,8 @@ export function CheckCard({
   canDecideLuck = false,
   busy = false,
   onDecideLuck,
+  actorId = '',
+  isGm = false,
 }: {
   check: CheckResult
   className?: string
@@ -57,6 +100,9 @@ export function CheckCard({
   canDecideLuck?: boolean
   busy?: boolean
   onDecideLuck?: (check: CheckResult, spend: boolean) => void
+  /** 本端身份：孤注一掷按归属者 / GM 分别给按钮 */
+  actorId?: string
+  isGm?: boolean
 }) {
   const t = useT()
   // 「减少动态效果」开启时跳过滚动直接揭示，初始值 false 只影响首帧
@@ -116,6 +162,32 @@ export function CheckCard({
     return () => loop.stop()
   }, [rolling, reduceMotion, roll])
 
+  // 点击揭示模式：结果先遮住，GM 或行动者揭开后所有人可见（纯展示，不阻断回合）
+  const diceRevealMode = useGameStore((state) => state.diceRevealMode)
+  const checkReveals = useGameStore((state) => state.checkReveals)
+  const players = useGameStore((state) => state.players)
+  const [revealBusy, setRevealBusy] = React.useState(false)
+  const [revealError, setRevealError] = React.useState('')
+  const masked = isCheckMasked(diceRevealMode, check, checkReveals)
+  const revealRecord = check.check_id ? checkReveals[String(check.check_id)] : undefined
+  const canReveal = isGm || (!!actorId && actorId === check.actor_uid)
+  const revealerName = revealRecord
+    ? players.find((player) => player.user_id === revealRecord.by)?.character_name || revealRecord.by
+    : ''
+
+  async function reveal() {
+    if (!check.check_id || revealBusy) return
+    setRevealBusy(true)
+    setRevealError('')
+    try {
+      await useGameStore.getState().revealCheck(String(check.check_id))
+    } catch (cause) {
+      setRevealError(errorMessage(cause))
+    } finally {
+      setRevealBusy(false)
+    }
+  }
+
   const status = checkStatusOf(check)
   const statusKey = statusLabelKeyOf(status)
   const accent = checkAccentOf(status)
@@ -156,6 +228,35 @@ export function CheckCard({
 
   const luckPending = check.luck_decision === 'pending'
   const luckDecidedByMe = luckPending && canDecideLuck
+
+  if (masked) {
+    return (
+      <Card className={cn('gap-1.5 rounded-xl border border-l-4 border-l-border p-4', className)} accessibilityLabel={t('checkCardLabel', { name: actorLabel })}>
+        <View className="flex-row items-center gap-2.5">
+          <View className="h-10 w-10 items-center justify-center rounded-lg border border-border bg-muted">
+            <Text className="font-mono text-base text-muted-foreground">✦</Text>
+          </View>
+          <View className="min-w-0 flex-1 gap-0.5">
+            <Text variant="small" numberOfLines={1}>
+              {check.label || check.skill || check.attribute || t('dfCheckDefaultLabel')}
+            </Text>
+            {actorLabel ? (
+              <Text variant="small" className="text-muted-foreground" numberOfLines={1}>{actorLabel}</Text>
+            ) : null}
+          </View>
+          <StatusBadge tone="warning">{t('checkRevealPending')}</StatusBadge>
+        </View>
+        {canReveal ? (
+          <Button size="sm" className="ml-12 self-start" disabled={revealBusy} onPress={() => void reveal()}>
+            <Text>{t('checkRevealAction')}</Text>
+          </Button>
+        ) : (
+          <Text variant="small" className="ml-12 text-muted-foreground">{t('checkRevealWaiting')}</Text>
+        )}
+        {revealError ? <Text variant="small" className="ml-12 text-destructive">{revealError}</Text> : null}
+      </Card>
+    )
+  }
 
   return (
     <Card
@@ -242,6 +343,9 @@ export function CheckCard({
                   {t(row.key, row.options)}
                 </Text>
               ))}
+              {check.dice_mechanic === 'coc_bonus_penalty' && validPercentileDice(check.percentile_dice) ? (
+                <PercentileDiceFaces dice={check.percentile_dice} />
+              ) : null}
             </View>
           ) : null}
 
@@ -278,6 +382,16 @@ export function CheckCard({
             <Text variant="small" className="ml-12 text-muted-foreground">
               {t('luckDeclined')}
             </Text>
+          ) : null}
+
+          {diceRevealMode === 'click' && revealRecord ? (
+            <Text variant="small" className="ml-12 text-muted-foreground">
+              {t('checkRevealBy', { name: revealerName })}
+            </Text>
+          ) : null}
+
+          {check.push ? (
+            <PushDecisionPanel key={check.push.run_id} check={check} actorId={actorId} isGm={isGm} />
           ) : null}
         </>
       ) : null}

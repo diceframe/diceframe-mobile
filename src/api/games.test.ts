@@ -17,6 +17,7 @@ import {
   fetchWorldCandidates,
   fetchWorldTemplates,
   regenerateSwipe,
+  submitAction,
   switchSwipe,
   updateCharacterPortrait,
   updateRulesetCharacterProfile,
@@ -30,6 +31,13 @@ describe('games API query 契约', () => {
   beforeEach(() => {
     mockedApi.mockReset()
     mockedApi.mockResolvedValue({})
+  })
+
+  it('行动提交：指定技能才带 selected_skill', async () => {
+    await submitAction('g', '撬锁')
+    expect(JSON.parse(String(mockedApi.mock.lastCall?.[1]?.body))).toEqual({ text: '撬锁' })
+    await submitAction('g', '撬锁', '锁匠')
+    expect(JSON.parse(String(mockedApi.mock.lastCall?.[1]?.body))).toEqual({ text: '撬锁', selected_skill: '锁匠' })
   })
 
   it.each([undefined, 0, 2])('日志 page=%s 交给客户端序列化，保留首页 0', async (page) => {
