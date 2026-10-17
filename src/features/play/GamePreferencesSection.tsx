@@ -146,7 +146,7 @@ export function GamePreferencesSection({ gameKey }: { gameKey: string }) {
                 <Button
                   key={option.value}
                   variant={prefs.story_mode === option.value ? 'secondary' : 'outline'}
-                  className="h-auto min-h-11 items-start px-3 py-2.5"
+                  className="h-auto min-h-11 items-start justify-start px-3 py-2.5"
                   accessibilityRole="radio"
                   accessibilityState={{ checked: prefs.story_mode === option.value, disabled: busy }}
                   disabled={busy}
@@ -154,7 +154,7 @@ export function GamePreferencesSection({ gameKey }: { gameKey: string }) {
                     if (prefs.story_mode !== option.value) void change({ story_mode: option.value })
                   }}
                 >
-                  <View className="shrink gap-0.5">
+                  <View className="flex-1 gap-0.5">
                     <Text className="text-left">{t(option.label)}</Text>
                     <Text variant="muted" className="text-left">{t(option.hint)}</Text>
                   </View>

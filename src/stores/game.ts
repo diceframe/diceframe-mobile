@@ -99,14 +99,14 @@ import { isFinalClaimFailure } from '@/lib/seat-credentials'
 import { buildLevelUpAttributes } from '@/lib/level-up'
 import { UserFacingError } from '@/lib/user-facing-error'
 import { mergePendingLuck } from '@/lib/check-details'
-import type { PushOperation, PushRequestBody } from '@/lib/push-decision'
+import { pendingPostChecks, type PushOperation, type PushRequestBody } from '@/lib/push-decision'
 import { isStorySequence } from '@/lib/story'
 import {
   economyProposalList,
   isEconomyProposalActionable,
 } from '@/lib/economy-prompts'
 
-interface GameStore {
+export interface GameStore {
   gameKey: string
   userId: string
   isGm: boolean
@@ -1105,9 +1105,13 @@ export function selectCanAskKp(state: GameStore): boolean {
   return canAskKpQuestion(state.gameKey, state.userId, state.players, currentShare(), ownerAuthActive(state.gameKey))
 }
 
-/** “GM 思考中”：判定阶段 或 正在流式输出 */
+/**
+ * “GM 思考中”：判定阶段 或 正在流式输出。判定阶段里还有运气 / 孤注一掷待决时，
+ * 服务端其实在等玩家而不是在生成（对齐上游 serverJudging），不显示思考骨架。
+ */
 export function selectGmThinking(state: GameStore) {
-  return state.detail?.state === 'active_judgment' || state.liveNarration.length > 0 || state.liveStory !== null
+  const judging = state.detail?.state === 'active_judgment' && pendingPostChecks(state.detail).length === 0
+  return judging || state.liveNarration.length > 0 || state.liveStory !== null
 }
 
 /**
