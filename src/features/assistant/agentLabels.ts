@@ -43,6 +43,27 @@ export function agentKindLabel(t: T, kind: unknown): string {
 }
 
 /** 服务端 status 事件的常见取值本地化，其余原样 */
+const EXECUTION_STATUS_KEYS: Record<string, TKey> = {
+  succeeded: 'dfAgentExecSucceeded',
+  completed: 'dfAgentExecSucceeded',
+  failed: 'dfAgentExecFailed',
+  failed_plan: 'dfAgentExecFailed',
+  not_executed: 'dfAgentExecNotExecuted',
+  unconfirmed: 'dfAgentExecUnconfirmed',
+  partial: 'dfAgentExecPartial',
+  paused: 'dfAgentExecPaused',
+  cancelled: 'dfAgentExecCancelled',
+  interrupted: 'dfAgentExecInterrupted',
+  running: 'dfAgentExecRunning',
+  pending: 'dfAgentExecPending',
+}
+
+/** 批量计划与逐项目标的执行状态（对齐上游 AgentExecutionSummary 的 statusLabel）；未知值原样显示 */
+export function agentExecutionStatusLabel(t: T, status: string): string {
+  const key = EXECUTION_STATUS_KEYS[status]
+  return key ? t(key) : status
+}
+
 export function agentStatusLabel(t: T, status: string): string {
   if (status === 'idle') return t('dfAgentStatusIdle')
   if (status === 'approval_required') return t('dfAgentStatusApproval')

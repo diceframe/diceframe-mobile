@@ -33,7 +33,7 @@ import { useBackNavigation } from '@/hooks/use-back-navigation'
 import { AgentApprovalCard } from './AgentApprovalCard'
 import { AgentDraftCard } from './AgentDraftCard'
 import { AgentMarkdown } from './AgentMarkdown'
-import { agentRouteLabel, agentStatusLabel, agentToolLabel } from './agentLabels'
+import { agentExecutionStatusLabel, agentRouteLabel, agentStatusLabel, agentToolLabel } from './agentLabels'
 import { ConversationSheet } from './ConversationSheet'
 import { DiceFamiliar } from './DiceFamiliar'
 
@@ -212,10 +212,14 @@ export function AssistantScreen() {
   const hasTasks = draftList.length > 0 || !!pendingApproval || !!actionError || !!pendingNavigation
   const workspaceVisible = hasTasks || (streaming && !!status)
   const attention = !!actionError || !!pendingApproval?.expired || !!pendingApproval?.recovery_required
+  // 没跑完的批量计划显示执行状态（已暂停 / 部分完成…），不是「等待确认」
+  const approvalStatus = pendingApproval?.resumable
+    ? agentExecutionStatusLabel(t, pendingApproval.execution_status || 'paused')
+    : t('dfAgentStatusApproval')
   const workspaceStatus = attention
     ? t('dfAgentAttention')
     : pendingApproval
-      ? t('dfAgentStatusApproval')
+      ? approvalStatus
       : streaming || actionBusy
         ? t('dfAgentWorking')
         : draftList.length
@@ -352,7 +356,7 @@ export function AssistantScreen() {
               <View className="gap-2.5">
                 {pendingApproval || (streaming && status) ? (
                   <Text variant="small" className="text-muted-foreground">
-                    {t('dfAgentStatus')}: {pendingApproval ? t('dfAgentStatusApproval') : agentStatusLabel(t, status)}
+                    {t('dfAgentStatus')}: {pendingApproval ? approvalStatus : agentStatusLabel(t, status)}
                   </Text>
                 ) : null}
 
@@ -382,6 +386,7 @@ export function AssistantScreen() {
                     approval={pendingApproval}
                     busy={actionBusy}
                     onConfirm={() => void useAssistantStore.getState().confirmApproval(true)}
+                    onResume={() => void useAssistantStore.getState().resumeApproval()}
                     onCancel={() => void useAssistantStore.getState().cancelApproval()}
                   />
                 ) : null}

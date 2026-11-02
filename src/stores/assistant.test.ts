@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { AgentStreamHandlers } from '@/lib/assistant-agent'
+import type { AgentConfirmResult, AgentStreamHandlers } from '@/lib/assistant-agent'
 
 import { createAssistantStore, storageKeyOf, type AssistantDeps } from './assistant'
 
@@ -12,7 +12,8 @@ function setup(script?: (handlers: AgentStreamHandlers) => void | Promise<void>)
     stream: vi.fn(async (_messages, _language, handlers: AgentStreamHandlers) => {
       await script?.(handlers)
     }),
-    confirm: vi.fn(async () => ({ ok: true, result: { saved: true } })),
+    confirm: vi.fn(async (): Promise<AgentConfirmResult> => ({ ok: true, result: { saved: true } })),
+    resume: vi.fn(async (): Promise<AgentConfirmResult> => ({ ok: true, result: { done: true } })),
     review: vi.fn(async () => ({ ok: true, draft_id: 'dr1', review: { ok: true, kind: 'lorebook' }, approval: { ...approval, approval_id: 'a2', plan_digest: 'd2' } })),
     session: vi.fn(async () => ({ session_id: 's1', pending: null, drafts: {}, receipts: [] })),
     storage: {
@@ -95,6 +96,51 @@ describe('DF Agent 会话', () => {
     await store.getState().reviewDraft('dr1', { items: [] })
     expect(store.getState().pendingApproval).toMatchObject({ approval_id: 'a2' })
     expect(store.getState().pendingApproval?.expired).toBeUndefined()
+  })
+
+  it('批量计划没跑完：保留为可续跑的审批，不报失败；续跑完成后清掉', async () => {
+    const plan = { approval_id: 'p1', plan_digest: 'pd1', tool: 'apply_lorebook_visibility_plan' }
+    const { store, deps } = setup((h) => {
+      h.onAgentEvent?.('session', { session_id: 's1' })
+      h.onAgentEvent?.('approval', plan)
+    })
+    deps.confirm.mockResolvedValueOnce({
+      ok: false,
+      error: '部分目标失败',
+      pending: { ...plan, expires_at: 1, resumable: true, execution_status: 'partial', execution_state: { report: { status: 'partial', success_count: 1, failed_count: 1 } } },
+    })
+    await store.getState().load('http://a')
+    await store.getState().send('批量改可见性', 'zh-CN')
+    await store.getState().confirmApproval(true)
+    const paused = store.getState().pendingApproval
+    expect(paused).toMatchObject({ approval_id: 'p1', resumable: true, execution_status: 'partial' })
+    // 原审批时限已过也能续跑：服务端会开新的执行窗口
+    expect(paused?.expired).toBeUndefined()
+    expect(store.getState().actionError).toBe('')
+
+    await store.getState().resumeApproval()
+    expect(deps.resume).toHaveBeenCalledWith('s1', 'p1', 'pd1')
+    expect(store.getState().pendingApproval).toBeNull()
+    expect(store.getState().receipts.filter((r) => r.approval_id === 'p1')).toHaveLength(1)
+  })
+
+  it('续跑请求失败：保留计划和报告供重试；非可续跑审批不走续跑', async () => {
+    const plan = { approval_id: 'p1', plan_digest: 'pd1', tool: 'apply_lorebook_visibility_plan', resumable: true, execution_status: 'paused' }
+    const { store, deps } = setup((h) => {
+      h.onAgentEvent?.('session', { session_id: 's1' })
+      h.onAgentEvent?.('approval', plan)
+    })
+    deps.resume.mockRejectedValueOnce(new Error('Network request failed'))
+    await store.getState().load('http://a')
+    await store.getState().send('继续', 'zh-CN')
+    await store.getState().resumeApproval()
+    expect(store.getState().pendingApproval).toMatchObject({ approval_id: 'p1', resumable: true })
+    expect(store.getState().actionError).not.toBe('')
+
+    store.setState({ pendingApproval: { approval_id: 'a1', plan_digest: 'd1', tool: 'save_content' } })
+    deps.resume.mockClear()
+    expect(await store.getState().resumeApproval()).toBeUndefined()
+    expect(deps.resume).not.toHaveBeenCalled()
   })
 
   it('过期批准不能确认，只能取消', async () => {

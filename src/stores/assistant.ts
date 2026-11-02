@@ -16,6 +16,7 @@ import { create } from 'zustand'
 import {
   confirmAssistantAgent,
   getAssistantAgentSession,
+  resumeAssistantAgent,
   reviewAssistantAgent,
   streamAssistantAgent,
 } from '@/api/assistant'
@@ -23,6 +24,7 @@ import { ApiError, errorMessage } from '@/api/client'
 import { getT } from '@/i18n/t'
 import {
   AgentStreamError,
+  approvalAfterResult,
   fenceDirtyApproval,
   findReceipt,
   normaliseApproval,
@@ -53,6 +55,7 @@ import {
 export interface AssistantDeps {
   stream: typeof streamAssistantAgent
   confirm: typeof confirmAssistantAgent
+  resume: typeof resumeAssistantAgent
   review: typeof reviewAssistantAgent
   session: typeof getAssistantAgentSession
   storage: {
@@ -93,6 +96,8 @@ export interface AssistantState {
   restoreSession: () => Promise<void>
   confirmApproval: (approved?: boolean) => Promise<AgentConfirmResult | undefined>
   cancelApproval: () => Promise<AgentConfirmResult | undefined>
+  /** 可续跑的批量计划：只跑剩余目标 */
+  resumeApproval: () => Promise<AgentConfirmResult | undefined>
   reviewDraft: (draftId: string, draft: unknown) => Promise<void>
   saveDraft: (draftId: string, language: string) => Promise<void>
   /** 草稿表单一有改动就作废旧批准（服务端也撤回），防止确认的是改动前的内容 */
@@ -222,10 +227,24 @@ export function createAssistantStore(deps: AssistantDeps) {
       if (result.navigation) set({ navigation: safeNavigation(result.navigation) })
     }
 
+    /** confirm / resume / 回执的统一落地：没跑完的计划保留为待续跑，不当作失败报错 */
+    function applyApprovalResult(result: AgentConfirmResult, pending: AgentApproval, approved: boolean) {
+      set({
+        pendingApproval: fenceDirtyApproval(approvalAfterResult(result, pending, approved), dirtyDraftIds),
+        actionError: result.ok || result.pending ? '' : result.error || getT()('assistantError'),
+      })
+      addResult(result, pending.tool)
+    }
+
+    function cacheReceipt(pending: AgentApproval, response: AgentConfirmResult) {
+      const next: AgentReceipt = { approval_id: pending.approval_id, plan_digest: pending.plan_digest, result: response.result, response }
+      const rest = get().receipts.filter((item) => item.approval_id !== pending.approval_id || item.plan_digest !== pending.plan_digest)
+      set({ receipts: [...rest, next] })
+    }
+
     function adoptReceipt(pending: AgentApproval, receipt: AgentReceipt): AgentConfirmResult {
       const recovered = receiptResponse(receipt)
-      set({ pendingApproval: null, actionError: recovered.ok ? '' : recovered.error || getT()('assistantError') })
-      addResult(recovered, pending.tool)
+      applyApprovalResult(recovered, pending, true)
       return recovered
     }
 
@@ -398,12 +417,8 @@ export function createAssistantStore(deps: AssistantDeps) {
         try {
           const result = await deps.confirm(sessionId, pending.approval_id, pending.plan_digest, approved)
           if (current !== generation) return undefined
-          set({ pendingApproval: null })
-          if (result.ok && approved) {
-            set({ receipts: [...get().receipts, { approval_id: pending.approval_id, plan_digest: pending.plan_digest, result: result.result, response: result }] })
-          }
-          addResult(result, pending.tool)
-          if (!result.ok) set({ actionError: result.error || getT()('assistantError') })
+          if (approved && (result.ok || result.pending || result.partial)) cacheReceipt(pending, result)
+          applyApprovalResult(result, pending, approved)
           await persist()
           return result
         } catch (error) {
@@ -429,6 +444,29 @@ export function createAssistantStore(deps: AssistantDeps) {
       async cancelApproval() {
         get().stop()
         return get().confirmApproval(false)
+      },
+
+      async resumeApproval() {
+        const pending = get().pendingApproval
+        const sessionId = get().sessionId
+        if (!pending?.resumable || pending.expired || pending.recovery_required || !sessionId || get().actionBusy) return undefined
+        const current = generation
+        set({ actionBusy: true, actionError: '' })
+        try {
+          const result = await deps.resume(sessionId, pending.approval_id, pending.plan_digest)
+          if (current !== generation || get().sessionId !== sessionId) return undefined
+          if (result.ok || result.pending || result.partial) cacheReceipt(pending, result)
+          applyApprovalResult(result, pending, true)
+          await persist()
+          return result
+        } catch (error) {
+          if (current !== generation) return undefined
+          // 续跑失败保留计划和执行报告，让房主重试或明确取消（与上游一致）
+          set({ actionError: errorMessage(error) })
+          return undefined
+        } finally {
+          if (current === generation) set({ actionBusy: false })
+        }
       },
 
       async reviewDraft(draftId, draft) {
@@ -484,6 +522,7 @@ export function createAssistantStore(deps: AssistantDeps) {
 export const useAssistantStore = createAssistantStore({
   stream: streamAssistantAgent,
   confirm: confirmAssistantAgent,
+  resume: resumeAssistantAgent,
   review: reviewAssistantAgent,
   session: getAssistantAgentSession,
   storage: {

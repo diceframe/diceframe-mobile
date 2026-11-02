@@ -9,6 +9,9 @@
  *
  * 会改数据的工具不会直接执行：服务端先发 approval（带 approval_id + plan_digest），
  * 用户确认后 POST /agent/confirm 才执行；内容创作先发 draft，可编辑后 /agent/review 重审。
+ * 批量计划（目前是资料册可见性）执行到一半失败、被取消或遇到服务重启时，confirm 回包带 pending：
+ * 服务端仍挂着这份计划（resumable，附逐项执行报告），只能 POST /agent/resume 跑剩余目标或取消，
+ * 不能当作已结束清掉——否则下一轮服务端会重发审批并拒绝继续，用户只剩取消一条路。
  * 服务端只认房主（owner_authenticated），持分享链接的玩家用不了。
  */
 
@@ -49,6 +52,10 @@ export interface AgentApproval {
   expires_at?: number | string
   recovery_required?: boolean
   expired?: boolean
+  /** 已派发、可只跑剩余目标的批量计划（上游 #564） */
+  resumable?: boolean
+  execution_status?: string
+  execution_state?: { report?: unknown; [key: string]: unknown }
   preview?: unknown
 }
 
@@ -58,6 +65,8 @@ export interface AgentConfirmResult {
   navigation?: { route: string; query?: Record<string, unknown> }
   cancelled?: boolean
   partial?: boolean
+  /** 计划没跑完：服务端保留的待续跑审批（ok 只在全部完成时为真） */
+  pending?: AgentApproval | null
   error?: string
 }
 
@@ -285,6 +294,8 @@ export function safeNavigation(value: unknown): AssistantNavigation | null {
 /** expires_at 兼容秒 / 毫秒时间戳与 ISO 字符串 */
 export function approvalExpired(value: AgentApproval, now = Date.now()): boolean {
   if (value.recovery_required) return true
+  // 可续跑的计划已经派发过，原审批时限不该挡住房主显式续跑剩余目标（服务端会开新的执行窗口）
+  if (value.resumable) return false
   if (value.expires_at === undefined || value.expires_at === null) return false
   const numeric = typeof value.expires_at === 'number' || /^\d+(?:\.\d+)?$/.test(String(value.expires_at))
   const raw = numeric
@@ -307,7 +318,74 @@ export function normaliseApproval(value: unknown, now = Date.now()): AgentApprov
     preview: record.preview,
     recovery_required: record.recovery_required === true,
   }
+  if (record.resumable === true) approval.resumable = true
+  if (typeof record.execution_status === 'string') approval.execution_status = record.execution_status
+  if (record.execution_state && typeof record.execution_state === 'object' && !Array.isArray(record.execution_state)) {
+    approval.execution_state = record.execution_state as AgentApproval['execution_state']
+  }
   return approvalExpired(approval, now) ? { ...approval, expired: true } : approval
+}
+
+/**
+ * confirm / resume 回包之后还挂着哪份审批（对齐上游 applyApprovalResult）：
+ * 拒绝就清掉；服务端回了 pending 就换成它；partial 却没带 pending（旧服务端）保留原审批，
+ * 免得回执让任务看起来已完成、执行报告也跟着丢。
+ */
+export function approvalAfterResult(
+  result: AgentConfirmResult,
+  approval: AgentApproval,
+  approved: boolean,
+  now = Date.now(),
+): AgentApproval | null {
+  if (!approved) return null
+  if (result.pending) return normaliseApproval(result.pending, now)
+  if (result.partial) return approval
+  return null
+}
+
+export interface ExecutionTarget {
+  id: string
+  label: string
+  status: string
+  error?: string
+}
+
+export interface ExecutionReport {
+  status: string
+  succeeded?: number
+  failed?: number
+  notExecuted?: number
+  unconfirmed?: number
+  /** 只含执行报告里出现过的目标（带逐项状态），计划阶段的目标清单不在这里 */
+  targets: ExecutionTarget[]
+}
+
+/** 续跑卡片上的执行报告（对齐上游 AgentExecutionSummary 的 execution_state.report 读取） */
+export function executionReport(approval: AgentApproval): ExecutionReport | null {
+  const record = (value: unknown): Record<string, unknown> =>
+    value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+  const count = (value: unknown): number | undefined =>
+    typeof value === 'number' && Number.isFinite(value) ? value : Array.isArray(value) ? value.length : undefined
+  const text = (value: unknown): string => (typeof value === 'string' ? value : '')
+  const report = record(approval.execution_state?.report)
+  const status = text(report.status) || approval.execution_status || ''
+  const targets: ExecutionTarget[] = []
+  for (const raw of Array.isArray(report.targets) ? report.targets : []) {
+    const item = record(raw)
+    const id = text(item.id) || text(item.target_id) || text(item.book_id) || text(item.key) || `target-${targets.length}`
+    const label = text(item.label) || text(item.name) || id
+    const error = text(item.error)
+    targets.push({ id, label, status: text(item.status) || 'pending', ...(error ? { error } : {}) })
+  }
+  if (!status && !targets.length && !Object.keys(report).length) return null
+  return {
+    status,
+    succeeded: count(report.success_count),
+    failed: count(report.failed_count),
+    notExecuted: count(report.not_executed_count),
+    unconfirmed: count(report.unconfirmed_count),
+    targets,
+  }
 }
 
 /** 待批准操作关联的草稿（在 arguments / preview 里找 draft_id，最多下探 3 层） */
