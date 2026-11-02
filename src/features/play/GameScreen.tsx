@@ -572,6 +572,7 @@ export default function GameScreen() {
   // SSE 刷新到端上即自动换背景；无生成图（builtin/缺 asset_id）时保持素底。
   const backdropSource = sceneImageSource(gameKey, detail?.scene_image)
 
+  // 结团只读期间服务端拒收推进/回退（409 RUN_READ_ONLY），回合流程按钮跟输入框一起锁住。
   // GM 回合流程与问 GM / 桌面对话合并为一条横向滚动栏（与快捷行动条同款交互）：
   // 按钮自然宽度不再互相挤压，窄屏左右滑动；桌面管理入口只保留情境行一处。
   const composerTopControls =
@@ -587,7 +588,7 @@ export default function GameScreen() {
             <Button
               size="sm"
               className="shrink-0"
-              disabled={busy || hasBlockingEconomyProposal}
+              disabled={busy || hasBlockingEconomyProposal || runReadOnly !== null}
               onPress={() => void runGm(() => useGameStore.getState().advance())}
             >
               <Text>{t('dfPlayAdvance')}</Text>
@@ -596,7 +597,7 @@ export default function GameScreen() {
               size="sm"
               variant="outline"
               className="shrink-0"
-              disabled={busy}
+              disabled={busy || runReadOnly !== null}
               onPress={() => void runGm(() => useGameStore.getState().rollback())}
             >
               <Text>{t('dfPlayRollback')}</Text>
@@ -605,7 +606,7 @@ export default function GameScreen() {
               size="sm"
               variant="outline"
               className="shrink-0"
-              disabled={busy}
+              disabled={busy || runReadOnly !== null}
               onPress={() => void handleForceAdvance()}
             >
               <Icon as={ChevronsRight} size={16} />
