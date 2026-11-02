@@ -61,6 +61,7 @@ import { useT, type T } from '@/i18n/t'
 import { confirmDestructive } from '@/lib/confirm'
 import { toastNotice } from '@/components/patterns/toast'
 import { createGameLifecycle } from '@/lib/game-lifecycle'
+import { runReadOnlyOf } from '@/lib/game-state'
 import { overlayOpen } from '@/lib/overlay-focus'
 import {
   economyCurrencyLabel,
@@ -298,9 +299,9 @@ export default function GameScreen() {
   async function sendVoice(text: string) {
     // 录音/编辑期间对局可能已经变化，发送时重新检查当前状态。
     const current = useGameStore.getState()
-    if (current.gameKey !== gameKey || current.detail?.state === 'ended') {
-      throw new UserFacingError('dfPlayGameEnded')
-    }
+    if (current.gameKey !== gameKey) throw new UserFacingError('dfPlayGameEnded')
+    const readOnly = runReadOnlyOf(current.detail)
+    if (readOnly) throw new UserFacingError(readOnly === 'preparing' ? 'dfPlayRunPreparing' : 'dfPlayGameEnded')
     if (current.actionBusy || current.gmBusy) throw new UserFacingError('dfPlayVoiceSendBusy')
     if (recovery?.kind === 'refresh') throw new UserFacingError('dfRecoveryLocked')
     if (pendingPostChecks(current.detail).length) throw new UserFacingError('dfPostCheckWaiting')
@@ -482,7 +483,11 @@ export default function GameScreen() {
 
   // 运气与孤注一掷都会让叙事停在骰子卡上；只有运气时沿用上游的「运气决定」状态名
   const pendingChecks = pendingPostChecks(detail)
-  const stateLabel = pendingChecks.some((check) => check.push)
+  const runReadOnly = runReadOnlyOf(detail)
+  // 准备结团优先于其它进行中状态（与上游 PlayView 的 stateLabel 一致）
+  const stateLabel = runReadOnly === 'preparing'
+    ? t('preparing')
+    : pendingChecks.some((check) => check.push)
     ? t('dfPostCheckWaiting')
     : pendingChecks.length
     ? t('luckDecisionState')
@@ -491,16 +496,19 @@ export default function GameScreen() {
       : stateLabelOf(detail?.state, t)
   const recoveryLocked = recovery?.kind === 'refresh'
   const composerDisabled =
-    recoveryLocked || pendingChecks.length > 0 || hasBlockingEconomyProposal || detail?.state === 'ended'
-  const composerDisabledReason = recoveryLocked
+    recoveryLocked || pendingChecks.length > 0 || hasBlockingEconomyProposal || runReadOnly !== null
+  // 只读放在最前：结团后刷新解决不了，提示「先刷新」或「等检定」都会误导
+  const composerDisabledReason = runReadOnly === 'preparing'
+    ? t('dfPlayRunPreparing')
+    : runReadOnly === 'ended'
+    ? t('dfPlayGameEnded')
+    : recoveryLocked
     ? t('dfRecoveryLocked')
     : pendingChecks.length
     ? t('dfPostCheckWaiting')
     : hasBlockingEconomyProposal
       ? t('apiErrors.economy_decision_pending')
-      : detail?.state === 'ended'
-        ? t('dfPlayGameEnded')
-        : undefined
+      : undefined
 
   const statusBadge =
     streamStatus === 'live' ? (

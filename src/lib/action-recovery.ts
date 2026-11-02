@@ -3,14 +3,22 @@
  *
  * - ROUND_PROCESSING_FAILED：本轮处理失败已回滚到行动阶段，草稿可改后重发（editable）；
  * - ROUND_POST_COMMIT_FAILED：行动已入账、回合可能已推进——刷新后清空草稿，绝不能重发；
- * - ROUND_NOT_PROCESSED 与结果不确定的失败（断网、超时、5xx、未知码）：先刷新核对再决定。
+ * - ROUND_NOT_PROCESSED 与结果不确定的失败（断网、超时、5xx、未知码）：先刷新核对再决定；
+ * - CHECK_MODEL_NOT_CONFIGURED（502，独立检定模型未配置，行动已保留）、ROUND_ROLLBACK_FAILED（500，
+ *   回合恢复失败）同样先刷新，只是提示具体原因，免得玩家对着笼统的「结果不确定」反复重试。
  *
  * 移动端调整：服务端明确拒收的 4xx（校验失败、经济决议待处理等）本就没有副作用，
  * 沿用原有顶部错误横幅、草稿可直接改，不进恢复流程。
  */
 import { ApiError } from '@/api/client'
 
-export type ActionRecoveryCode = 'ROUND_PROCESSING_FAILED' | 'ROUND_POST_COMMIT_FAILED' | 'ROUND_NOT_PROCESSED' | 'UNKNOWN'
+export type ActionRecoveryCode =
+  | 'ROUND_PROCESSING_FAILED'
+  | 'ROUND_POST_COMMIT_FAILED'
+  | 'ROUND_NOT_PROCESSED'
+  | 'CHECK_MODEL_NOT_CONFIGURED'
+  | 'ROUND_ROLLBACK_FAILED'
+  | 'UNKNOWN'
 
 export interface ActionRecovery {
   code: ActionRecoveryCode
@@ -20,7 +28,13 @@ export interface ActionRecovery {
   confirmed: boolean
 }
 
-const ROUND_CODES = new Set<string>(['ROUND_PROCESSING_FAILED', 'ROUND_POST_COMMIT_FAILED', 'ROUND_NOT_PROCESSED'])
+const ROUND_CODES = new Set<string>([
+  'ROUND_PROCESSING_FAILED',
+  'ROUND_POST_COMMIT_FAILED',
+  'ROUND_NOT_PROCESSED',
+  'CHECK_MODEL_NOT_CONFIGURED',
+  'ROUND_ROLLBACK_FAILED',
+])
 
 export function actionRecoveryOf(error: unknown): ActionRecovery | null {
   const code = error instanceof ApiError ? (error.code ?? '').toUpperCase() : ''

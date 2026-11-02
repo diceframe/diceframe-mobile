@@ -56,6 +56,7 @@ export const play = {
     dfPlayMicReady: '麦克风已授权，请重新按住说话',
     dfPlayRecordingHint: '按住说话，松手发送；滑向左侧取消，滑向右侧转文字编辑',
     dfPlayGameEnded: '对局已结束，不能继续提交行动',
+    dfPlayRunPreparing: 'GM 正在准备尾声与结算，本局暂时不能提交行动。',
     // 时间线
     dfPlayRoundShort: '回合',
     dfPlayRoundLabel: '第 {{round}} 回合',
@@ -249,6 +250,7 @@ export const play = {
     dfPlayMicReady: 'Microphone enabled. Hold to talk again.',
     dfPlayRecordingHint: 'Hold to talk, release to send; slide left to cancel or right to edit text',
     dfPlayGameEnded: 'The game has ended; no further actions can be submitted.',
+    dfPlayRunPreparing: 'The GM is preparing the finale. Actions are temporarily frozen.',
     // Timeline
     dfPlayRoundShort: 'Round',
     dfPlayRoundLabel: 'Round {{round}}',
@@ -440,6 +442,7 @@ export const play = {
     dfPlayMicReady: 'マイクを許可しました。もう一度長押しして話してください',
     dfPlayRecordingHint: '長押しで話し、指を離して送信。左へスライドでキャンセル、右へスライドで文字を編集',
     dfPlayGameEnded: 'セッションは終了したため、これ以上アクションを送信できません',
+    dfPlayRunPreparing: 'GM がエピローグと精算を準備中のため、このセッションでは一時的に行動を送信できません。',
     // タイムライン
     dfPlayRoundShort: 'ラウンド',
     dfPlayRoundLabel: '第{{round}}ラウンド',
@@ -631,6 +634,7 @@ export const play = {
     dfPlayMicReady: 'Mikrofon freigegeben. Zum Sprechen erneut gedrückt halten.',
     dfPlayRecordingHint: 'Zum Sprechen halten, zum Senden loslassen; nach links ziehen zum Abbrechen, nach rechts zum Bearbeiten',
     dfPlayGameEnded: 'Das Spiel ist beendet. Es können keine weiteren Aktionen gesendet werden.',
+    dfPlayRunPreparing: 'Der GM bereitet Epilog und Abrechnung vor. Aktionen sind vorübergehend gesperrt.',
     // 时间线
     dfPlayRoundShort: 'Runde',
     dfPlayRoundLabel: 'Runde {{round}}',
