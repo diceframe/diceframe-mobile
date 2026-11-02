@@ -28,6 +28,8 @@ const NODE_KIND_KEYS: Record<string, TKey> = {
   decision: 'adventureNode_decision',
   milestone: 'adventureNode_milestone',
   reference: 'adventureNode_reference',
+  // 上游 Web 的节点类型表漏了 ending（直接显示英文原值），移动端补一个本地化标签
+  ending: 'dfAdventureNodeEnding',
 }
 
 const UNAVAILABLE_KEYS: Record<string, TKey> = {
