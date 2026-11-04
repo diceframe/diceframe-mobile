@@ -2,7 +2,6 @@ import * as React from 'react'
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg'
-import { getGlassCapabilities, LiquidGlassView } from 'react-native-liquid-glassmorphism'
 
 import {
   capsuleFill,
@@ -11,7 +10,6 @@ import {
   glassBackdropPalette,
   glassHighlight,
   glassTint,
-  shouldUseNativeGlass,
 } from '@/lib/glass'
 import type { ResolvedTheme } from '@/stores/settings'
 
@@ -62,25 +60,14 @@ export function GlassBackdrop({ theme, anchor = 'top' }: { theme: ResolvedTheme;
 }
 
 /**
- * 标签栏背景：背景画布的下沿一段 + 玻璃层。Android 13+ 用库的 AGSL 实时折射、iOS 用系统材质；
- * 其余平台（低版本 Android、Web）用半透明染色，原因见 lib/glass 的 shouldUseNativeGlass。
+ * 贴底标签栏背景：背景画布的下沿一段 + 淡染色 + 镜面高光。标签栏占位不叠在内容上，
+ * 背后只有环境光，不需要实时模糊。
  */
 export function GlassBarBackground({ theme, anchor = 'bottom' }: { theme: ResolvedTheme; anchor?: 'top' | 'bottom' }) {
-  const native = shouldUseNativeGlass(getGlassCapabilities().tier, Platform.OS)
   return (
     <View style={[StyleSheet.absoluteFill, styles.clip]}>
       <GlassBackdrop theme={theme} anchor={anchor} />
-      {native ? (
-        <LiquidGlassView
-          style={StyleSheet.absoluteFill}
-          variant="regular"
-          tintColor={glassTint(theme)}
-          intensity={65}
-          borderRadius={0}
-        />
-      ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: glassTint(theme) }]} />
-      )}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: glassTint(theme) }]} />
       <LinearGradient colors={capsuleSpecular(theme)} start={{ x: 0, y: 0 }} end={{ x: 0, y: 0.7 }} style={StyleSheet.absoluteFill} />
       <View style={[styles.highlight, { backgroundColor: glassHighlight(theme) }]} />
     </View>
@@ -88,10 +75,10 @@ export function GlassBarBackground({ theme, anchor = 'bottom' }: { theme: Resolv
 }
 
 /**
- * 悬浮胶囊 / 悬浮侧栏的玻璃面：填充 + 顶部镜面高光渐变 + 内描边。投影在外层 tabBarStyle 上
- * （这里裁圆角，阴影画在里面会被裁掉）。胶囊浮在页面内容上方，不再拼背景画布——
- * 底下滑过的就是真实内容：Android 13+ / iOS 由库折射或模糊，Web 用 CSS 模糊，
- * 低版本 Android 没有模糊，填充接近不透明（见 capsuleFill）。
+ * 自绘悬浮胶囊 / 悬浮侧栏的玻璃面（Android 手机胶囊走 react-native-liquid-tabs，不经过这里）：
+ * 填充 + 顶部镜面高光渐变 + 内描边。投影在外层 tabBarStyle 上（这里裁圆角，阴影画在里面会被裁掉）。
+ * 胶囊浮在页面内容上方，不再拼背景画布——底下滑过的就是真实内容：Web 用 CSS 模糊，
+ * 原生没有模糊，填充接近不透明（见 capsuleFill）。
  */
 export function GlassCapsuleBackground({ theme, radius, overContent }: {
   theme: ResolvedTheme
@@ -99,27 +86,17 @@ export function GlassCapsuleBackground({ theme, radius, overContent }: {
   /** 是否浮在会滚动的内容上方（手机胶囊是，平板侧栏不是——背后只有环境光，淡染色即可） */
   overContent: boolean
 }) {
-  const native = shouldUseNativeGlass(getGlassCapabilities().tier, Platform.OS)
-  const material = native || !overContent ? 'native' : Platform.OS === 'web' ? 'blur' : 'tint'
+  const material = !overContent ? 'ambient' : Platform.OS === 'web' ? 'blur' : 'tint'
   return (
     <View style={[StyleSheet.absoluteFill, styles.clip, { borderRadius: radius }]}>
-      {native ? (
-        <LiquidGlassView
-          style={StyleSheet.absoluteFill}
-          preset="floatingTabBar"
-          tintColor={capsuleFill(theme, material)}
-          borderRadius={radius}
-        />
-      ) : (
-        <View
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: capsuleFill(theme, material) },
-            // react-native-web 原样输出为 CSS backdrop-filter
-            material === 'blur' ? ({ backdropFilter: 'blur(24px) saturate(160%)' } as object) : null,
-          ]}
-        />
-      )}
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: capsuleFill(theme, material) },
+          // react-native-web 原样输出为 CSS backdrop-filter
+          material === 'blur' ? ({ backdropFilter: 'blur(24px) saturate(160%)' } as object) : null,
+        ]}
+      />
       <LinearGradient colors={capsuleSpecular(theme)} start={{ x: 0, y: 0 }} end={{ x: 0, y: 0.6 }} style={StyleSheet.absoluteFill} />
       <View style={[StyleSheet.absoluteFill, { borderRadius: radius, borderWidth: 1, borderColor: capsuleRim(theme) }]} />
     </View>

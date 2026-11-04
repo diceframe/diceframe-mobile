@@ -7,8 +7,8 @@ import { THEME } from './theme'
  * - 表面令牌换成半透明版本，经 NativeWind vars() 挂在根节点上覆盖 global.css 的同名变量，
  *   rnr 生成的 ui/ 组件不用改就跟着变；
  * - 页面底下铺一层环境光背景（GlassBackdrop），半透明表面才透得出颜色；
- * - 标签栏用 react-native-liquid-glassmorphism 的实时折射（Android 13+ / iOS 26），
- *   更老的系统由库自己降级为染色 + 描边。
+ * - Android 手机的悬浮胶囊标签栏用 react-native-liquid-tabs（Skia 水滴透镜，Android 12+ 实时模糊）；
+ *   贴底标签栏、平板侧栏和 Web 用自绘玻璃（染色 + 镜面高光 + 描边，Web 另加 CSS 模糊）。
  *
  * --background 刻意不动：开关滑块、对话框、对局场景遮罩都靠它保持不透明。
  * 没有实时模糊的平台上，抽屉这类叠在内容上方的面板必须接近不透明，所以 popover 只降一点。
@@ -73,7 +73,7 @@ export function surfaceCssVars(theme: ResolvedTheme, glass: boolean): Record<`--
   }
 }
 
-/** 标签栏等原生玻璃的染色：比卡片再淡一些，让折射出来的背景看得见 */
+/** 贴底标签栏 / 平板侧栏的染色：背后只有环境光背景，比卡片再淡一些，让光团透得出来 */
 export function glassTint(theme: ResolvedTheme): string {
   return withAlpha(THEME[theme].card, theme === 'light' ? 0.35 : 0.3)
 }
@@ -150,15 +150,15 @@ export const FLOATING_SIDEBAR = { margin: 12, radius: 28 } as const
 
 /**
  * 胶囊玻璃的填充：
- * - native：库做真模糊 / 折射，染色要淡，才看得见底下的内容；
+ * - ambient：背后只有环境光（平板侧栏不叠在内容上），淡染色即可；
  * - blur：Web 用 CSS backdrop-filter 真模糊，可以半透明；
- * - tint：没有模糊（低版本 Android），底下的文字会原样透出来，填充要接近不透明。
+ * - tint：叠在内容上又没有模糊（原生自绘胶囊），底下的文字会原样透出来，填充要接近不透明。
  */
-export type CapsuleMaterial = 'native' | 'blur' | 'tint'
+export type CapsuleMaterial = 'ambient' | 'blur' | 'tint'
 
 export function capsuleFill(theme: ResolvedTheme, material: CapsuleMaterial): string {
   const card = THEME[theme].card
-  if (material === 'native') return glassTint(theme)
+  if (material === 'ambient') return glassTint(theme)
   if (material === 'blur') return withAlpha(card, theme === 'light' ? 0.55 : 0.5)
   // 0.86 时深色下 14% 的透出仍能看清底下的字（SHV41 实测），0.94 只剩隐约轮廓
   return withAlpha(card, 0.94)
@@ -180,20 +180,6 @@ export function capsuleShadow(theme: ResolvedTheme): string {
   return theme === 'light'
     ? `0px 10px 28px ${withAlpha(THEME.light.foreground, 0.2)}`
     : `0px 12px 32px ${withAlpha(THEME.dark.background, 0.7)}`
-}
-
-/** react-native-liquid-glassmorphism 的设备能力档（与库的 GlassTier 一致） */
-export type NativeGlassTier = 'glass' | 'refraction' | 'blur' | 'tint' | 'none'
-
-/**
- * 是否挂原生液态玻璃。库在 Android 上每帧把整个根视图软件绘制一遍来截背景；
- * 在 API 28（SHV41 实测）上这会把整窗画成空白，而这些低版本只有「染色 + 描边」档，
- * 截图毫无用处。所以 Android 只在 13+ 的折射档用它，iOS 走系统材质（不截图）不受影响；
- * 其余情况用我们自己的半透明染色，观感与库的低档位一致。
- */
-export function shouldUseNativeGlass(tier: NativeGlassTier, os: string): boolean {
-  if (tier === 'glass' || tier === 'refraction') return true
-  return os === 'ios' && tier === 'blur'
 }
 
 /** 系统要求降低透明度（iOS「降低透明度」）时一律回到经典风格 */

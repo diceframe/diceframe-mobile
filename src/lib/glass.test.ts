@@ -14,7 +14,6 @@ import {
   glassHighlight,
   glassTint,
   isGlassActive,
-  shouldUseNativeGlass,
   surfaceCssVars,
   withAlpha,
 } from './glass'
@@ -131,13 +130,13 @@ describe('悬浮胶囊标签栏', () => {
     expect(floatingTabBarGeometry(-5).bottom).toBe(floatingTabBarGeometry(0).bottom)
   })
 
-  it.each(['light', 'dark'] as const)('%s：没有模糊时填充接近不透明，有模糊 / 原生折射时更通透', (theme) => {
+  it.each(['light', 'dark'] as const)('%s：叠在内容上又没模糊时接近不透明，有模糊 / 只叠环境光时更通透', (theme) => {
     const tint = alphaOf(capsuleFill(theme, 'tint'))
     const blur = alphaOf(capsuleFill(theme, 'blur'))
-    const native = alphaOf(capsuleFill(theme, 'native'))
+    const ambient = alphaOf(capsuleFill(theme, 'ambient'))
     expect(tint).toBeGreaterThanOrEqual(0.92)
     expect(blur).toBeLessThan(tint)
-    expect(native).toBeLessThan(blur)
+    expect(ambient).toBeLessThan(blur)
   })
 
   it.each(['light', 'dark'] as const)('%s：镜面高光从可见渐隐到全透明，描边与投影都是主题色加透明度', (theme) => {
@@ -146,20 +145,6 @@ describe('悬浮胶囊标签栏', () => {
     expect(alphaOf(to)).toBe(0)
     expect(alphaOf(capsuleRim(theme))).toBeGreaterThan(0)
     expect(capsuleShadow(theme)).toMatch(/^0px \d+px \d+px rgba\(\d+,\d+,\d+,0\.\d+\)$/)
-  })
-})
-
-describe('shouldUseNativeGlass', () => {
-  it('Android 只在 13+ 折射档挂原生玻璃；低版本（每帧截整窗会白屏）与 Web 用自绘染色', () => {
-    expect(shouldUseNativeGlass('refraction', 'android')).toBe(true)
-    expect(shouldUseNativeGlass('blur', 'android')).toBe(false)
-    expect(shouldUseNativeGlass('tint', 'android')).toBe(false)
-    expect(shouldUseNativeGlass('none', 'web')).toBe(false)
-  })
-
-  it('iOS 走系统材质不截图：26 的玻璃与更老版本的模糊都可以用', () => {
-    expect(shouldUseNativeGlass('glass', 'ios')).toBe(true)
-    expect(shouldUseNativeGlass('blur', 'ios')).toBe(true)
   })
 })
 
