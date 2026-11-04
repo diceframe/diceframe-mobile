@@ -58,11 +58,16 @@ afterEach(() => {
 })
 
 describe('1. 服务器身份：地址与实例一起锁定，#500+ 服务端缺 id 视为不符', () => {
-  it('resolveContentServer：读房主 config 取 id，并用空的 /status 探测能力（#500+ → strict）', async () => {
-    fetchMock.mockImplementation(async (url: string) => {
+  it('resolveContentServer：读房主 config 取 id，并用 /status 探测能力（#500+ → strict）', async () => {
+    // 按真实服务端行为模拟：空 items 回 400 REQUEST_INVALID（响应仍带实例 id），不存在的 id 回 exists:false
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
       const path = new URL(url).pathname
       if (path === '/api/config') return json({ server_instance_id: SRV })
-      return json({ ok: true, items: [], server_instance_id: SRV })
+      const items = (JSON.parse(String(init.body)) as { items: { kind: string; canonical_id: string }[] }).items
+      if (!items.length) {
+        return json({ ok: false, error_code: 'REQUEST_INVALID', error: 'items must be a non-empty list', server_instance_id: SRV }, 400)
+      }
+      return json({ ok: true, items: items.map((item) => ({ ...item, exists: false, state_token: '', provenance: null })), server_instance_id: SRV })
     })
     await expect(resolveContentServer()).resolves.toEqual(server({ strict: true, hasStatus: true }))
   })

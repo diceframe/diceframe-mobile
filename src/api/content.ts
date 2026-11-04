@@ -178,10 +178,17 @@ export function serverInstanceIdFromConfig(config: AppConfig, hasOwnerCredential
 }
 
 /**
- * 锁定本次同步的服务器：房主 config 给实例 id，再用一次空的 /status 探测能力。
+ * /status 能力探测查询的 id。/status 拒收空 items（400 REQUEST_INVALID），探测必须带一项；
+ * 查不存在的 id 只回 exists:false，不报错。character_template 是每台服务器都有的种类
+ * （lorebook 可能被关掉，会回 KIND_NOT_SUPPORTED）。
+ */
+const STATUS_PROBE_ITEM = { kind: 'character_template', canonical_id: 'df-mobile-status-probe' } as const
+
+/**
+ * 锁定本次同步的服务器：房主 config 给实例 id，再用一次 /status 探测能力。
  * 房主 config 在 #494 与 #500 上都带 server_instance_id，分不出新旧；/status 是 #500
  * 才有的端点，且它的响应带实例 id——有它就按 strict 处理（之后缺 id 即不符）。
- * 空探测会计入写入限流（一次）。
+ * 探测会计入写入限流（一次）。
  */
 export async function resolveContentServer(): Promise<ContentServer> {
   const baseUrl = currentBaseUrl()
@@ -189,7 +196,7 @@ export async function resolveContentServer(): Promise<ContentServer> {
   const serverInstanceId = serverInstanceIdFromConfig(config, !!currentToken())
   const pending: ContentServer = { serverInstanceId, baseUrl, strict: false, hasStatus: false }
   try {
-    const probe = await contentRequest<ContentStatusResponse>(pending, '/content/status', { items: [] })
+    const probe = await contentRequest<ContentStatusResponse>(pending, '/content/status', { items: [STATUS_PROBE_ITEM] })
     const advertised = isRecord(probe) && typeof probe.server_instance_id === 'string' && !!probe.server_instance_id
     return { ...pending, hasStatus: true, strict: advertised }
   } catch (error) {
