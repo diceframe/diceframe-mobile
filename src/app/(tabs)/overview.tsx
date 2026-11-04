@@ -26,6 +26,7 @@ import { confirmDestructive } from '@/lib/confirm'
 import { useThemeToken } from '@/lib/theme'
 import { useT } from '@/i18n/t'
 import { useAppUpdates } from '@/hooks/useAppUpdates'
+import { useTabBarOverlap } from '@/lib/tab-bar-overlap'
 
 type SortMode = 'recent' | 'oldest' | 'name' | 'round'
 
@@ -101,6 +102,8 @@ function OverviewContent({
   onCreate: () => void
   onOpen: (key: string) => void
 }) {
+  // 悬浮胶囊标签栏盖住的底部高度：列表滑到胶囊下面，滚到底时最后一张卡不被挡住
+  const tabBarOverlap = useTabBarOverlap()
   const t = useT()
   const border = useThemeToken('border')
 
@@ -147,7 +150,7 @@ function OverviewContent({
       data={sorted}
       numColumns={columns}
       keyExtractor={(item) => item.game_key}
-      contentContainerStyle={{ paddingBottom: 32 }}
+      contentContainerStyle={{ paddingBottom: 32 + tabBarOverlap }}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={mutedForeground} />

@@ -3,10 +3,10 @@ import '@/global.css'
 import * as React from 'react'
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, router, usePathname } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import { useColorScheme } from 'react-native'
+import { Platform, useColorScheme, View } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
-import { cssInterop, useColorScheme as useNativeWindColorScheme } from 'nativewind'
+import { cssInterop, useColorScheme as useNativeWindColorScheme, vars } from 'nativewind'
 import { PortalHost } from '@rn-primitives/portal'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
@@ -20,7 +20,9 @@ import { useServerCompatCheck } from '@/hooks/useServerCompatCheck'
 import { joinBounceKey, shouldBounceToJoin } from '@/lib/join-bounce'
 import { joinLinkParams } from '@/lib/join-deep-link'
 import { buildShareLink } from '@/lib/share-link'
+import { glassCssVars, surfaceCssVars } from '@/lib/glass'
 import { useResolvedTheme, useThemeToken } from '@/lib/theme'
+import { useGlass } from '@/lib/use-glass'
 import { useSettingsStore } from '@/stores/settings'
 import { resetTo } from '@/hooks/use-back-navigation'
 
@@ -37,6 +39,10 @@ export default function RootLayout() {
   const theme = useResolvedTheme()
   const background = useThemeToken('background')
   const { setColorScheme } = useNativeWindColorScheme()
+  const glass = useGlass()
+  const glassVars = glass.active ? glassCssVars(glass.theme) : null
+  // 两种风格都挂同一组变量（见 surfaceCssVars），切换时不重挂整棵树
+  const surfaceVars = surfaceCssVars(glass.theme, glass.active)
   const pathname = usePathname()
   // 凭证被拒的回调在请求链路里触发，读的是当时所在页面；加入页自己就地处理
   const pathnameRef = React.useRef(pathname)
@@ -92,6 +98,16 @@ export default function RootLayout() {
     })
   }, [])
 
+  // Web 上 Modal 渲染在 body 下的 portal 里，CSS 变量继承不到包裹层：同一组覆盖值也写到 :root
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined' || !glassVars) return
+    const root = document.documentElement
+    for (const [name, value] of Object.entries(glassVars)) root.style.setProperty(name, value)
+    return () => {
+      for (const name of Object.keys(glassVars)) root.style.removeProperty(name)
+    }
+  }, [glassVars])
+
   if (!hydrated) return null
 
   return (
@@ -100,15 +116,18 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ThemeProvider value={theme === 'dark' ? DarkTheme : DefaultTheme}>
           <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: background },
-            }}
-          />
-          <PortalHost />
-          {/* 应用内 toast：错误与操作提示不再占输入区排版，顶部居中不挡底部输入。 */}
-          <Toaster position="top-center" richColors />
+          {/* 液态玻璃：表面令牌在这一层整体换成半透明版本（lib/glass），Modal 与 Portal 内容同样继承 */}
+          <View style={[{ flex: 1 }, vars(surfaceVars)]}>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: background },
+              }}
+            />
+            <PortalHost />
+            {/* 应用内 toast：错误与操作提示不再占输入区排版，顶部居中不挡底部输入。 */}
+            <Toaster position="top-center" richColors />
+          </View>
         </ThemeProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>

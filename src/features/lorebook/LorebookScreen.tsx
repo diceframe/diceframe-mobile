@@ -26,6 +26,7 @@ import {
   type LorebookEntryView,
 } from '@/lib/lorebook'
 import { cn } from '@/lib/utils'
+import { tabBarContentInset, useTabBarOverlap } from '@/lib/tab-bar-overlap'
 
 /** 分类筛选值：'all' 之外直接用服务端类型 key，展示名经 t() 翻译 */
 type CategoryFilter = 'all' | LoreType
@@ -75,6 +76,7 @@ function visibilityBadgeIcon(mode: LoreVisibilityMode) {
 
 export default function LorebookScreen() {
   const t = useT()
+  const tabBarOverlap = useTabBarOverlap()
   const router = useRouter()
   const { worlds, worldId, setWorldId, entries, loading, error, refresh, addWorld, addEntry, updateEntry, deleteEntry } = useLorebook()
   const [category, setCategory] = React.useState<CategoryFilter>('all')
@@ -214,6 +216,7 @@ export default function LorebookScreen() {
         keyExtractor={(item) => item.id}
         className="flex-1"
         contentContainerClassName="gap-2 pb-8"
+        contentContainerStyle={tabBarContentInset(tabBarOverlap, 32)}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
           <Pressable onPress={() => openEdit(item)}>

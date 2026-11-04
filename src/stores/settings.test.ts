@@ -60,6 +60,28 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     expect(useSettingsStore.getState().themeMode).toBe('dark')
   })
 
+  it('界面风格默认经典，可切到液态玻璃', () => {
+    expect(useSettingsStore.getState().uiStyle).toBe('classic')
+    useSettingsStore.getState().setUiStyle('glass')
+    expect(useSettingsStore.getState().uiStyle).toBe('glass')
+    useSettingsStore.getState().setUiStyle('classic')
+  })
+
+  it('没有 uiStyle 的 v3 旧数据照常恢复，界面风格取经典（新增字段不升版本）', async () => {
+    const before = useSettingsStore.getState()
+    useSettingsStore.setState({ ...useSettingsStore.getInitialState() })
+    await AsyncStorage.setItem('diceframe-settings', JSON.stringify({
+      version: 3,
+      state: { baseUrl: 'http://keep:18000', token: 'kept', themeMode: 'dark', language: 'de' },
+    }))
+    await useSettingsStore.persist.rehydrate()
+    expect(useSettingsStore.getState()).toMatchObject({
+      baseUrl: 'http://keep:18000', token: 'kept', themeMode: 'dark', language: 'de', uiStyle: 'classic', glassTabBar: 'floating',
+    })
+    // 本文件的用例共用一个 store，恢复原状态免得影响后面的断言
+    useSettingsStore.setState(before)
+  })
+
   it('语言偏好默认跟随系统，可显式覆盖', () => {
     expect(useSettingsStore.getState().language).toBe('system')
     useSettingsStore.getState().setLanguage('en')
@@ -265,6 +287,8 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
       ttsAuto: true,
       hapticsEnabled: true,
       themeMode: 'system',
+      uiStyle: 'classic',
+      glassTabBar: 'floating',
       language: 'system',
       quickActionVisibility: {},
       assistantReactions: true,
@@ -290,6 +314,8 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     store.storeRoomToken('http://new:18000', 'new-game', 'room-a')
     store.activateShare('new-game')
     store.setThemeMode('light')
+    store.setUiStyle('glass')
+    store.setGlassTabBar('docked')
     store.setLanguage('en')
     const saved = await AsyncStorage.getItem('diceframe-settings')
     const sessionToken = currentSessionToken()
@@ -313,6 +339,8 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
         activeShareGame: 'new-game',
         hydrated: true,
         themeMode: 'light',
+        uiStyle: 'glass',
+        glassTabBar: 'docked',
         language: 'en',
       })
       expect(activeIdentityOf(useSettingsStore.getState())).toEqual(identity)

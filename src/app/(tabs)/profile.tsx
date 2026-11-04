@@ -29,6 +29,7 @@ import { useT } from '@/i18n/t'
 import { LANGUAGE_OPTIONS, THEME_OPTIONS, type SettingsSection } from '@/features/settings/config'
 import { useAssistantStore } from '@/stores/assistant'
 import { activeIdentityOf, useSettingsStore } from '@/stores/settings'
+import { tabBarContentInset, useTabBarOverlap } from '@/lib/tab-bar-overlap'
 
 interface MenuRowProps {
   icon: typeof Server
@@ -71,6 +72,7 @@ function MenuGroup({ children }: { children: React.ReactNode }) {
 export default function ProfileScreen() {
   const router = useRouter()
   const t = useT()
+  const tabBarOverlap = useTabBarOverlap()
   const settings = useSettingsStore()
   const activeIdentity = activeIdentityOf(settings)
   const identity = settings.token ? t('dfProfileGmLoggedIn') : activeIdentity ? activeIdentity.name || t('dfProfilePlayerJoined') : t('dfSettingsNotLoggedIn')
@@ -87,7 +89,7 @@ export default function ProfileScreen() {
   return (
     <Screen className="px-4" style={{ width: '100%', maxWidth: 760, alignSelf: 'center' }}>
       <PageHeader title={t('dfTabProfile')} subtitle={t('dfProfileSubtitle')} className="px-0" />
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-4 pb-8">
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerClassName="gap-4 pb-8" contentContainerStyle={tabBarContentInset(tabBarOverlap, 32)}>
         {/* 身份摘要卡：点击直达「身份与登录」，通用偏好仍走下方设置组，避免重复入口 */}
         <Pressable
           className="flex-row items-center gap-4 rounded-xl border border-border bg-card px-5 py-5 active:bg-accent"

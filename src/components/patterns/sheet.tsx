@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { appLayoutForWidth } from '@/lib/layout'
 import { useKeyboardHeight } from '@/lib/use-keyboard-height'
 import { useOverlayHold } from '@/lib/overlay-focus'
+import { useGlass } from '@/lib/use-glass'
 import { cn } from '@/lib/utils'
 
 type SheetProps = {
@@ -35,6 +36,8 @@ export function Sheet({
   const keyboardHeight = useKeyboardHeight()
   const { width } = useWindowDimensions()
   const { isTablet } = appLayoutForWidth(width)
+  // 液态玻璃下 card 是半透明的；抽屉叠在页面内容上方又没有实时模糊，改用接近不透明的 popover
+  const glass = useGlass()
   // 打开期间主窗口的 blur 是本面板造成的，对局页据此不暂停实时连接（见 lib/overlay-focus）
   useOverlayHold(open)
   return (
@@ -53,8 +56,9 @@ export function Sheet({
           <Pressable className="absolute inset-0 bg-black/60" onPress={onClose} />
           <View
             className={cn(
-              'max-h-[90%] border-border bg-card px-5 pt-2',
-              isTablet ? 'w-full rounded-xl border' : 'rounded-t-xl border-t',
+              'max-h-[90%] border-border px-5 pt-2',
+              glass.active ? 'bg-popover' : 'bg-card',
+              isTablet ? cn('w-full border', glass.active ? 'rounded-3xl' : 'rounded-xl') : cn('border-t', glass.active ? 'rounded-t-3xl' : 'rounded-t-xl'),
               className,
             )}
             style={{

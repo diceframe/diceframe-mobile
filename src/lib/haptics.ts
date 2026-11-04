@@ -18,6 +18,7 @@ export type HapticEvent =
   | 'critical' // 检定大成功
   | 'fumble' // 检定大失败
   | 'submit' // 行动提交成功的轻确认（仅 UI 直调，不从叙事推导）
+  | 'select' // 标签栏拖过 / 点到另一个标签的轻触（仅 UI 直调）
 
 /**
  * 同一批叙事可能同时携带多个语义（COMBAT + HP:-3 + LOOT…），
@@ -34,6 +35,7 @@ const EVENT_PRIORITY: HapticEvent[] = [
   'reward',
   'decision',
   'submit',
+  'select',
 ]
 
 export function pickStrongest(events: readonly HapticEvent[]): HapticEvent | null {
@@ -108,6 +110,7 @@ const ANDROID_PATTERNS: Record<HapticEvent, number[]> = {
   critical: [0, 40, 50, 40, 50, 40, 50, 140], // 连点收长音
   fumble: [0, 300, 120, 300], // 双重长震
   submit: [0, 20], // 极轻确认
+  select: [0, 15], // 选择刻度：比提交更短更脆，拖过多个标签时一格一下
 }
 
 export function patternFor(event: HapticEvent): number[] {
@@ -134,6 +137,7 @@ const IOS_SPECS: Record<HapticEvent, HapticSpec> = {
   critical: { kind: 'notification', type: 'success', repeats: 2, gapMs: 130 },
   fumble: { kind: 'impact', style: 'heavy', repeats: 2, gapMs: 220 },
   submit: { kind: 'impact', style: 'light' },
+  select: { kind: 'impact', style: 'soft' },
 }
 
 export function specFor(event: HapticEvent): HapticSpec {

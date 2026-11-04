@@ -28,6 +28,7 @@ import { useT } from '@/i18n/t'
 import type { CharacterCardPatch } from '@/lib/character-card'
 import type { EditorSnapshot } from '@/lib/local-library/card-edit'
 import { confirmDestructive } from '@/lib/confirm'
+import { tabBarContentInset, useTabBarOverlap } from '@/lib/tab-bar-overlap'
 
 type LibraryTab = 'local' | 'server'
 
@@ -110,6 +111,7 @@ type EditorTarget =
  */
 export default function CharactersScreen() {
   const t = useT()
+  const tabBarOverlap = useTabBarOverlap()
   const server = useCharacters()
   const local = useLocalCards()
   const localAvailable = local.cards !== null
@@ -167,6 +169,7 @@ export default function CharactersScreen() {
         keyExtractor={(item) => cardId(item)}
         className="flex-1"
         contentContainerClassName="gap-2 pb-8"
+        contentContainerStyle={tabBarContentInset(tabBarOverlap, 32)}
         refreshing={server.loading}
         onRefresh={() => void server.refresh()}
         showsVerticalScrollIndicator={false}
@@ -202,6 +205,7 @@ export default function CharactersScreen() {
         keyExtractor={(item) => item.localId}
         className="flex-1"
         contentContainerClassName="gap-2 pb-8"
+        contentContainerStyle={tabBarContentInset(tabBarOverlap, 32)}
         refreshing={local.loading}
         onRefresh={() => void local.refresh()}
         showsVerticalScrollIndicator={false}
