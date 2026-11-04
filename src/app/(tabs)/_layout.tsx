@@ -3,9 +3,11 @@ import { useWindowDimensions } from 'react-native'
 import { Tabs } from 'expo-router'
 
 
+import { GlassBarBackground } from '@/components/patterns/glass-backdrop'
 import { useT } from '@/i18n/t'
 import { appLayoutForWidth } from '@/lib/layout'
 import { useThemeToken } from '@/lib/theme'
+import { useGlass } from '@/lib/use-glass'
 
 /**
  * 一级页面：对局列表 + 我的（选中态用 goldStrong 强化对比，与 Web 同一色族）。
@@ -21,6 +23,9 @@ export default function TabsLayout() {
   const mutedForeground = useThemeToken('mutedForeground')
   const card = useThemeToken('card')
   const border = useThemeToken('border')
+  const glass = useGlass()
+  // 液态玻璃：栏本身透明，背景交给原生玻璃 + 环境光画布（平板侧栏贴上沿，手机底栏贴下沿）
+  const barColor = glass.active ? 'transparent' : card
 
   return (
     <Tabs
@@ -32,8 +37,11 @@ export default function TabsLayout() {
         tabBarVariant: isTablet ? 'material' : 'uikit',
         tabBarLabelPosition: isTablet ? 'beside-icon' : 'below-icon',
         tabBarStyle: isTablet
-          ? { width: navigationSidebarWidth, backgroundColor: card, borderRightColor: border }
-          : { backgroundColor: card, borderTopColor: border },
+          ? { width: navigationSidebarWidth, backgroundColor: barColor, borderRightColor: border, ...(glass.active ? { borderRightWidth: 0 } : null) }
+          : { backgroundColor: barColor, borderTopColor: border, ...(glass.active ? { borderTopWidth: 0 } : null) },
+        tabBarBackground: glass.active
+          ? () => <GlassBarBackground theme={glass.theme} anchor={isTablet ? 'top' : 'bottom'} />
+          : undefined,
         tabBarItemStyle: isTablet ? { minHeight: 52 } : undefined,
         tabBarLabelStyle: { fontSize: isTablet ? 14 : 11 },
         sceneStyle: { backgroundColor: card },

@@ -3,11 +3,13 @@ import {
   CircleX,
   Coins,
   Dices,
+  Droplets,
   HeartCrack,
   Monitor,
   Moon,
   Skull,
   Sparkles,
+  Square,
   Sun,
   Swords,
 } from 'lucide-react-native'
@@ -64,6 +66,12 @@ export const THEME_OPTIONS = [
   { value: 'system', labelKey: 'dfSettingsThemeSystem', descKey: 'dfSettingsThemeSystemDesc', icon: Monitor },
   { value: 'light', labelKey: 'dfSettingsThemeLight', descKey: 'dfSettingsThemeLightDesc', icon: Sun },
   { value: 'dark', labelKey: 'dfSettingsThemeDark', descKey: 'dfSettingsThemeDarkDesc', icon: Moon },
+] as const
+
+/** 界面风格（与明暗主题正交，见 lib/glass） */
+export const UI_STYLE_OPTIONS = [
+  { value: 'classic', labelKey: 'dfUiStyleClassic', descKey: 'dfUiStyleClassicDesc', icon: Square },
+  { value: 'glass', labelKey: 'dfUiStyleGlass', descKey: 'dfUiStyleGlassDesc', icon: Droplets },
 ] as const
 
 // 语言名用各自母语展示（切换语言前也要能认出来），不进文案字典；
