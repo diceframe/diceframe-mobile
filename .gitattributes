@@ -1,0 +1,3 @@
+# patch-package 的补丁按 LF 应用到 node_modules（文件本身是 LF）；
+# Windows 检出若把补丁转成 CRLF，新增行会混进回车符。
+patches/*.patch text eol=lf
