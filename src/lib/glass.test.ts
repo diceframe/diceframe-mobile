@@ -4,6 +4,11 @@ import { resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  capsuleFill,
+  capsuleRim,
+  capsuleShadow,
+  capsuleSpecular,
+  floatingTabBarGeometry,
   glassBackdropPalette,
   glassCssVars,
   glassHighlight,
@@ -113,6 +118,34 @@ describe('glassBackdropPalette', () => {
       expect(glow.opacity).toBeGreaterThan(0)
       expect(glow.opacity).toBeLessThan(0.5)
     }
+  })
+})
+
+describe('悬浮胶囊标签栏', () => {
+  it('药丸形：圆角是高度一半；底边距叠在系统安全区上；内容留白覆盖胶囊与底边距', () => {
+    const g = floatingTabBarGeometry(34)
+    expect(g.radius).toBe(g.height / 2)
+    expect(g.bottom).toBeGreaterThan(34)
+    expect(g.side).toBeGreaterThan(0)
+    expect(g.overlap).toBeGreaterThan(g.height + g.bottom)
+    expect(floatingTabBarGeometry(-5).bottom).toBe(floatingTabBarGeometry(0).bottom)
+  })
+
+  it.each(['light', 'dark'] as const)('%s：没有模糊时填充接近不透明，有模糊 / 原生折射时更通透', (theme) => {
+    const tint = alphaOf(capsuleFill(theme, 'tint'))
+    const blur = alphaOf(capsuleFill(theme, 'blur'))
+    const native = alphaOf(capsuleFill(theme, 'native'))
+    expect(tint).toBeGreaterThanOrEqual(0.92)
+    expect(blur).toBeLessThan(tint)
+    expect(native).toBeLessThan(blur)
+  })
+
+  it.each(['light', 'dark'] as const)('%s：镜面高光从可见渐隐到全透明，描边与投影都是主题色加透明度', (theme) => {
+    const [from, to] = capsuleSpecular(theme)
+    expect(alphaOf(from)).toBeGreaterThan(0)
+    expect(alphaOf(to)).toBe(0)
+    expect(alphaOf(capsuleRim(theme))).toBeGreaterThan(0)
+    expect(capsuleShadow(theme)).toMatch(/^0px \d+px \d+px rgba\(\d+,\d+,\d+,0\.\d+\)$/)
   })
 })
 

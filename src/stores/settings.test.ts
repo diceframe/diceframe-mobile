@@ -76,7 +76,7 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     }))
     await useSettingsStore.persist.rehydrate()
     expect(useSettingsStore.getState()).toMatchObject({
-      baseUrl: 'http://keep:18000', token: 'kept', themeMode: 'dark', language: 'de', uiStyle: 'classic',
+      baseUrl: 'http://keep:18000', token: 'kept', themeMode: 'dark', language: 'de', uiStyle: 'classic', glassTabBar: 'floating',
     })
     // 本文件的用例共用一个 store，恢复原状态免得影响后面的断言
     useSettingsStore.setState(before)
@@ -288,6 +288,7 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
       hapticsEnabled: true,
       themeMode: 'system',
       uiStyle: 'classic',
+      glassTabBar: 'floating',
       language: 'system',
       quickActionVisibility: {},
       assistantReactions: true,
@@ -314,6 +315,7 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
     store.activateShare('new-game')
     store.setThemeMode('light')
     store.setUiStyle('glass')
+    store.setGlassTabBar('docked')
     store.setLanguage('en')
     const saved = await AsyncStorage.getItem('diceframe-settings')
     const sessionToken = currentSessionToken()
@@ -338,6 +340,7 @@ describe('settings store 登录/登出状态机（回归：退出登录后必须
         hydrated: true,
         themeMode: 'light',
         uiStyle: 'glass',
+        glassTabBar: 'docked',
         language: 'en',
       })
       expect(activeIdentityOf(useSettingsStore.getState())).toEqual(identity)

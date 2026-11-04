@@ -126,6 +126,62 @@ export function glassBackdropPalette(theme: ResolvedTheme): GlassBackdropPalette
   }
 }
 
+/**
+ * 悬浮胶囊标签栏的几何：药丸形，四周留边距，底边距叠在系统安全区之上。
+ * overlap 是标签页滚动内容需要额外留出的底部空间（胶囊高度 + 底边距 + 呼吸距离），
+ * 内容能滑到胶囊下面，滚到底时最后一项又不会被盖住。
+ */
+export interface FloatingTabBarGeometry {
+  height: number
+  side: number
+  bottom: number
+  radius: number
+  overlap: number
+}
+
+export function floatingTabBarGeometry(bottomInset: number): FloatingTabBarGeometry {
+  const height = 64
+  const bottom = Math.max(0, bottomInset) + 12
+  return { height, side: 16, bottom, radius: height / 2, overlap: height + bottom + 12 }
+}
+
+/** 平板悬浮侧栏：四周留边距的圆角面板（侧栏占位，不叠在内容上） */
+export const FLOATING_SIDEBAR = { margin: 12, radius: 28 } as const
+
+/**
+ * 胶囊玻璃的填充：
+ * - native：库做真模糊 / 折射，染色要淡，才看得见底下的内容；
+ * - blur：Web 用 CSS backdrop-filter 真模糊，可以半透明；
+ * - tint：没有模糊（低版本 Android），底下的文字会原样透出来，填充要接近不透明。
+ */
+export type CapsuleMaterial = 'native' | 'blur' | 'tint'
+
+export function capsuleFill(theme: ResolvedTheme, material: CapsuleMaterial): string {
+  const card = THEME[theme].card
+  if (material === 'native') return glassTint(theme)
+  if (material === 'blur') return withAlpha(card, theme === 'light' ? 0.55 : 0.5)
+  // 0.86 时深色下 14% 的透出仍能看清底下的字（SHV41 实测），0.94 只剩隐约轮廓
+  return withAlpha(card, 0.94)
+}
+
+/** 顶部镜面高光渐变的起止色（亮色用白，暗色用前景色压低透明度） */
+export function capsuleSpecular(theme: ResolvedTheme): readonly [string, string] {
+  const base = theme === 'light' ? THEME.light.accent : THEME.dark.foreground
+  return [withAlpha(base, theme === 'light' ? 0.7 : 0.16), withAlpha(base, 0)]
+}
+
+/** 内描边：玻璃边缘的反光 */
+export function capsuleRim(theme: ResolvedTheme): string {
+  return theme === 'light' ? withAlpha(THEME.light.accent, 0.9) : withAlpha(THEME.dark.foreground, 0.18)
+}
+
+/** 胶囊投影（CSS box-shadow 语法，RN 新架构与 Web 通用） */
+export function capsuleShadow(theme: ResolvedTheme): string {
+  return theme === 'light'
+    ? `0px 10px 28px ${withAlpha(THEME.light.foreground, 0.2)}`
+    : `0px 12px 32px ${withAlpha(THEME.dark.background, 0.7)}`
+}
+
 /** react-native-liquid-glassmorphism 的设备能力档（与库的 GlassTier 一致） */
 export type NativeGlassTier = 'glass' | 'refraction' | 'blur' | 'tint' | 'none'
 

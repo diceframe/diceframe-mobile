@@ -1,0 +1,110 @@
+diff --git a/node_modules/react-native-liquid-tabs/src/GlassSurface.tsx b/node_modules/react-native-liquid-tabs/src/GlassSurface.tsx
+index e256f79..6b957ed 100644
+--- a/node_modules/react-native-liquid-tabs/src/GlassSurface.tsx
++++ b/node_modules/react-native-liquid-tabs/src/GlassSurface.tsx
+@@ -1,10 +1,16 @@
+ import { useEffect, useState, type RefObject } from "react";
+-import { findNodeHandle, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
++import { findNodeHandle, Platform, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+ import Animated, { useAnimatedReaction, useAnimatedStyle, type SharedValue } from "react-native-reanimated";
+ import { scheduleOnRN } from "react-native-worklets";
+ 
+ import { NativeBlurView } from "./native";
+ 
++// diceframe patch: below Android 12 the native view has no RenderEffect and draws only its thin
++// overlay (~0.3 alpha with the wash), so content behind the bar reads through crisply. Use the
++// opaque tint there as well, a little thicker than upstream so text behind does not ghost.
++const CAN_BLUR =
++  NativeBlurView != null && (Platform.OS !== "android" || (typeof Platform.Version === "number" && Platform.Version >= 31));
++
+ function argb(alpha: number, r: number, g: number, b: number) {
+   return (Math.round(alpha * 255) << 24) | (r << 16) | (g << 8) | b | 0;
+ }
+@@ -26,8 +32,8 @@ export function GlassSurface({
+ }) {
+   const shape = [StyleSheet.absoluteFill, { borderRadius: radius, overflow: "hidden" as const }];
+   const targetId = useTargetId(blurTarget);
+-  if (!NativeBlurView) {
+-    return <View style={[shape, { backgroundColor: dark ? "rgba(30,32,38,0.86)" : "rgba(248,248,250,0.9)" }]} pointerEvents="none" />;
++  if (!CAN_BLUR) {
++    return <View style={[shape, { backgroundColor: dark ? "rgba(30,32,38,0.95)" : "rgba(248,248,250,0.96)" }]} pointerEvents="none" />;
+   }
+   return (
+     <>
+diff --git a/node_modules/react-native-liquid-tabs/src/GlassTabBar.tsx b/node_modules/react-native-liquid-tabs/src/GlassTabBar.tsx
+index 8668474..d0f77ab 100644
+--- a/node_modules/react-native-liquid-tabs/src/GlassTabBar.tsx
++++ b/node_modules/react-native-liquid-tabs/src/GlassTabBar.tsx
+@@ -59,6 +59,8 @@ export interface GlassTabBarProps {
+   /** The `BlurTarget` wrapping the content the bar floats over (Android). */
+   blurTarget?: RefObject<View | null>;
+   style?: StyleProp<ViewStyle>;
++  /** diceframe patch: called (on the JS thread) when a drag carries the drop onto another tab, and when a tap picks another tab — the place for a selection haptic. */
++  onSelectionTick?: () => void;
+ }
+ 
+ export const DEFAULT_COLORS = {
+@@ -282,6 +284,7 @@ export function GlassTabBar({
+   labelFont,
+   blurTarget,
+   style,
++  onSelectionTick,
+ }: GlassTabBarProps) {
+   const scheme = useColorScheme();
+   const isDark = dark ?? scheme === "dark";
+@@ -522,6 +525,7 @@ export function GlassTabBar({
+       goal.set(target);
+       // The tab under the goal's centre is the one picked, wherever the finger grabbed it.
+       const index = indexAt(target + slot / 2);
++      if (onSelectionTick && index !== lastIndex.get()) scheduleOnRN(onSelectionTick);
+       lastIndex.set(index);
+     })
+     .onFinalize(() => {
+@@ -533,6 +537,8 @@ export function GlassTabBar({
+       goal.set(target);
+       landing.set(true);
+       if (index !== pickedIndex.get()) {
++        // A drag already ticked as it crossed into this tab; a tap ticks here.
++        if (onSelectionTick && !moved.get()) scheduleOnRN(onSelectionTick);
+         pickedIndex.set(index);
+         awaitedIndex.set(index);
+         scheduleOnRN(onChange, index);
+diff --git a/node_modules/react-native-liquid-tabs/src/expo-router.tsx b/node_modules/react-native-liquid-tabs/src/expo-router.tsx
+index 835b72b..3c999f7 100644
+--- a/node_modules/react-native-liquid-tabs/src/expo-router.tsx
++++ b/node_modules/react-native-liquid-tabs/src/expo-router.tsx
+@@ -21,7 +21,7 @@ export interface LiquidTab {
+ 
+ export interface LiquidTabsProps extends Pick<
+   GlassTabBarProps,
+-  "dark" | "activeColor" | "inactiveColor" | "backgroundColor" | "labelFont"
++  "dark" | "activeColor" | "inactiveColor" | "backgroundColor" | "labelFont" | "onSelectionTick"
+ > {
+   tabs: LiquidTab[];
+   hideOnKeyboard?: boolean;
+diff --git a/node_modules/react-native-liquid-tabs/build/GlassTabBar.d.ts b/node_modules/react-native-liquid-tabs/build/GlassTabBar.d.ts
+index 4cc6704..cf718b8 100644
+--- a/node_modules/react-native-liquid-tabs/build/GlassTabBar.d.ts
++++ b/node_modules/react-native-liquid-tabs/build/GlassTabBar.d.ts
+@@ -21,6 +21,8 @@ export interface GlassTabBarProps {
+     /** The `BlurTarget` wrapping the content the bar floats over (Android). */
+     blurTarget?: RefObject<View | null>;
+     style?: StyleProp<ViewStyle>;
++    /** diceframe patch: called (on the JS thread) when a drag carries the drop onto another tab, and when a tap picks another tab. */
++    onSelectionTick?: () => void;
+ }
+ export declare const DEFAULT_COLORS: {
+     dark: {
+diff --git a/node_modules/react-native-liquid-tabs/build/expo-router.d.ts b/node_modules/react-native-liquid-tabs/build/expo-router.d.ts
+index 1d51804..aa7ddaa 100644
+--- a/node_modules/react-native-liquid-tabs/build/expo-router.d.ts
++++ b/node_modules/react-native-liquid-tabs/build/expo-router.d.ts
+@@ -11,7 +11,7 @@ export interface LiquidTab {
+     /** iOS SF Symbol, or a `{ default, selected }` pair. */
+     sfSymbol?: SFSymbolIcon["sf"];
+ }
+-export interface LiquidTabsProps extends Pick<GlassTabBarProps, "dark" | "activeColor" | "inactiveColor" | "backgroundColor" | "labelFont"> {
++export interface LiquidTabsProps extends Pick<GlassTabBarProps, "dark" | "activeColor" | "inactiveColor" | "backgroundColor" | "labelFont" | "onSelectionTick"> {
+     tabs: LiquidTab[];
+     hideOnKeyboard?: boolean;
+     /** iOS 26: shrink the system tab bar while scrolling down. */

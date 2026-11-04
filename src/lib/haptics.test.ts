@@ -77,6 +77,7 @@ describe('patternFor（Android Vibration pattern）', () => {
     'critical',
     'fumble',
     'submit',
+    'select',
   ]
 
   it('每个事件都有 pattern，且结构合法（首元素无延迟、奇数位震动时长为正）', () => {
@@ -109,6 +110,7 @@ describe('specFor（iOS expo-haptics 预设）', () => {
       'critical',
       'fumble',
       'submit',
+      'select',
     ]
     for (const event of events) {
       const spec = specFor(event)

@@ -31,6 +31,8 @@ export type ThemeMode = 'system' | 'light' | 'dark'
 export type ResolvedTheme = 'light' | 'dark'
 /** 界面风格（与明暗主题正交）：classic = 不透明表面，glass = 液态玻璃（见 lib/glass） */
 export type UiStyle = 'classic' | 'glass'
+/** 液态玻璃下的标签栏布局：floating = 悬浮胶囊（平板为悬浮侧栏），docked = 贴底（平板贴左） */
+export type GlassTabBarLayout = 'floating' | 'docked'
 
 /** 朗读引擎：server = 服务器合成（对齐 Web），system = 设备自带 TTS（expo-speech） */
 export type TtsEngine = 'server' | 'system'
@@ -53,6 +55,7 @@ interface PersistedSettings {
   hapticsEnabled: boolean
   themeMode: ThemeMode
   uiStyle: UiStyle
+  glassTabBar: GlassTabBarLayout
   language: LocalePreference
   quickActionVisibility: Record<string, boolean>
   assistantReactions: boolean
@@ -77,6 +80,7 @@ function defaultSettings(): PersistedSettings {
     hapticsEnabled: true,
     themeMode: 'system',
     uiStyle: 'classic',
+    glassTabBar: 'floating',
     language: 'system',
     quickActionVisibility: {},
     assistantReactions: true,
@@ -135,6 +139,8 @@ interface SettingsState {
   themeMode: ThemeMode
   /** 界面风格；新增字段，persist 浅合并，旧数据里没有它就取初值 classic，无需升版本 */
   uiStyle: UiStyle
+  /** 液态玻璃下的标签栏布局；经典风格不受影响。新增字段同样浅合并，旧数据取 floating */
+  glassTabBar: GlassTabBarLayout
   /** 界面语言偏好；system 表示跟随设备语言 */
   language: LocalePreference
   /** 设备当前主题，用于解析 system 偏好 */
@@ -173,6 +179,7 @@ interface SettingsState {
   setReactionCategory: (category: ReactionCategory, on: boolean) => void
   setThemeMode: (mode: ThemeMode) => void
   setUiStyle: (style: UiStyle) => void
+  setGlassTabBar: (layout: GlassTabBarLayout) => void
   setLanguage: (language: LocalePreference) => void
   setSystemTheme: (theme: ResolvedTheme) => void
   markHydrated: () => void
@@ -344,6 +351,7 @@ export const useSettingsStore = create<SettingsState>()(
         set({ quickActionVisibility: rememberQuickActionVisibility(get().quickActionVisibility, key, visible) }),
       setThemeMode: (themeMode) => set({ themeMode }),
       setUiStyle: (uiStyle) => set({ uiStyle }),
+      setGlassTabBar: (glassTabBar) => set({ glassTabBar }),
       setLanguage: (language) => set({ language }),
       setSystemTheme: (systemTheme) => set({ systemTheme }),
       markHydrated: () => set({ hydrated: true }),
@@ -372,6 +380,7 @@ export const useSettingsStore = create<SettingsState>()(
         disabledReactionCategories: state.disabledReactionCategories,
         themeMode: state.themeMode,
         uiStyle: state.uiStyle,
+        glassTabBar: state.glassTabBar,
         language: state.language,
       }),
       // 结构升级照旧重置设置，但保留 install id 缓存（双保险；权威值在本机库里）

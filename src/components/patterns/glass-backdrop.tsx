@@ -4,7 +4,15 @@ import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg'
 import { getGlassCapabilities, LiquidGlassView } from 'react-native-liquid-glassmorphism'
 
-import { glassBackdropPalette, glassHighlight, glassTint, shouldUseNativeGlass } from '@/lib/glass'
+import {
+  capsuleFill,
+  capsuleRim,
+  capsuleSpecular,
+  glassBackdropPalette,
+  glassHighlight,
+  glassTint,
+  shouldUseNativeGlass,
+} from '@/lib/glass'
 import type { ResolvedTheme } from '@/stores/settings'
 
 let gradientSeq = 0
@@ -73,7 +81,47 @@ export function GlassBarBackground({ theme, anchor = 'bottom' }: { theme: Resolv
       ) : (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: glassTint(theme) }]} />
       )}
+      <LinearGradient colors={capsuleSpecular(theme)} start={{ x: 0, y: 0 }} end={{ x: 0, y: 0.7 }} style={StyleSheet.absoluteFill} />
       <View style={[styles.highlight, { backgroundColor: glassHighlight(theme) }]} />
+    </View>
+  )
+}
+
+/**
+ * 悬浮胶囊 / 悬浮侧栏的玻璃面：填充 + 顶部镜面高光渐变 + 内描边。投影在外层 tabBarStyle 上
+ * （这里裁圆角，阴影画在里面会被裁掉）。胶囊浮在页面内容上方，不再拼背景画布——
+ * 底下滑过的就是真实内容：Android 13+ / iOS 由库折射或模糊，Web 用 CSS 模糊，
+ * 低版本 Android 没有模糊，填充接近不透明（见 capsuleFill）。
+ */
+export function GlassCapsuleBackground({ theme, radius, overContent }: {
+  theme: ResolvedTheme
+  radius: number
+  /** 是否浮在会滚动的内容上方（手机胶囊是，平板侧栏不是——背后只有环境光，淡染色即可） */
+  overContent: boolean
+}) {
+  const native = shouldUseNativeGlass(getGlassCapabilities().tier, Platform.OS)
+  const material = native || !overContent ? 'native' : Platform.OS === 'web' ? 'blur' : 'tint'
+  return (
+    <View style={[StyleSheet.absoluteFill, styles.clip, { borderRadius: radius }]}>
+      {native ? (
+        <LiquidGlassView
+          style={StyleSheet.absoluteFill}
+          preset="floatingTabBar"
+          tintColor={capsuleFill(theme, material)}
+          borderRadius={radius}
+        />
+      ) : (
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: capsuleFill(theme, material) },
+            // react-native-web 原样输出为 CSS backdrop-filter
+            material === 'blur' ? ({ backdropFilter: 'blur(24px) saturate(160%)' } as object) : null,
+          ]}
+        />
+      )}
+      <LinearGradient colors={capsuleSpecular(theme)} start={{ x: 0, y: 0 }} end={{ x: 0, y: 0.6 }} style={StyleSheet.absoluteFill} />
+      <View style={[StyleSheet.absoluteFill, { borderRadius: radius, borderWidth: 1, borderColor: capsuleRim(theme) }]} />
     </View>
   )
 }

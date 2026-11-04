@@ -7,6 +7,8 @@ import {
   HeartCrack,
   Monitor,
   Moon,
+  PanelBottom,
+  Pill,
   Skull,
   Sparkles,
   Square,
@@ -72,6 +74,12 @@ export const THEME_OPTIONS = [
 export const UI_STYLE_OPTIONS = [
   { value: 'classic', labelKey: 'dfUiStyleClassic', descKey: 'dfUiStyleClassicDesc', icon: Square },
   { value: 'glass', labelKey: 'dfUiStyleGlass', descKey: 'dfUiStyleGlassDesc', icon: Droplets },
+] as const
+
+/** 液态玻璃下的标签栏布局 */
+export const GLASS_TAB_BAR_OPTIONS = [
+  { value: 'floating', labelKey: 'dfTabBarFloating', descKey: 'dfTabBarFloatingDesc', icon: Pill },
+  { value: 'docked', labelKey: 'dfTabBarDocked', descKey: 'dfTabBarDockedDesc', icon: PanelBottom },
 ] as const
 
 // 语言名用各自母语展示（切换语言前也要能认出来），不进文案字典；
