@@ -586,6 +586,9 @@ const DF_ERROR_KEYS: Record<string, TKey> = {
   RUN_READ_ONLY: 'dfErrorsRunReadOnly',
   RUN_ENDED: 'dfErrorsRunReadOnly',
   ADVENTURE_ENDED: 'dfErrorsAdventureEnded',
+  // 冒险面板指令：服务端原文是英文异常串（如 node is not active），不直接展示
+  ADVENTURE_NODE_REJECTED: 'dfErrorsAdventureNodeRejected',
+  SUGGESTION_NOT_FOUND: 'dfErrorsAdventureSuggestionGone',
 }
 
 export function errorMessage(error: unknown, fallback: TKey = 'dfErrorsUnexpected'): string {

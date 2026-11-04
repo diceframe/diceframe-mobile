@@ -32,6 +32,7 @@ import { GameContextRow } from '@/features/play/GameContextRow'
 import { GameTimeline } from '@/features/play/GameTimeline'
 import { ActionRecoveryBanner } from '@/features/play/ActionRecoveryBanner'
 import { ActionSkillPicker } from '@/features/play/ActionSkillPicker'
+import { AdventureTool } from '@/features/play/AdventureTool'
 import { PlayFamiliar, usePlayReactions } from '@/features/assistant/PlayFamiliar'
 import { CheckModesTool } from '@/features/play/CheckModesTool'
 import { StoryPortraitsTool } from '@/features/play/StoryPortraitsTool'
@@ -772,6 +773,7 @@ export default function GameScreen() {
               accessory={
                 <>
                   <CheckModesTool key={gameKey} gameKey={gameKey} actorId={userId} isGm={isGm} />
+                  <AdventureTool key={`adventure-${gameKey}`} gameKey={gameKey} isGm={isGm} />
                   <ActionSkillPicker
                     skills={actionSkillNames(mySheet)}
                     value={selectedSkill}
