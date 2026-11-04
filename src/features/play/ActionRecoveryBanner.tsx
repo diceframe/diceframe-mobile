@@ -11,6 +11,8 @@ const MESSAGE: Record<ActionRecoveryCode, TKey> = {
   ROUND_PROCESSING_FAILED: 'dfRecoveryRolledBack',
   ROUND_POST_COMMIT_FAILED: 'dfRecoveryPostCommit',
   ROUND_NOT_PROCESSED: 'dfRecoveryNotProcessed',
+  CHECK_MODEL_NOT_CONFIGURED: 'dfRecoveryCheckModel',
+  ROUND_ROLLBACK_FAILED: 'dfRecoveryRollbackFailed',
   UNKNOWN: 'dfRecoveryUnknown',
 }
 

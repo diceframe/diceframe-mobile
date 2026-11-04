@@ -1,4 +1,4 @@
-import type { LogEntry } from '@/api/types'
+import type { GameDetail, LogEntry } from '@/api/types'
 
 export type GameStateTone = 'default' | 'secondary' | 'success' | 'warning' | 'info'
 
@@ -44,4 +44,20 @@ export function hasNewRound(
 ): boolean {
   const lastRound = (entries: LogEntry[] | undefined) => entries?.[entries.length - 1]?.round
   return lastRound(next) !== lastRound(previous)
+}
+
+/**
+ * 本局是否只读（对齐上游 PlayView 的 runReadOnly）。
+ *
+ * GM 准备结团时对局 state 仍停在 active_action / paused，但服务端中间件已拒收全部写请求
+ * （409 RUN_READ_ONLY），只看 state 会把输入框留给玩家白白提交，必须同时看 run_lifecycle。
+ * 3.0 之前的服务端没有结团流程、也不下发该字段，缺省即进行中，与上游默认 {status:'playing'} 一致。
+ */
+export type RunReadOnly = 'preparing' | 'ended' | null
+
+export function runReadOnlyOf(detail?: Pick<GameDetail, 'state' | 'run_lifecycle'> | null): RunReadOnly {
+  const status = detail?.run_lifecycle?.status
+  if (status === 'preparing') return 'preparing'
+  if (detail?.state === 'ended' || status === 'ended') return 'ended'
+  return null
 }

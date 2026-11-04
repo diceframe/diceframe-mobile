@@ -284,6 +284,12 @@ describe('api()', () => {
     )
   })
 
+  it('结团只读、冒险结局这类刷新也解决不了的 409 给出具体原因', () => {
+    expect(errorMessage(new ApiError('x', 409, 'RUN_READ_ONLY'))).toBe('本局已结团或正在准备结团，只能查看。')
+    expect(errorMessage(new ApiError('x', 409, 'RUN_ENDED'))).toBe('本局已结团或正在准备结团，只能查看。')
+    expect(errorMessage(new ApiError('x', 409, 'ADVENTURE_ENDED'))).toBe('故事已经抵达结局，不能再提交行动。')
+  })
+
   it('Owner 模式 401 触发 onUnauthorized，玩家模式不触发', async () => {
     const onUnauthorized = vi.fn()
     configureApiClient({ baseUrl: 'http://h', onUnauthorized })

@@ -336,7 +336,16 @@ export interface DetailViewer {
   uid?: string
 }
 
+export interface RestActivity {
+  id: string
+  kind: 'overnight' | 'therapy' | 'short' | 'long'
+  status: 'requested' | 'settled' | 'rejected' | 'error'
+  actors: Array<{ uid: string; name: string }>
+}
+
 export interface GameDetail {
+  run_lifecycle?: { status: string; id?: string; revision?: number }
+  gm_workspace_revision?: string | null
   game_key: string
   viewer?: DetailViewer
   world_name?: string
@@ -354,6 +363,7 @@ export interface GameDetail {
   story_mode?: StoryMode
   advancement?: LiveAdvancementStatus
   rest_session?: RestSessionStatus
+  rest_activity?: RestActivity[]
   player_access_open?: boolean
   /** 房间级暂离语义：pause（默认，暂离不交给 AI）/ ai_takeover。 */
   away_control_policy?: 'pause' | 'ai_takeover' | string
@@ -1145,10 +1155,13 @@ export interface RulesetRestResponse extends JsonObject {
 export interface RulesetCombatTarget {
   actor_id: string
   kind: 'player' | 'enemy'
+  side?: 'party' | 'enemy'
   name: string
   hp: number
   max_hp: number
   position: number
+  /** Server-projected death state; clients must not infer it from hp === 0. */
+  is_dead?: boolean
   armor_class?: number
   speed?: number
   conditions?: Record<string, JsonObject>
@@ -1188,7 +1201,20 @@ export interface RulesetCombatSpell extends JsonObject {
   range: number
   mode: string
   available_slot_levels: number[]
+  target_scope?: 'self'
+  target_side?: 'ally' | 'enemy' | 'any'
+  target_count?: number
+  upcast_target_count?: number
+  repeat_targets?: boolean
+  resist_choice?: string[]
   trigger_target_id?: string
+}
+
+export interface RulesetCombatReactionFeature extends JsonObject {
+  feature_id: string
+  name: string
+  mode: string
+  damage_multiplier?: number
 }
 
 export interface RulesetPendingDecision extends JsonObject {
@@ -2202,6 +2228,7 @@ export interface AppConfig {
   analysis_max_tokens?: number
   text_gen_max_tokens?: number
   assistant_agent_max_tokens?: number
+  assistant_agent_task_max_tokens?: number
   llm_generation_options?: Partial<Record<'temperature' | 'top_p' | 'frequency_penalty' | 'presence_penalty', number>>
   context_recent_rounds?: number
   check_model_enabled?: boolean

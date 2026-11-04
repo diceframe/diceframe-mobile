@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { LogEntry } from '@/api/types'
-import { gameStateLabel, gameStateTone, hasNewRound } from './game-state'
+import { gameStateLabel, gameStateTone, hasNewRound, runReadOnlyOf } from './game-state'
 
 function pageOf(size: number, newestRound: number): LogEntry[] {
   return Array.from({ length: size }, (_, index) => ({ round: newestRound - size + 1 + index }))
@@ -33,5 +33,24 @@ describe('hasNewRound', () => {
 
   it('首次拉到日志（此前为空）视为新回合', () => {
     expect(hasNewRound([], pageOf(3, 3))).toBe(true)
+  })
+})
+
+describe('结团只读判定', () => {
+  it('准备结团时 state 仍是行动阶段，也要按只读处理', () => {
+    expect(runReadOnlyOf({ state: 'active_action', run_lifecycle: { status: 'preparing', id: 'f1', revision: 2 } })).toBe('preparing')
+    expect(runReadOnlyOf({ state: 'paused', run_lifecycle: { status: 'preparing' } })).toBe('preparing')
+  })
+
+  it('已结团或对局已结束都算结束', () => {
+    expect(runReadOnlyOf({ state: 'ended', run_lifecycle: { status: 'ended' } })).toBe('ended')
+    expect(runReadOnlyOf({ state: 'ended' })).toBe('ended')
+    expect(runReadOnlyOf({ state: 'active_action', run_lifecycle: { status: 'ended' } })).toBe('ended')
+  })
+
+  it('进行中或旧服务端没有该字段时不锁', () => {
+    expect(runReadOnlyOf({ state: 'active_action', run_lifecycle: { status: 'playing' } })).toBeNull()
+    expect(runReadOnlyOf({ state: 'active_action' })).toBeNull()
+    expect(runReadOnlyOf(null)).toBeNull()
   })
 })

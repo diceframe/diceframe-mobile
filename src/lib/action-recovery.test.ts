@@ -11,6 +11,16 @@ describe('行动提交失败恢复', () => {
     expect(actionRecoveryOf(new ApiError('x', 409, 'ROUND_NOT_PROCESSED'))).toMatchObject({ code: 'ROUND_NOT_PROCESSED', kind: 'refresh' })
   })
 
+  it('检定模型未配置、回合恢复失败：先刷新，并保留具体原因', () => {
+    expect(actionRecoveryOf(new ApiError('x', 502, 'CHECK_MODEL_NOT_CONFIGURED'))).toMatchObject({ code: 'CHECK_MODEL_NOT_CONFIGURED', kind: 'refresh' })
+    expect(actionRecoveryOf(new ApiError('x', 500, 'ROUND_ROLLBACK_FAILED'))).toMatchObject({ code: 'ROUND_ROLLBACK_FAILED', kind: 'refresh' })
+  })
+
+  it('结团只读的 409 是明确拒收，不进恢复流程', () => {
+    expect(actionRecoveryOf(new ApiError('x', 409, 'RUN_READ_ONLY'))).toBeNull()
+    expect(actionRecoveryOf(new ApiError('x', 409, 'ADVENTURE_ENDED'))).toBeNull()
+  })
+
   it('结果不确定的失败按未知处理；明确拒收的 4xx 不进恢复', () => {
     expect(actionRecoveryOf(new Error('Network request failed'))).toMatchObject({ code: 'UNKNOWN', kind: 'refresh' })
     expect(actionRecoveryOf(new ApiError('x', 502))).toMatchObject({ code: 'UNKNOWN', kind: 'refresh' })

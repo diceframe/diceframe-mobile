@@ -74,6 +74,14 @@ export function confirmAssistantAgent(
   }, OWNER_ONLY)
 }
 
+/** 续跑批量计划的剩余目标（上游 #564）；已完成的目标服务端不会重复执行 */
+export function resumeAssistantAgent(sessionId: string, approvalId: string, planDigest: string): Promise<AgentConfirmResult> {
+  return api<AgentConfirmResult>('/assistant/agent/resume', {
+    method: 'POST',
+    body: JSON.stringify({ session_id: sessionId, approval_id: approvalId, plan_digest: planDigest }),
+  }, OWNER_ONLY)
+}
+
 export function reviewAssistantAgent(sessionId: string, draftId: string, draft: unknown): Promise<AgentReviewResult> {
   return api<AgentReviewResult>('/assistant/agent/review', {
     method: 'POST',

@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   AgentStreamError,
+  approvalAfterResult,
   approvalDraftId,
   createAgentStreamParser,
   draftItemsComplete,
   draftItemsOf,
   editedDraftOf,
+  executionReport,
   fenceDirtyApproval,
   messagesForStorage,
   normaliseApproval,
@@ -162,5 +164,55 @@ describe('内联操作标签', () => {
     expect(actions).toHaveLength(2)
     expect(actionNavigationOf(actions[0])).toEqual({ route: 'lorebook' })
     expect(actionNavigationOf(actions[1])).toBeNull()
+  })
+})
+
+describe('可续跑的批量计划', () => {
+  const base = { approval_id: 'p1', plan_digest: 'pd1', tool: 'apply_lorebook_visibility_plan' }
+
+  it('解析续跑字段；可续跑的审批不按原时限判过期，结果待核实仍作废', () => {
+    const now = Date.parse('2026-11-02T12:00:00Z')
+    const approval = normaliseApproval({ ...base, expires_at: now / 1000 - 60, resumable: true, execution_status: 'paused', execution_state: { report: {} } }, now)!
+    expect(approval).toMatchObject({ resumable: true, execution_status: 'paused', execution_state: { report: {} } })
+    expect(approval.expired).toBeUndefined()
+    expect(normaliseApproval({ ...base, resumable: true, recovery_required: true }, now)?.expired).toBe(true)
+    expect(normaliseApproval({ ...base, resumable: 'yes', execution_state: [] }, now)).not.toHaveProperty('resumable')
+  })
+
+  it('回包之后挂着哪份审批：拒绝清掉、pending 替换、partial 无 pending 保留原审批、完成清掉', () => {
+    expect(approvalAfterResult({ ok: true }, base, false)).toBeNull()
+    expect(approvalAfterResult({ ok: false, pending: { ...base, resumable: true } }, base, true)).toMatchObject({ resumable: true })
+    expect(approvalAfterResult({ ok: true, partial: true }, base, true)).toBe(base)
+    expect(approvalAfterResult({ ok: true }, base, true)).toBeNull()
+    expect(approvalAfterResult({ ok: false, error: 'x' }, base, true)).toBeNull()
+  })
+
+  it('执行报告：计数与逐项状态，缺 id 时按序号兜底', () => {
+    const report = executionReport({
+      ...base,
+      execution_status: 'paused',
+      execution_state: {
+        report: {
+          status: 'partial',
+          success_count: 2,
+          failed_count: 1,
+          not_executed_count: 3,
+          targets: [{ book_id: 'b1', name: '王都', status: 'succeeded' }, { label: '地下城', status: 'failed', error: '保存失败' }],
+        },
+      },
+    })
+    expect(report).toEqual({
+      status: 'partial',
+      succeeded: 2,
+      failed: 1,
+      notExecuted: 3,
+      unconfirmed: undefined,
+      targets: [
+        { id: 'b1', label: '王都', status: 'succeeded' },
+        { id: 'target-1', label: '地下城', status: 'failed', error: '保存失败' },
+      ],
+    })
+    expect(executionReport({ ...base, execution_status: 'paused' })).toMatchObject({ status: 'paused', targets: [] })
+    expect(executionReport(base)).toBeNull()
   })
 })

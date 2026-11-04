@@ -578,6 +578,16 @@ export async function fetchAppConfig(): Promise<import('./types').AppConfig> {
   return api<import('./types').AppConfig>('/config', {}, { anonymous: true })
 }
 
+/**
+ * 上游 apiErrors 未收录、但移动端需要讲清楚的错误码。上游 Web 直接展示服务端原文，
+ * 移动端只展示已翻译的业务提示，不补这张表就会落到 409 的「刷新后重试」——而这些状态刷新也解决不了。
+ */
+const DF_ERROR_KEYS: Record<string, TKey> = {
+  RUN_READ_ONLY: 'dfErrorsRunReadOnly',
+  RUN_ENDED: 'dfErrorsRunReadOnly',
+  ADVENTURE_ENDED: 'dfErrorsAdventureEnded',
+}
+
 export function errorMessage(error: unknown, fallback: TKey = 'dfErrorsUnexpected'): string {
   const t = getT()
   if (error instanceof UserFacingError) return t(error.key)
@@ -590,6 +600,8 @@ export function errorMessage(error: unknown, fallback: TKey = 'dfErrorsUnexpecte
         const translated = t(key as TKey)
         if (translated !== key) return translated
       }
+      const dfKey = DF_ERROR_KEYS[error.code.toUpperCase()]
+      if (dfKey) return t(dfKey)
     }
     if (error.status === 429) {
       const seconds = error.retryAfter
