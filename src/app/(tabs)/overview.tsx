@@ -1,9 +1,10 @@
 import * as React from 'react'
 import { Pressable, RefreshControl, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { GlassView } from 'expo-glass-effect'
+import { LinearGradient } from 'expo-linear-gradient'
 import { useNavigation, useRouter } from 'expo-router'
 import { FlashList } from '@shopify/flash-list'
-import { Check, ListChecks, Plus, ScrollText, Trash2, X } from 'lucide-react-native'
+import { Check, ChevronDown, ChevronRight, ListChecks, LogIn, Plus, ScrollText, Trash2, X } from 'lucide-react-native'
 
 import { PageHeader } from '@/components/page-header'
 import { SceneCover } from '@/components/patterns/scene-cover'
@@ -21,14 +22,14 @@ import { batchDeleteGames, fetchGames } from '@/api/games'
 import { gameSceneCoverSource } from '@/api/assets'
 import type { GameSummary } from '@/api/types'
 import { gameStateLabel, gameStateTone } from '@/lib/game-state'
+import { featuredGame, sortGames, type GameSortMode } from '@/lib/game-sort'
+import { withAlpha } from '@/lib/glass'
 import { appLayoutForWidth } from '@/lib/layout'
 import { confirmDestructive } from '@/lib/confirm'
 import { useThemeToken } from '@/lib/theme'
 import { useT } from '@/i18n/t'
 import { useAppUpdates } from '@/hooks/useAppUpdates'
 import { useTabBarOverlap } from '@/lib/tab-bar-overlap'
-
-type SortMode = 'recent' | 'oldest' | 'name' | 'round'
 
 const styles = StyleSheet.create({
   infoPanel: {
@@ -41,34 +42,51 @@ const styles = StyleSheet.create({
   },
 })
 
-function activityTime(game: GameSummary): number | null {
-  for (const value of [game.last_activity, game.started_at]) {
-    if (!value) continue
-    const timestamp = Date.parse(value)
-    if (Number.isFinite(timestamp)) return timestamp
-  }
-  return null
-}
-
-function sortGames(games: GameSummary[], mode: SortMode): GameSummary[] {
-  return [...games].sort((left, right) => {
-    const nameA = String(left.world_name || left.game_key)
-    const nameB = String(right.world_name || right.game_key)
-    if (mode === 'name') return nameA.localeCompare(nameB)
-    if (mode === 'round') {
-      const diff = Number(right.round_number || 0) - Number(left.round_number || 0)
-      if (diff !== 0) return diff
-    }
-    const aTime = activityTime(left)
-    const bTime = activityTime(right)
-    if (aTime === null && bTime === null) return nameA.localeCompare(nameB)
-    if (aTime === null) return 1
-    if (bTime === null) return -1
-    const oldestFirst = mode === 'oldest'
-    const diff = oldestFirst ? aTime - bTime : bTime - aTime
-    if (diff !== 0) return diff
-    return nameA.localeCompare(nameB)
-  })
+/**
+ * 首页顶部的「最近 / 进行中的冒险」（对齐 Web OverviewView 的 overview-featured）：
+ * 场景大图 + 标题、当前场景、轮次 / 玩家 / 状态，和一个直接进入的主按钮。
+ */
+function FeaturedGameCard({ game, coverBase, onOpen }: { game: GameSummary; coverBase: string; onOpen: () => void }) {
+  const t = useT()
+  const name = game.world_name || game.game_key
+  return (
+    <Card className="mb-4 gap-0 overflow-hidden p-0">
+      <SceneCover
+        source={gameSceneCoverSource(game.game_key, game.rule_id)}
+        className="absolute inset-0"
+        accessibilityLabel={t('dfOverviewCoverA11y', { name })}
+      />
+      {/* 图的下半段压一层卡片底色，文字落在渐变上，浅色 / 深色主题都读得清 */}
+      <LinearGradient
+        pointerEvents="none"
+        colors={[withAlpha(coverBase, 0), withAlpha(coverBase, 0.82), withAlpha(coverBase, 0.95)]}
+        locations={[0.05, 0.42, 0.75]}
+        style={StyleSheet.absoluteFill}
+      />
+      <View className="min-h-[260px] justify-end gap-1.5 p-4">
+        <Text className="text-xs font-semibold tracking-wider text-primary">{t('recentAdventures')}</Text>
+        <Text className="font-display text-2xl font-semibold text-foreground" numberOfLines={2}>
+          {name}
+        </Text>
+        <Text variant="small" numberOfLines={1}>
+          {game.scene || t('notStarted')}
+        </Text>
+        <View className="mt-1 flex-row flex-wrap items-center gap-x-3 gap-y-1">
+          <Text variant="small">
+            {t('roundPrefix')}{game.round_number ?? 0}{t('roundSuffix')}
+          </Text>
+          <Text variant="small">
+            {t('players')} {game.player_count ?? 0}/{game.max_players ?? '-'}
+          </Text>
+          <StatusBadge tone={gameStateTone(game.state)}>{gameStateLabel(game.state)}</StatusBadge>
+        </View>
+        <Button size="lg" className="mt-3" onPress={onOpen} accessibilityLabel={`${t('enter')} ${name}`}>
+          <Text>{t('enter')}</Text>
+          <Icon as={LogIn} size={18} />
+        </Button>
+      </View>
+    </Card>
+  )
 }
 
 function OverviewContent({
@@ -81,6 +99,7 @@ function OverviewContent({
   mutedForeground,
   coverBase,
   columns,
+  header,
   onRetry,
   onRefresh,
   onSelect,
@@ -96,6 +115,8 @@ function OverviewContent({
   mutedForeground: string
   coverBase: string
   columns: 1 | 2 | 3
+  /** 列表头：最近冒险 / 存档统计 / 排序与管理，随列表一起滚动 */
+  header: React.ReactElement | null
   onRetry: () => void
   onRefresh: () => void
   onSelect: (key: string) => void
@@ -149,6 +170,7 @@ function OverviewContent({
       key={`game-grid-${columns}`}
       data={sorted}
       numColumns={columns}
+      ListHeaderComponent={header}
       keyExtractor={(item) => item.game_key}
       contentContainerStyle={{ paddingBottom: 32 + tabBarOverlap }}
       showsVerticalScrollIndicator={false}
@@ -242,10 +264,11 @@ export default function OverviewScreen() {
   const [error, setError] = React.useState('')
   const [refreshing, setRefreshing] = React.useState(false)
   const [reloadToken, setReloadToken] = React.useState(0)
-  const [sort, setSort] = React.useState<SortMode>('recent')
+  const [sort, setSort] = React.useState<GameSortMode>('recent')
   const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [managing, setManaging] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
+  const [statsOpen, setStatsOpen] = React.useState(true)
 
   function openCreate() {
     router.push('/create')
@@ -339,6 +362,126 @@ export default function OverviewScreen() {
   const totalPlayers = games?.reduce((sum, g) => sum + Number(g.player_count || 0), 0) ?? 0
   const totalRounds = games?.reduce((sum, g) => sum + Number(g.round_number || 0), 0) ?? 0
 
+  const featured = games ? featuredGame(games) : null
+  // 列表头随存档列表一起滚动：首屏先看到最近的冒险，往下才是统计、排序和全部存档
+  const listHeader = featured ? (
+    <View>
+      <FeaturedGameCard
+        game={featured}
+        coverBase={coverBase}
+        onOpen={() => router.push({ pathname: '/play/[gameKey]', params: { gameKey: featured.game_key } })}
+      />
+
+      {/* 存档统计（对齐 Web 的 archiveStats 折叠区）：窄卡片不放图标，纯「标签 + 数字」两行最透气 */}
+      <Pressable
+        onPress={() => setStatsOpen((open) => !open)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: statsOpen }}
+        hitSlop={8}
+        className="mb-2 flex-row items-center gap-1 self-start active:opacity-70"
+      >
+        <Icon as={statsOpen ? ChevronDown : ChevronRight} size={14} className="text-muted-foreground" />
+        <Text variant="small" className="font-semibold">{t('archiveStats')}</Text>
+      </Pressable>
+      {statsOpen && (
+        <View className="mb-3 flex-row gap-2">
+          <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
+            <Text variant="small">{t('dfOverviewStatTotal')}</Text>
+            <Text className="font-mono text-lg font-semibold text-primary">{totalGames}</Text>
+          </View>
+          <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
+            <Text variant="small">{t('activeGames')}</Text>
+            <Text className="font-mono text-lg font-semibold text-primary">{activeGames}</Text>
+          </View>
+          <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
+            <Text variant="small">{t('players')}</Text>
+            <Text className="font-mono text-lg font-semibold text-primary">{totalPlayers}</Text>
+          </View>
+          <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
+            <Text variant="small">{t('dfOverviewRound')}</Text>
+            <Text className="font-mono text-lg font-semibold text-primary">{totalRounds}</Text>
+          </View>
+        </View>
+      )}
+
+      {/* 排序与管理态分行：窄屏不让四段排序和操作按钮互相挤压 */}
+      <View className="mb-4 gap-3">
+        {!managing ? (
+          <View className="flex-row items-center gap-2">
+            <Tabs
+              value={sort}
+              onValueChange={(v) => setSort(v as GameSortMode)}
+              className="min-w-0 flex-1"
+            >
+              <TabsList className="mr-0 w-full">
+                <TabsTrigger value="recent" className="min-w-0 flex-1 px-1">
+                  <Text variant="small">{t('dfOverviewSortRecent')}</Text>
+                </TabsTrigger>
+                <TabsTrigger value="oldest" className="min-w-0 flex-1 px-1">
+                  <Text variant="small">{t('dfOverviewSortOldest')}</Text>
+                </TabsTrigger>
+                <TabsTrigger value="name" className="min-w-0 flex-1 px-1">
+                  <Text variant="small">{t('dfOverviewSortName')}</Text>
+                </TabsTrigger>
+                <TabsTrigger value="round" className="min-w-0 flex-1 px-1">
+                  <Text variant="small">{t('dfOverviewRound')}</Text>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-11 px-3"
+              onPress={toggleManaging}
+              accessibilityLabel={t('dfOverviewManage')}
+            >
+              <Icon as={ListChecks} size={16} />
+              <Text>{t('dfOverviewManage')}</Text>
+            </Button>
+          </View>
+        ) : (
+          <View className="gap-3 rounded-xl border border-primary bg-muted p-3">
+            <View className="flex-row items-start gap-3">
+              <View className="mt-0.5 h-9 w-9 items-center justify-center rounded-full bg-primary">
+                <Icon as={ListChecks} size={18} className="text-primary-foreground" />
+              </View>
+              <View className="min-w-0 flex-1 gap-0.5">
+                <Text className="font-semibold">
+                  {selected.size > 0
+                    ? t('dfOverviewSelectedCount', { count: selected.size })
+                    : t('dfOverviewManage')}
+                </Text>
+                <Text variant="small">{t('dfOverviewManageHint')}</Text>
+              </View>
+              <Button variant="secondary" size="sm" onPress={toggleManaging}>
+                <Text>{t('finish')}</Text>
+              </Button>
+            </View>
+
+            {selected.size > 0 && (
+              <View className="flex-row justify-end gap-2 border-t border-border pt-3">
+                <Button variant="outline" size="sm" onPress={clearSelection}>
+                  <Icon as={X} size={16} />
+                  <Text>{t('clearSelection')}</Text>
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onPress={batchRemove}
+                  accessibilityLabel={t('dfOverviewBatchDeleteA11y')}
+                  disabled={busy}
+                >
+                  <Icon as={Trash2} size={16} />
+                  <Text>{t('dfCommonDelete')}</Text>
+                </Button>
+              </View>
+            )}
+          </View>
+        )}
+      </View>
+    </View>
+  ) : null
+
   return (
     <Screen
       className="px-4"
@@ -363,106 +506,6 @@ export default function OverviewScreen() {
         }
       />
 
-      {/* 统计条：窄卡片不放图标，纯「标签 + 数字」两行最透气 */}
-      {games !== null && totalGames > 0 && (
-        <View className="mb-3 flex-row gap-2">
-          <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <Text variant="small">{t('dfOverviewStatTotal')}</Text>
-            <Text className="font-mono text-lg font-semibold text-primary">{totalGames}</Text>
-          </View>
-          <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <Text variant="small">{t('activeGames')}</Text>
-            <Text className="font-mono text-lg font-semibold text-primary">{activeGames}</Text>
-          </View>
-          <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <Text variant="small">{t('players')}</Text>
-            <Text className="font-mono text-lg font-semibold text-primary">{totalPlayers}</Text>
-          </View>
-          <View className="flex-1 rounded-md border border-border bg-muted px-3 py-2">
-            <Text variant="small">{t('dfOverviewRound')}</Text>
-            <Text className="font-mono text-lg font-semibold text-primary">{totalRounds}</Text>
-          </View>
-        </View>
-      )}
-
-      {/* 排序与管理态分行：窄屏不让四段排序和操作按钮互相挤压 */}
-      {games !== null && totalGames > 0 && (
-        <View className="mb-4 gap-3">
-          {!managing ? (
-            <View className="flex-row items-center gap-2">
-              <Tabs
-                value={sort}
-                onValueChange={(v) => setSort(v as SortMode)}
-                className="min-w-0 flex-1"
-              >
-                <TabsList className="mr-0 w-full">
-                  <TabsTrigger value="recent" className="min-w-0 flex-1 px-1">
-                    <Text variant="small">{t('dfOverviewSortRecent')}</Text>
-                  </TabsTrigger>
-                  <TabsTrigger value="oldest" className="min-w-0 flex-1 px-1">
-                    <Text variant="small">{t('dfOverviewSortOldest')}</Text>
-                  </TabsTrigger>
-                  <TabsTrigger value="name" className="min-w-0 flex-1 px-1">
-                    <Text variant="small">{t('dfOverviewSortName')}</Text>
-                  </TabsTrigger>
-                  <TabsTrigger value="round" className="min-w-0 flex-1 px-1">
-                    <Text variant="small">{t('dfOverviewRound')}</Text>
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-11 px-3"
-                onPress={toggleManaging}
-                accessibilityLabel={t('dfOverviewManage')}
-              >
-                <Icon as={ListChecks} size={16} />
-                <Text>{t('dfOverviewManage')}</Text>
-              </Button>
-            </View>
-          ) : (
-            <View className="gap-3 rounded-xl border border-primary bg-muted p-3">
-              <View className="flex-row items-start gap-3">
-                <View className="mt-0.5 h-9 w-9 items-center justify-center rounded-full bg-primary">
-                  <Icon as={ListChecks} size={18} className="text-primary-foreground" />
-                </View>
-                <View className="min-w-0 flex-1 gap-0.5">
-                  <Text className="font-semibold">
-                    {selected.size > 0
-                      ? t('dfOverviewSelectedCount', { count: selected.size })
-                      : t('dfOverviewManage')}
-                  </Text>
-                  <Text variant="small">{t('dfOverviewManageHint')}</Text>
-                </View>
-                <Button variant="secondary" size="sm" onPress={toggleManaging}>
-                  <Text>{t('finish')}</Text>
-                </Button>
-              </View>
-
-              {selected.size > 0 && (
-                <View className="flex-row justify-end gap-2 border-t border-border pt-3">
-                  <Button variant="outline" size="sm" onPress={clearSelection}>
-                    <Icon as={X} size={16} />
-                    <Text>{t('clearSelection')}</Text>
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onPress={batchRemove}
-                    accessibilityLabel={t('dfOverviewBatchDeleteA11y')}
-                    disabled={busy}
-                  >
-                    <Icon as={Trash2} size={16} />
-                    <Text>{t('dfCommonDelete')}</Text>
-                  </Button>
-                </View>
-              )}
-            </View>
-          )}
-        </View>
-      )}
-
       <OverviewContent
         error={error}
         games={games}
@@ -473,6 +516,7 @@ export default function OverviewScreen() {
         mutedForeground={mutedForeground}
         coverBase={coverBase}
         columns={gameListColumns}
+        header={listHeader}
         onRetry={() => setReloadToken((t) => t + 1)}
         onRefresh={refresh}
         onSelect={manageSelect}
