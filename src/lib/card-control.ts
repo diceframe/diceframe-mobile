@@ -38,10 +38,27 @@ export function defaultCardControl(index: number): CardControlMode {
   return index === 0 ? 'human' : 'unclaimed'
 }
 
-/** 把任意值（旧草稿、导入数据、用户输入）收敛成合法控制方式。 */
+/**
+ * 第 1 张就是 GM 席位：它绑定房主自己、永远拿不到操作链接，没有人能认领它。
+ * 「等待认领」在这里只会建出一个连房主都提交不了行动的席位（新版服务端直接拒绝创建），
+ * 所以第 1 张只能是玩家或 AI 托管。
+ */
+export const GM_SEAT_CONTROL_MODES: readonly CardControlMode[] = ['human', 'ai']
+
+/** 某个位置允许的控制方式：第 1 张（GM 席位）不能等待认领，其余三态都可以。 */
+export function cardControlModesAt(index: number): readonly CardControlMode[] {
+  return index === 0 ? GM_SEAT_CONTROL_MODES : CARD_CONTROL_MODES
+}
+
+/**
+ * 把任意值（旧草稿、导入数据、用户输入）收敛成该位置合法的控制方式。
+ *
+ * 删掉第 1 张角色后，原来第 2 张的「等待认领」会顶到 GM 席位上；按位置收敛后它变回
+ * 默认的「玩家」，不会带着一个房主无法使用的状态进入本局。
+ */
 export function normalizeCardControl(value: unknown, index: number): CardControlMode {
   const text = String(value ?? '')
-  return (CARD_CONTROL_MODES as readonly string[]).includes(text)
+  return (cardControlModesAt(index) as readonly string[]).includes(text)
     ? (text as CardControlMode)
     : defaultCardControl(index)
 }
@@ -52,15 +69,16 @@ export function cardControlAt(players: readonly object[], index: number): CardCo
 }
 
 /**
- * 三态循环：human → ai → unclaimed → human，顺序即契约顺序，循环长度取自
- * CARD_CONTROL_MODES，契约变了不用改这里的魔法数。先归一化再取下一个，
- * 所以坏值被点到时会先落回合法模式而不是被跳过。越界不写入。
+ * 三态循环：human → ai → unclaimed → human，顺序即契约顺序；第 1 张（GM 席位）只在
+ * human ↔ ai 之间切换。循环长度取自该位置允许的模式，契约变了不用改这里的魔法数。
+ * 先归一化再取下一个，所以坏值被点到时会先落回合法模式而不是被跳过。越界不写入。
  */
 export function cycleCardControl<T extends object>(players: readonly T[], index: number): T[] {
   const next = withCardControls(players)
   if (index < 0 || index >= next.length) return next
-  const position = CARD_CONTROL_MODES.indexOf(cardControlAt(next, index))
-  next[index] = { ...next[index], control: CARD_CONTROL_MODES[(position + 1) % CARD_CONTROL_MODES.length] }
+  const modes = cardControlModesAt(index)
+  const position = modes.indexOf(cardControlAt(next, index))
+  next[index] = { ...next[index], control: modes[(position + 1) % modes.length] }
   return next
 }
 
