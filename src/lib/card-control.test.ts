@@ -78,7 +78,7 @@ describe('创建期逐卡控制方式', () => {
     const players = withCardControls([{ name: 'A' }, { name: 'B' }, { name: 'C' }])
     const afterRemove = players.filter((_, index) => index !== 0)
     expect(cardControlAt(afterRemove, 0)).toBe('human')
-    const payload = withCardControls(afterRemove) as Array<{ control?: string }>
+    const payload = withCardControls(afterRemove) as { control?: string }[]
     expect(payload.map(player => player.control)).toEqual(['human', 'unclaimed'])
   })
 })

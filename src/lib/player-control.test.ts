@@ -6,7 +6,7 @@ import {
   awayControlPolicy,
   normalizeAwayPolicy,
   readyProgress,
-  controlToggleFor,
+  controlActionsFor,
   isTemporaryHost,
   playerControlMode,
 } from './player-control'
@@ -38,16 +38,23 @@ describe('席位控制方式', () => {
 
 describe('GM 可做的托管切换', () => {
   it('玩家与等待认领都能设为 AI', () => {
-    expect(controlToggleFor(player())).toBe('ai')
-    expect(controlToggleFor(player({ mode: 'unclaimed' }))).toBe('ai')
+    expect(controlActionsFor(player())).toEqual(['ai'])
+    expect(controlActionsFor(player({ mode: 'unclaimed' }))).toEqual(['ai'])
   })
 
   it('GM 显式托管可以交回玩家', () => {
-    expect(controlToggleFor(player({ mode: 'ai' }))).toBe('human')
+    expect(controlActionsFor(player({ mode: 'ai' }))).toEqual(['human'])
+    expect(controlActionsFor(player({ mode: 'ai' }), { gmSeat: true })).toEqual(['human'])
   })
 
   it('暂离带来的临时托管不给托管按钮（该点的是「回来」）', () => {
-    expect(controlToggleFor(player({ mode: 'ai', temporary: true }))).toBeNull()
+    expect(controlActionsFor(player({ mode: 'ai', temporary: true }))).toEqual([])
+  })
+
+  it('GM 自己的席位是等待认领时，先给「由我操作」再给设为 AI', () => {
+    // GM 席位拿不到操作链接、没人能认领；旧版建局留下的这种席位只能由 GM 自己收回。
+    expect(controlActionsFor(player({ mode: 'unclaimed' }), { gmSeat: true })).toEqual(['human', 'ai'])
+    expect(controlActionsFor(player(), { gmSeat: true })).toEqual(['ai'])
   })
 })
 
