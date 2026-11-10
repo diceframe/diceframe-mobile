@@ -32,16 +32,22 @@ export function isTemporaryHost(player?: Player | null): boolean {
 }
 
 /**
- * GM 在这个席位上能做的托管切换：
+ * GM 在这个席位上能做的托管切换（按按钮顺序）：
  * - 已是 GM 显式托管 → 只能停止（交回玩家）；
  * - 暂离带来的临时托管 → 不给按钮：它跟着暂离状态走，该点的是「回来」；
- * - 其余（玩家 / 等待认领）→ 可以设为 AI。
+ * - GM 自己的席位却是等待认领 → 先给「由我操作」再给设为 AI：GM 席位拿不到操作链接，
+ *   没人能认领它，不给这个入口房主每次提交都会被 PLAYER_UNCLAIMED 拒绝；
+ * - 其余（玩家 / 别人的等待认领席位）→ 可以设为 AI。
  * 服务端只接受 'ai' 与 'human' 两个目标模式。
  */
-export function controlToggleFor(player?: Player | null): 'ai' | 'human' | null {
+export function controlActionsFor(
+  player?: Player | null,
+  options: { gmSeat?: boolean } = {},
+): ('ai' | 'human')[] {
   const mode = playerControlMode(player)
-  if (mode === 'ai') return isTemporaryHost(player) ? null : 'human'
-  return 'ai'
+  if (mode === 'ai') return isTemporaryHost(player) ? [] : ['human']
+  if (mode === 'unclaimed' && options.gmSeat) return ['human', 'ai']
+  return ['ai']
 }
 
 /** 任意来源的暂离语义取值（详情字段、设置草稿）；只有显式 ai_takeover 才算，其余按服务端默认的 pause。 */

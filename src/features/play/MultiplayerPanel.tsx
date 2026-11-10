@@ -9,7 +9,7 @@ import { Text } from '@/components/ui/text'
 import type { GameDetail, Player } from '@/api/types'
 import { useT, type T } from '@/i18n/t'
 import {
-  controlToggleFor,
+  controlActionsFor,
   isTemporaryHost,
   playerControlMode,
   type PlayerControlMode,
@@ -53,6 +53,12 @@ function controlBadge(player: Player, t: T): string {
   if (mode === 'ai') return isTemporaryHost(player) ? t('controlAiTemporary') : t('controlAi')
   if (mode === 'unclaimed') return t('controlUnclaimed')
   return t('controlHuman')
+}
+
+/** 交回玩家分两种说法：从 AI 托管收回是「停止托管」，GM 收回自己等待认领的席位是「由我操作」（与 Web 成员菜单一致）。 */
+function controlActionLabel(target: 'ai' | 'human', mode: PlayerControlMode, t: T): string {
+  if (target === 'ai') return t('controlSetAi')
+  return mode === 'unclaimed' ? t('controlClaimOwnSeat') : t('controlStopAi')
 }
 
 const CONTROL_BADGE_CLASS: Record<PlayerControlMode, string> = {
@@ -112,7 +118,9 @@ export function MultiplayerPanel({
         const isGmPlayer = player.user_id === detail.gm_uid
         const hosting = Boolean(hostingUid) && player.user_id === hostingUid
         const controlMode = playerControlMode(player)
-        const controlToggle = controlToggleFor(player)
+        const controlActions = controlActionsFor(player, {
+          gmSeat: Boolean(detail.gm_uid) && isGmPlayer,
+        })
         const tone = hosting ? WAITING_TONE : statusTone(player, detail)
         const label = hosting ? t('controlAiTakingOver') : statusLabel(player, detail, t)
 
@@ -163,19 +171,18 @@ export function MultiplayerPanel({
                       <Text variant="small">{isAway ? t('dfPlayBackToGame') : t('away')}</Text>
                     </Button>
                   )}
-                  {controlToggle && (
+                  {controlActions.map((target) => (
                     <Button
+                      key={target}
                       size="sm"
                       variant="outline"
                       disabled={hosting}
-                      onPress={() => onSetControl(player.user_id, controlToggle)}
+                      onPress={() => onSetControl(player.user_id, target)}
                     >
-                      <Icon as={controlToggle === 'ai' ? Bot : UserRound} size={12} />
-                      <Text variant="small">
-                        {controlToggle === 'ai' ? t('controlSetAi') : t('controlStopAi')}
-                      </Text>
+                      <Icon as={target === 'ai' ? Bot : UserRound} size={12} />
+                      <Text variant="small">{controlActionLabel(target, controlMode, t)}</Text>
                     </Button>
-                  )}
+                  ))}
                   {adjustGameKey ? (
                     <Button
                       size="sm"
