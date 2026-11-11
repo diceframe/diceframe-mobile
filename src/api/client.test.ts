@@ -26,7 +26,7 @@ beforeEach(() => {
   globalThis.fetch = fetchMock as unknown as typeof fetch
   configureApiClient({
     baseUrl: '', token: null, share: null, sessionToken: null, credentials: {},
-    onUnauthorized: undefined, onShareCredentialRejected: undefined,
+    onUnauthorized: undefined, onShareCredentialRejected: undefined, language: null,
   })
 })
 
@@ -626,5 +626,43 @@ describe('跨源重定向不得带走凭证', () => {
     fetchMock.mockResolvedValueOnce(redirectedTo('http://h:18000/api/games/abc/log', { ok: 'same' }))
     await expect(api('/games/abc/log')).resolves.toEqual({ ok: 'same' })
     expect(errorMessage(new ApiError('x', 0, 'CROSS_ORIGIN_REDIRECT'))).toContain('重定向')
+  })
+})
+
+describe('请求语言', () => {
+  function sentHeaders(): Headers {
+    return (fetchMock.mock.calls[0][1] as RequestInit).headers as Headers
+  }
+
+  function okResponse(): Response {
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }
+
+  it('把界面语言作为 Accept-Language 发给服务端', async () => {
+    configureApiClient({ baseUrl: 'http://host', language: 'en' })
+    fetchMock.mockResolvedValue(okResponse())
+    await api('/games')
+    expect(sentHeaders().get('Accept-Language')).toBe('en')
+  })
+
+  it('匿名请求也带语言，但仍不带凭据', async () => {
+    configureApiClient({ baseUrl: 'http://host', token: 'owner-token', language: 'ja' })
+    fetchMock.mockResolvedValue(okResponse())
+    await api('/config', {}, { anonymous: true })
+    expect(sentHeaders().get('Accept-Language')).toBe('ja')
+    expect(sentHeaders().has('Authorization')).toBe(false)
+  })
+
+  it('未设置语言时不带该头，调用方显式指定时以调用方为准', async () => {
+    configureApiClient({ baseUrl: 'http://host' })
+    fetchMock.mockResolvedValue(okResponse())
+    await api('/games')
+    expect(sentHeaders().has('Accept-Language')).toBe(false)
+
+    fetchMock.mockReset()
+    configureApiClient({ language: 'en' })
+    fetchMock.mockResolvedValue(okResponse())
+    await api('/games', { headers: { 'Accept-Language': 'de' } })
+    expect(sentHeaders().get('Accept-Language')).toBe('de')
   })
 })

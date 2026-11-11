@@ -113,6 +113,11 @@ interface ApiContext {
    * settings 同步只改 share、不碰它；有它时以它为准。
    */
   joinShare: ShareIdentity | null
+  /**
+   * 当前界面语言。作为标准的 Accept-Language 发给服务端，服务端的提示文案
+   * （错误信息等）随之返回对应语言；未设置时不带该头，服务端返回默认文案。
+   */
+  language?: string | null
   onUnauthorized?: () => void
   onShareCredentialRejected?: (rejection: ShareCredentialRejection) => void
 }
@@ -361,6 +366,8 @@ function buildHeaders(init: RequestInit, mode: RequestMode, path: string): Heade
     }
   }
   if (init.method && init.method !== 'GET') headers.set('X-TRPG-Confirm', 'true')
+  // 语言不是凭据，匿名请求也带；调用方显式指定时以调用方为准
+  if (context.language && !headers.has('Accept-Language')) headers.set('Accept-Language', context.language)
   return headers
 }
 
