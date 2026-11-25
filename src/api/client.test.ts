@@ -20,6 +20,7 @@ import {
   shareQuery,
   validateAccessToken,
 } from './client'
+import { exportPlayerFinale, fetchPlayerFinale } from './games'
 import i18n from '@/i18n'
 import { credentialKey, type CredentialSlots } from '@/lib/seat-credentials'
 
@@ -47,6 +48,31 @@ describe('normalizeBaseUrl', () => {
     expect(normalizeBaseUrl('HTTP://HOST:80/')).toBe('http://host')
     expect(normalizeBaseUrl('https://user:secret@HOST:443/')).toBe('https://host')
     expect(normalizeBaseUrl('')).toBe('')
+  })
+})
+
+describe('玩家结团鉴权', () => {
+  it('同机保留房主密码时，读档和导出仍只发当前席位与房间凭证', async () => {
+    const baseUrl = 'http://host'
+    const game = 'web|story|bot'
+    configureApiClient({ baseUrl, token: 'owner', share: { game, user: 'alice' },
+      credentials: { [credentialKey(baseUrl, game)]: { seat: 'seat-a', room: 'room-a' } },
+    })
+    fetchMock.mockResolvedValueOnce(Response.json({ ok: true, run_id: 'run', finale: { id: 'archive', status: 'ended', epilogue: 'end', recap: 'recap' } }))
+      .mockResolvedValueOnce(Response.json({ format: 'diceframe-character-carry' }))
+    const { signal } = new AbortController()
+    await fetchPlayerFinale(game, { runId: 'run', finaleId: 'archive', revision: 1 }, signal)
+    await exportPlayerFinale(game, 'character', signal)
+    const queries = fetchMock.mock.calls.map(([request, init]) => {
+      const headers = new Headers(init.headers)
+      expect(headers.get('X-Seat-Token')).toBe('seat-a')
+      expect(headers.get('X-Room-Token')).toBe('room-a')
+      expect(headers.has('Authorization')).toBe(false)
+      expect(headers.has('X-TRPG-Confirm')).toBe(false)
+      return new URL(request).searchParams
+    })
+    expect(queries.map((query) => [query.get('share'), query.get('user'), query.get('uid'), query.get('kind')]))
+      .toEqual([['1', null, null, null], ['1', null, null, 'character']])
   })
 })
 

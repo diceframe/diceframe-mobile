@@ -12,6 +12,7 @@ import type { characters } from './messages/mobile/characters'
 import type { common } from './messages/mobile/common'
 import type { content } from './messages/mobile/content'
 import type { create } from './messages/mobile/create'
+import type { finale } from './messages/mobile/finale'
 import type { lore } from './messages/mobile/lore'
 import type { overview } from './messages/mobile/overview'
 import type { play } from './messages/mobile/play'
@@ -37,7 +38,8 @@ export type AppTranslation = WidenValues<
     (typeof content)['zh'] &
     (typeof table)['zh'] &
     (typeof assistant)['zh'] &
-    (typeof reactions)['zh']
+    (typeof reactions)['zh'] &
+    (typeof finale)['zh']
 >
 
 /** 全部合法文案 key（上游镜像 + 移动端 df 簇） */

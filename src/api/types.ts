@@ -2780,6 +2780,19 @@ export interface BotBindTokenResponse {
 
 // ---- 移动端独有接口 ----
 
+/** GET /games/{key}/run-story：只消费当前身份可见的已结算尾声。 */
+export interface RunFinaleResponse {
+  ok?: boolean
+  run_id?: string
+  finale?: {
+    id?: string
+    status?: string
+    epilogue?: string
+    recap?: string
+    character?: unknown
+  }
+}
+
 /** ASR 语音转写响应 */
 export interface TranscriptionResponse {
   ok?: boolean

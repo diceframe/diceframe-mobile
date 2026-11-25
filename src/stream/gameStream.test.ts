@@ -17,6 +17,7 @@ describe('gameSseEffect', () => {
       'rollback',
       'public_actions',
       'players',
+      'run_story_changed',
       'refresh',
       'private',
       'private_reset',

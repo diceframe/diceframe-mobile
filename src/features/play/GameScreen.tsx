@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { AppState, Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft, ChevronsRight, MoreHorizontal } from 'lucide-react-native'
+import { BookOpen, ChevronLeft, ChevronsRight, MoreHorizontal } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Sheet } from '@/components/patterns/sheet'
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
-import { errorMessage } from '@/api/client'
+import { currentBaseUrl, currentShare, errorMessage, ownerAuthActive } from '@/api/client'
 import { UserFacingError } from '@/lib/user-facing-error'
 import {
   regenerateSwipe,
@@ -50,6 +50,7 @@ import { PlotTracker } from '@/features/play/PlotTracker'
 import { PrivateMessagePanel } from '@/features/play/PrivateMessagePanel'
 import { RoomPasswordModal } from '@/features/play/RoomPasswordModal'
 import { RuleHelpModal } from '@/features/play/RuleHelpModal'
+import { RunFinaleSheet } from '@/features/play/RunFinaleSheet'
 import { SceneBackdrop } from '@/features/play/SceneBackdrop'
 import { SceneGalleryModal } from '@/features/play/SceneGalleryModal'
 import { sceneImageSource } from '@/api/assets'
@@ -65,6 +66,7 @@ import { confirmDestructive } from '@/lib/confirm'
 import { toastNotice } from '@/components/patterns/toast'
 import { createGameLifecycle } from '@/lib/game-lifecycle'
 import { runReadOnlyOf } from '@/lib/game-state'
+import { playerFinaleOf } from '@/lib/run-finale'
 import { overlayOpen } from '@/lib/overlay-focus'
 import {
   economyCurrencyLabel,
@@ -192,6 +194,7 @@ export default function GameScreen() {
   >([])
   const [cardsLoading, setCardsLoading] = React.useState(false)
   const [ruleHelpOpen, setRuleHelpOpen] = React.useState(false)
+  const [openFinaleScope, setOpenFinaleScope] = React.useState<string | null>(null)
   // 对局内换头像抽屉（对齐 Web PlayView 的 showPortraitEditor：面板发事件、屏幕持有弹窗）
   const [portraitOpen, setPortraitOpen] = React.useState(false)
   const [sceneGalleryOpen, setSceneGalleryOpen] = React.useState(false)
@@ -238,6 +241,8 @@ export default function GameScreen() {
     && detail?.ruleset_runtime?.capabilities?.character_lifecycle !== 'rules_aware'
     && levelUpAttributes(mySheet, allocationRules).length > 0
   const runReadOnly = runReadOnlyOf(detail)
+  const finale = detail?.game_key === gameKey && !seatCredentialLost ? playerFinaleOf(detail, userId, isGm) : null
+  const finaleScope = finale ? JSON.stringify([baseUrl, gameKey, userId, identityRevision, finale]) : null
   const draftScope = paymentDraftScope(detail, identityRevision)
   const activePaymentDraft = !runReadOnly && paymentDraft?.scope === draftScope ? paymentDraft : null
   const pendingQuotes = purchaseQuotesOf(detail, submittedQuotes.scope === draftScope ? submittedQuotes.keys : [])
@@ -258,6 +263,17 @@ export default function GameScreen() {
   )
 
   const busy = actionBusy || gmBusy
+
+  function isCurrentFinale() {
+    const current = useGameStore.getState()
+    const share = currentShare()
+    const latest = playerFinaleOf(current.detail, current.userId, current.isGm)
+    // 此处是玩家导出：GM 身份会拿到私有附注的团录，不允许自动回退到房主。
+    return !!finale && !current.seatCredentialLost && current.gameKey === gameKey && share?.game === gameKey
+      && share.user === userId && !ownerAuthActive(gameKey) && currentBaseUrl() === baseUrl
+      && current.userId === userId && current.tableTalkRevision === identityRevision
+      && latest?.runId === finale.runId && latest.finaleId === finale.finaleId && latest.revision === finale.revision
+  }
 
   React.useEffect(() => {
     if (!gameKey) return () => useGameStore.getState().leave()
@@ -769,6 +785,16 @@ export default function GameScreen() {
           </Pressable>
         ) : null}
 
+        {finaleScope ? (
+          <View className="flex-row flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2">
+            <Text variant="small" className="font-semibold">{t('dfFinaleTitle')}</Text>
+            <Button variant="outline" size="sm" onPress={() => setOpenFinaleScope(finaleScope)}>
+              <Icon as={BookOpen} size={16} />
+              <Text>{t('dfFinaleOpen')}</Text>
+            </Button>
+          </View>
+        ) : null}
+
         <View className="min-h-0 flex-1 flex-row">
           <View className="min-w-0 flex-1">
             {/* 时间线（生图后以最新场景图作低亮度背景） */}
@@ -916,6 +942,10 @@ export default function GameScreen() {
         onOpenWorldSwitch={() => void openWorldSwitch()}
         onOpenPaymentComposer={() => openPaymentComposer()}
       />
+
+      {finale && finaleScope && openFinaleScope === finaleScope ? (
+        <RunFinaleSheet key={finaleScope} gameKey={gameKey} identity={finale} isCurrent={isCurrentFinale} onClose={() => setOpenFinaleScope(null)} />
+      ) : null}
 
       {/* 低频页面工具 */}
       <UtilitySheet
