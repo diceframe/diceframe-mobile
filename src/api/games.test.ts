@@ -143,6 +143,18 @@ describe('games API economy contracts', () => {
       body: JSON.stringify(payload),
     })
   })
+
+  it('玩家出价只创建本人支付提案，不自动提交确认', async () => {
+    const payload = {
+      payer_uid: 'alice', recipient_uid: 'alice', amount: 25,
+      reason: '', items: ['通行证', '通行证'], source: 'player_self' as const,
+    }
+    await createPaymentProposal('game/a', payload)
+
+    expect(mockedApi).toHaveBeenCalledExactlyOnceWith('/games/game%2Fa/payments', {
+      method: 'POST', body: JSON.stringify(payload),
+    })
+  })
 })
 
 describe('games API level-up contracts', () => {

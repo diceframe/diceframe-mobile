@@ -104,6 +104,7 @@ export function GameTimeline({
   logPage,
   logTotalPages,
   pendingLuck,
+  purchaseQuotes,
   luckBusy,
   liveNarration,
   gmThinking,
@@ -128,6 +129,7 @@ export function GameTimeline({
   logPage: number
   logTotalPages: number
   pendingLuck: CheckResult[]
+  purchaseQuotes?: React.ReactNode
   luckBusy: boolean
   liveNarration: string
   gmThinking: boolean
@@ -168,7 +170,7 @@ export function GameTimeline({
     if (!pendingKeys.has(key) && !revealKeys.has(key)) revealChecks.push(check)
   }
   const hasOlder = logPage < logTotalPages
-  const liveIdle = !gmThinking && submittedActions.length === 0 && pendingChecks.length === 0
+  const liveIdle = !gmThinking && !purchaseQuotes && submittedActions.length === 0 && pendingChecks.length === 0
 
   // 倒置列表 offset 0 = 最新消息处；向上翻旧记录时 y 单调增大。
   // setState 收到相同布尔值时 React 自动跳过重渲染，滚动高频回调无需手动节流
@@ -241,6 +243,8 @@ export function GameTimeline({
           isGm={!!isGm}
         />
       ))}
+
+      {purchaseQuotes}
 
       {submittedActions.map((action) => {
         const mine = !!currentUserId && action.user_id === currentUserId

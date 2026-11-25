@@ -2788,13 +2788,14 @@ export interface TranscriptionResponse {
   [key: string]: unknown
 }
 
-/** GM 手工创建支付提案 */
+/** GM 开单，或玩家给自己的待报价购买提交支付提案。 */
 export interface PaymentProposalCreatePayload {
   payer_uid: string
   recipient_uid: string
   amount: number
   reason: string
   items: string[]
+  source?: 'player_self'
 }
 
 export interface PaymentProposalCreateResponse {

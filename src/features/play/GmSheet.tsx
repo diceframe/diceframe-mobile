@@ -27,6 +27,7 @@ import { Separator } from '@/components/ui/separator'
 import { Text } from '@/components/ui/text'
 import type { GameDetail, Multiplayer } from '@/api/types'
 import { useT } from '@/i18n/t'
+import { runReadOnlyOf } from '@/lib/game-state'
 import { readyProgress } from '@/lib/player-control'
 
 interface GmSheetProps {
@@ -137,7 +138,7 @@ export function GmSheet({
           <Icon as={BookOpen} size={16} />
           <Text>{t('dfPlayRecap')}</Text>
         </Button>
-        <Button variant="outline" className="flex-1" disabled={busy} onPress={onCreatePayment}>
+        <Button variant="outline" className="flex-1" disabled={busy || runReadOnlyOf(detail) !== null} onPress={onCreatePayment}>
           <Icon as={WalletCards} size={16} />
           <Text>{t('createPaymentProposal')}</Text>
         </Button>
