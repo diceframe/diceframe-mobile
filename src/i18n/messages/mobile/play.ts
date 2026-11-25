@@ -72,7 +72,7 @@ export const play = {
     dfPlaySceneBackdropA11y: '当前场景背景',
     // 运气决策
     dfPlayLuckCheckTitle: '运气检定 · {{label}}',
-    dfPlayLuckDecisionBody: '初始结果 {{roll}}（{{verdict}}）。花费 {{cost}} 点运气重骰，或接受当前结果？',
+    dfPlayLuckDecisionBody: '原出目 {{roll}}（{{verdict}}）。可花费 {{cost}} 点幸运达到所需成功档位，原出目不变。',
     dfPlayLuckSpend: '花费运气重骰',
     dfPlayLuckDecline: '接受结果',
     // 检定卡（运气按钮等文案复用上游 key：spendLuckForSuccess/keepFailure/
@@ -82,6 +82,13 @@ export const play = {
     dfCheckFumble: '大失败',
     dfCheckOpposed: '对抗：{{name}} d20={{roll}} = {{total}}',
     dfCheckOpponent: '对手',
+    dfCheckRequiredRegular: '本次需要普通成功（≤ {{max}}）',
+    dfCheckRegularSuccess: '普通成功',
+    dfCheckHardSuccess: '困难成功',
+    dfCheckExtremeSuccess: '极难成功',
+    dfCheckOpposedWon: '对抗结果：胜出',
+    dfCheckOpposedLost: '对抗结果：落败',
+    dfCheckOpposedTied: '对抗结果：平局',
     // GM 桌面管理
     dfPlayFlow: '流程',
     dfPlayAdvance: '推进回合',
@@ -268,7 +275,7 @@ export const play = {
     dfPlaySceneBackdropA11y: 'Current scene backdrop',
     // Luck decision
     dfPlayLuckCheckTitle: 'Luck Check · {{label}}',
-    dfPlayLuckDecisionBody: 'Initial roll {{roll}} ({{verdict}}). Spend {{cost}} Luck to reroll, or keep the current result?',
+    dfPlayLuckDecisionBody: 'Original roll: {{roll}} ({{verdict}}). Spend {{cost}} Luck to reach the required success level without rerolling.',
     dfPlayLuckSpend: 'Spend Luck to Reroll',
     dfPlayLuckDecline: 'Keep Result',
     // Check card (luck buttons reuse upstream keys: spendLuckForSuccess/keepFailure/
@@ -278,6 +285,13 @@ export const play = {
     dfCheckFumble: 'Critical Failure',
     dfCheckOpposed: 'Opposed: {{name}} d20={{roll}} = {{total}}',
     dfCheckOpponent: 'Opponent',
+    dfCheckRequiredRegular: 'This roll needs a Regular success (≤ {{max}})',
+    dfCheckRegularSuccess: 'Regular success',
+    dfCheckHardSuccess: 'Hard success',
+    dfCheckExtremeSuccess: 'Extreme success',
+    dfCheckOpposedWon: 'Opposed result: won',
+    dfCheckOpposedLost: 'Opposed result: lost',
+    dfCheckOpposedTied: 'Opposed result: tie',
     // GM console
     dfPlayFlow: 'Flow',
     dfPlayAdvance: 'Advance Round',
@@ -462,7 +476,7 @@ export const play = {
     dfPlaySceneBackdropA11y: '現在のシーンの背景',
     // 幸運の判定
     dfPlayLuckCheckTitle: '幸運判定 · {{label}}',
-    dfPlayLuckDecisionBody: '初期出目 {{roll}}（{{verdict}}）。{{cost}}ポイントの幸運を消費して振り直すか、現在の結果を受け入れますか？',
+    dfPlayLuckDecisionBody: '元の出目：{{roll}}（{{verdict}}）。幸運を {{cost}} ポイント消費すると、振り直さずに必要な成功度に達します。',
     dfPlayLuckSpend: '幸運を消費して振り直す',
     dfPlayLuckDecline: '結果を受け入れる',
     // 判定カード（幸運ボタン等の文言は上流キーを流用：spendLuckForSuccess/keepFailure/
@@ -472,6 +486,13 @@ export const play = {
     dfCheckFumble: '大失敗',
     dfCheckOpposed: '対抗：{{name}} d20={{roll}} = {{total}}',
     dfCheckOpponent: '相手',
+    dfCheckRequiredRegular: 'この判定は通常成功が必要（≤ {{max}}）',
+    dfCheckRegularSuccess: '通常成功',
+    dfCheckHardSuccess: '困難成功',
+    dfCheckExtremeSuccess: '極難成功',
+    dfCheckOpposedWon: '対抗結果：勝利',
+    dfCheckOpposedLost: '対抗結果：敗北',
+    dfCheckOpposedTied: '対抗結果：引き分け',
     // GMコンソール
     dfPlayFlow: 'フロー',
     dfPlayAdvance: 'ラウンドを進める',
@@ -656,7 +677,7 @@ export const play = {
     dfPlaySceneBackdropA11y: 'Aktueller Szenenhintergrund',
     // 运气决策
     dfPlayLuckCheckTitle: 'Glücksprobe · {{label}}',
-    dfPlayLuckDecisionBody: 'Erster Wurf: {{roll}} ({{verdict}}). {{cost}} Glückspunkte für einen neuen Wurf ausgeben oder das Ergebnis behalten?',
+    dfPlayLuckDecisionBody: 'Ursprünglicher Wurf: {{roll}} ({{verdict}}). {{cost}} Glückspunkte reichen für die nötige Erfolgsstufe, ohne erneut zu würfeln.',
     dfPlayLuckSpend: 'Glück ausgeben und neu würfeln',
     dfPlayLuckDecline: 'Ergebnis behalten',
     // 检定卡（运气按钮等文案复用上游 key：spendLuckForSuccess/keepFailure/
@@ -666,6 +687,13 @@ export const play = {
     dfCheckFumble: 'Kritischer Patzer',
     dfCheckOpposed: 'Gegenprobe: {{name}} d20={{roll}} = {{total}}',
     dfCheckOpponent: 'Gegner',
+    dfCheckRequiredRegular: 'Diese Probe braucht einen regulären Erfolg (≤ {{max}})',
+    dfCheckRegularSuccess: 'Regulärer Erfolg',
+    dfCheckHardSuccess: 'Schwerer Erfolg',
+    dfCheckExtremeSuccess: 'Extremer Erfolg',
+    dfCheckOpposedWon: 'Ergebnis der Gegenprobe: gewonnen',
+    dfCheckOpposedLost: 'Ergebnis der Gegenprobe: verloren',
+    dfCheckOpposedTied: 'Ergebnis der Gegenprobe: unentschieden',
     // GM 桌面管理
     dfPlayFlow: 'Ablauf',
     dfPlayAdvance: 'Runde fortsetzen',

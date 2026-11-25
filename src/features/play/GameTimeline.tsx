@@ -13,10 +13,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Text } from '@/components/ui/text'
 import type { CheckResult, LogEntry, Player, PublicAction } from '@/api/types'
 import { useT } from '@/i18n/t'
-import { canDecideLuckOf, checkKeyOf, mergePendingLuck } from '@/lib/check-details'
+import { canDecideLuckOf, checkKeyOf, isCheckMasked, mergePendingLuck } from '@/lib/check-details'
+import { cocVerdictText } from '@/lib/coc-check-evidence'
 import { useGameStore, selectPendingLuck } from '@/stores/game'
 
 import { CheckCard } from './CheckCard'
+import { CocCheckEvidence } from './CocCheckEvidence'
 import { PushDecisionPanel } from './PushDecisionPanel'
 import { GmNarration } from './GmNarration'
 import { StorySequenceView } from './StorySequenceView'
@@ -49,6 +51,10 @@ function LuckCard({
   isGm: boolean
 }) {
   const t = useT()
+  const masked = useGameStore((state) => isCheckMasked(state.diceRevealMode, check, state.checkReveals))
+  // 紧凑的运气卡也不能提前暴露骰面或待决选项；先复用检定卡的揭示入口。
+  if (masked) return <CheckCard check={check} actorId={actorId} isGm={isGm} />
+
   return (
     <NativeOnlyAnimatedView entering={FadeInDown.duration(250)}>
       <Card className="gap-2 border-warning p-4">
@@ -58,10 +64,11 @@ function LuckCard({
         <Text variant="muted">
           {t('dfPlayLuckDecisionBody', {
             roll: check.roll ?? '?',
-            verdict: check.original_verdict || check.verdict || '',
+            verdict: cocVerdictText(check.original_verdict || check.verdict || '', t),
             cost: check.luck_cost ?? '?',
           })}
         </Text>
+        <CocCheckEvidence check={check} className="gap-0.5" />
         {canDecide ? (
           <View className="flex-row gap-2">
             <Button
