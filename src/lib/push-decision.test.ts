@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CheckResult } from '@/api/types'
+import { getT } from '@/i18n/t'
 
 import {
+  continueAsFailureFor,
   isSupportedPush,
   pendingPostChecks,
   pushControlsOf,
+  pushDecisionReasonText,
   pushRequestBody,
   type CheckPush,
 } from './push-decision'
@@ -74,6 +77,18 @@ describe('孤注一掷面板控件', () => {
   })
 })
 
+describe('检定选择关闭原因', () => {
+  it('翻译系统原因，保留 GM 自填理由', () => {
+    const t = getT()
+    expect(pushDecisionReasonText('push_timeout', t)).toBe(t('dfPushRollTimedOut'))
+    expect(pushDecisionReasonText('luck_timeout', t)).toBe(t('dfPushRollTimedOut'))
+    expect(pushDecisionReasonText('gm_forced_advance', t)).toBe(t('dfPushRollForcedAdvance'))
+    expect(pushDecisionReasonText('push_disabled_by_gm', t)).toBe(t('dfPushRollDisabled'))
+    expect(pushDecisionReasonText('这里不能换一种方式重试', t)).toBe('这里不能换一种方式重试')
+    expect(pushDecisionReasonText(undefined, t)).toBe('')
+  })
+})
+
 describe('检定后待决议并集', () => {
   it('运气与孤注一掷按检定去重，先到为准', () => {
     const a: CheckResult = { check_id: 'a', luck_decision: 'pending' }
@@ -81,5 +96,15 @@ describe('检定后待决议并集', () => {
     const b: CheckResult = { check_id: 'b', push: push('requested') }
     expect(pendingPostChecks({ pending_luck_decisions: [a], pending_push_decisions: [aPush, b] })).toEqual([a, b])
     expect(pendingPostChecks(null)).toEqual([])
+  })
+
+  it('只在结算阶段且有待处理的运气或孤注一掷时启用「按失败继续」', () => {
+    const luck = [{ check_id: 'a', luck_decision: 'pending' } satisfies CheckResult]
+    const pushes = [{ check_id: 'b', push: push('offered') }]
+    expect(continueAsFailureFor({ state: 'active_judgment', pending_luck_decisions: luck })).toBe(true)
+    expect(continueAsFailureFor({ state: 'active_judgment', pending_push_decisions: pushes })).toBe(true)
+    expect(continueAsFailureFor({ state: 'active_judgment', pending_luck_decisions: [], pending_push_decisions: [] })).toBe(false)
+    expect(continueAsFailureFor({ state: 'active_action', pending_push_decisions: pushes })).toBe(false)
+    expect(continueAsFailureFor(null)).toBe(false)
   })
 })

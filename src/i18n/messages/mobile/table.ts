@@ -141,6 +141,8 @@ export const table = {
     dfPushRollStale: '当前不支持此检定选择',
     dfPushRollError: '保存失败，请刷新后重试',
     dfPushRollDisabled: 'GM 已关闭孤注一掷，本次沿用原检定结果。',
+    dfPushRollForcedAdvance: 'GM 已按失败继续，沿用原检定结果。',
+    dfPushRollTimedOut: '等待超时，已按原检定结果继续。',
     dfPostCheckWaiting: '请先处理骰子卡片上的检定选择，再继续叙事。',
   },
   en: {
@@ -279,6 +281,8 @@ export const table = {
     dfPushRollStale: 'Unsupported check decision',
     dfPushRollError: 'Save failed. Refresh and retry.',
     dfPushRollDisabled: 'The GM disabled Push. Continue with the original check result.',
+    dfPushRollForcedAdvance: 'The GM continued as failure. The original check result stands.',
+    dfPushRollTimedOut: 'Timed out. The original check result stands.',
     dfPostCheckWaiting: 'Resolve the choices on the dice cards before continuing the story.',
   },
   ja: {
@@ -417,6 +421,8 @@ export const table = {
     dfPushRollStale: '未対応の判定選択',
     dfPushRollError: '保存失敗。更新して再試行してください。',
     dfPushRollDisabled: 'GM がプッシュを無効にしました。元の判定結果で続行します。',
+    dfPushRollForcedAdvance: 'GM は失敗として続行しました。元の判定結果が適用されます。',
+    dfPushRollTimedOut: '待ち時間が過ぎたため、元の判定結果で続行しました。',
     dfPostCheckWaiting: '物語を続ける前に、ダイスカードの判定選択を完了してください。',
   },
   de: {
@@ -555,6 +561,8 @@ export const table = {
     dfPushRollStale: 'Unbekannte Probenentscheidung',
     dfPushRollError: 'Speichern fehlgeschlagen. Aktualisieren und erneut versuchen.',
     dfPushRollDisabled: 'Die Spielleitung hat Forcieren deaktiviert. Es gilt das ursprüngliche Probenergebnis.',
+    dfPushRollForcedAdvance: 'Die Spielleitung hat mit dem Fehlschlag fortgesetzt. Es gilt das ursprüngliche Probenergebnis.',
+    dfPushRollTimedOut: 'Die Wartezeit ist abgelaufen. Es gilt das ursprüngliche Probenergebnis.',
     dfPostCheckWaiting: 'Entscheide zuerst über die Proben auf den Würfelkarten, bevor die Geschichte weitergeht.',
   },
 } as const

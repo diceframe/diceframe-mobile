@@ -74,7 +74,7 @@ import { appLayoutForWidth } from '@/lib/layout'
 import { levelUpAttributes, levelUpPoints } from '@/lib/level-up'
 import { actionRecoveryOf, afterRecoveryRefresh, type ActionRecovery } from '@/lib/action-recovery'
 import { actionSkillNames, reconcileActionSkill } from '@/lib/action-skill'
-import { pendingPostChecks } from '@/lib/push-decision'
+import { continueAsFailureFor, pendingPostChecks } from '@/lib/push-decision'
 import { quickActionsVisible, quickActionVisibilityKey } from '@/lib/quick-action-visibility'
 import { isStoredPlayerMember } from '@/lib/player-identity'
 import { createPlayShareScope } from '@/lib/play-share-scope'
@@ -377,17 +377,22 @@ export default function GameScreen() {
     }
   }
 
-  // 对局卡在「正在生成」时的恢复入口：与上游一致复用 advance 指令的
-  // force 语义（中止在飞生成并重新处理本回合），文案复用上游镜像 key。
+  // 同一个 force 指令在等待检定选择时保留原结果，否则用于恢复中断的叙事生成。
   async function handleForceAdvance() {
+    const asFailure = continueAsFailureFor(detail)
     const confirmed = await confirmDestructive({
-      title: t('gmForceAdvanceConfirmTitle'),
-      message: t('gmForceAdvanceConfirm'),
-      confirmText: t('gmForceAdvance'),
+      title: t(asFailure ? 'gmContinueAsFailureConfirmTitle' : 'gmForceAdvanceConfirmTitle'),
+      message: t(asFailure ? 'gmContinueAsFailureConfirm' : 'gmForceAdvanceConfirm'),
+      confirmText: t(asFailure ? 'gmContinueAsFailure' : 'gmForceAdvance'),
       cancelText: t('dfCommonCancel'),
     })
     if (!confirmed) return
-    void runGm(() => useGameStore.getState().advance())
+    // 弹窗期间另一端可能已决议或超时，不把旧确认用于其它回合或另一种推进。
+    const current = useGameStore.getState()
+    if (current.gameKey !== gameKey || !current.isGm || runReadOnlyOf(current.detail)
+      || current.detail?.run_id !== detail?.run_id || current.detail?.round_number !== detail?.round_number
+      || continueAsFailureFor(current.detail) !== asFailure) return
+    void runGm(() => current.advance())
   }
 
   async function openWorldSwitch() {
@@ -484,6 +489,7 @@ export default function GameScreen() {
 
   // 运气与孤注一掷都会让叙事停在骰子卡上；只有运气时沿用上游的「运气决定」状态名
   const pendingChecks = pendingPostChecks(detail)
+  const continueAsFailure = continueAsFailureFor(detail)
   const runReadOnly = runReadOnlyOf(detail)
   // 准备结团优先于其它进行中状态（与上游 PlayView 的 stateLabel 一致）
   const stateLabel = runReadOnly === 'preparing'
@@ -589,7 +595,7 @@ export default function GameScreen() {
             <Button
               size="sm"
               className="shrink-0"
-              disabled={busy || hasBlockingEconomyProposal || runReadOnly !== null}
+              disabled={busy || continueAsFailure || hasBlockingEconomyProposal || runReadOnly !== null}
               onPress={() => void runGm(() => useGameStore.getState().advance())}
             >
               <Text>{t('dfPlayAdvance')}</Text>
@@ -611,7 +617,7 @@ export default function GameScreen() {
               onPress={() => void handleForceAdvance()}
             >
               <Icon as={ChevronsRight} size={16} />
-              <Text>{t('gmForceAdvance')}</Text>
+              <Text>{t(continueAsFailure ? 'gmContinueAsFailure' : 'gmForceAdvance')}</Text>
             </Button>
             {detail?.story_mode === 'dialogue' ? (
               <Button size="sm" variant="outline" className="shrink-0" onPress={() => setStoryPortraitsOpen(true)}>
