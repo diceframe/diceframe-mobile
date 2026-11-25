@@ -78,6 +78,14 @@ export const characters = {
     dfCharacterCardSkillCount: '已填 {{filled}}/{{max}}',
     dfCharacterCardSkillPoints: '技能点 {{spent}}/{{total}}',
     dfCharacterCardSkillMaxValue: '单技能上限 {{max}}',
+    dfCharacterCreationSkillBase: '基础值 {{base}}',
+    dfCharacterCreationSkillValue: '技能数值',
+    dfCharacterCreationAttributesInvalid: '请填齐属性，并检查各项范围和属性点总额。',
+    dfCharacterCreationSkillsInvalid: '请检查技能条数、技能点预算和单项数值上限。',
+    dfCharacterCreationReviewPlayer: '{{name}}：{{reason}}',
+    dfCharacterCreationEditDetails: '配置属性与技能',
+    dfCharacterCreationDiscardDetails: '放弃本次属性与技能调整',
+    dfCharacterCreationServerRejected: '服务器拒绝了这张角色卡。请核对本局的属性、技能和装备限制。',
     // useCharacters 错误兜底复用 profile 簇的 dfCharacterSaveFailed/dfCharacterUpdateFailed/dfCharacterDeleteFailed
   },
   en: {
@@ -154,6 +162,14 @@ export const characters = {
     dfCharacterCardSkillCount: 'Filled {{filled}}/{{max}}',
     dfCharacterCardSkillPoints: 'Skill points {{spent}}/{{total}}',
     dfCharacterCardSkillMaxValue: 'Per-skill max {{max}}',
+    dfCharacterCreationSkillBase: 'Base {{base}}',
+    dfCharacterCreationSkillValue: 'Skill value',
+    dfCharacterCreationAttributesInvalid: 'Fill in every attribute and check the individual ranges and total points.',
+    dfCharacterCreationSkillsInvalid: 'Check the skill count, point budget, and per-skill limit.',
+    dfCharacterCreationReviewPlayer: '{{name}}: {{reason}}',
+    dfCharacterCreationEditDetails: 'Configure attributes and skills',
+    dfCharacterCreationDiscardDetails: 'Discard attribute and skill changes',
+    dfCharacterCreationServerRejected: 'The server rejected this character. Check the game’s limits for attributes, skills, and equipment.',
     // useCharacters error fallbacks reuse the profile cluster's dfCharacterSaveFailed/dfCharacterUpdateFailed/dfCharacterDeleteFailed
   },
   ja: {
@@ -230,6 +246,14 @@ export const characters = {
     dfCharacterCardSkillCount: '入力済み {{filled}}/{{max}}',
     dfCharacterCardSkillPoints: 'スキルポイント {{spent}}/{{total}}',
     dfCharacterCardSkillMaxValue: '単一スキルの上限 {{max}}',
+    dfCharacterCreationSkillBase: '初期値 {{base}}',
+    dfCharacterCreationSkillValue: '技能値',
+    dfCharacterCreationAttributesInvalid: 'すべての能力値を入力し、各項目の範囲と合計ポイントを確認してください。',
+    dfCharacterCreationSkillsInvalid: '技能数、技能ポイント、各技能値の上限を確認してください。',
+    dfCharacterCreationReviewPlayer: '{{name}}：{{reason}}',
+    dfCharacterCreationEditDetails: '能力値と技能を設定',
+    dfCharacterCreationDiscardDetails: '能力値と技能の変更を破棄',
+    dfCharacterCreationServerRejected: 'サーバーがキャラクターシートを受け付けませんでした。この卓の能力値、技能、装備の制限を確認してください。',
     // useCharacters のエラーは profile 簇の dfCharacterSaveFailed/dfCharacterUpdateFailed/dfCharacterDeleteFailed を再利用
   },
   de: {
@@ -302,5 +326,13 @@ export const characters = {
     dfCharacterCardSkillCount: 'Ausgefüllt: {{filled}}/{{max}}',
     dfCharacterCardSkillPoints: 'Fertigkeitspunkte: {{spent}}/{{total}}',
     dfCharacterCardSkillMaxValue: 'Maximum pro Fertigkeit: {{max}}',
+    dfCharacterCreationSkillBase: 'Grundwert {{base}}',
+    dfCharacterCreationSkillValue: 'Fertigkeitswert',
+    dfCharacterCreationAttributesInvalid: 'Fülle alle Attribute aus und prüfe die einzelnen Bereiche und die Gesamtpunktzahl.',
+    dfCharacterCreationSkillsInvalid: 'Prüfe die Anzahl der Fertigkeiten, das Punktebudget und die Obergrenze pro Fertigkeit.',
+    dfCharacterCreationReviewPlayer: '{{name}}: {{reason}}',
+    dfCharacterCreationEditDetails: 'Attribute und Fertigkeiten festlegen',
+    dfCharacterCreationDiscardDetails: 'Änderungen an Attributen und Fertigkeiten verwerfen',
+    dfCharacterCreationServerRejected: 'Der Server hat den Charakterbogen abgelehnt. Prüfe die Grenzen für Attribute, Fertigkeiten und Ausrüstung in dieser Partie.',
   },
 } as const

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { CharacterCard, CharacterPortrait } from '@/api/types'
 import {
   applyCardToDraft,
+  beginJoinCreation,
   buildJoinNewPayload,
   joinFormReady,
 } from './join-form'
@@ -99,6 +100,31 @@ describe('buildJoinNewPayload（对照 Web create() 的字段清单）', () => {
     expect('rule_id' in payload).toBe(false)
     expect('rule_name' in payload).toBe(false)
     expect('ruleset_runtime' in payload).toBe(false)
+  })
+
+  it('显式配置属性技能时才发送新角色的完整属性和技能，未填数值留给服务器', () => {
+    const creation = beginJoinCreation({ rule_attrs: [{ key: 'dex', min: 15, max: 90 }], rule_attrs_total: 55 }, null)
+    creation.skills.push({ name: 'Dodge' }, { name: 'Spot Hidden', value: 0 }, { name: '' })
+    expect(buildJoinNewPayload({ characterName: 'Mira', background: '', portrait: undefined }, null, creation)).toEqual({
+      join_as_new: true, character_name: 'Mira', background: '', attributes: { dex: 55 },
+      skills: [{ name: 'Dodge' }, { name: 'Spot Hidden', value: 0 }],
+    })
+  })
+
+  it('调整库卡只覆盖属性和技能，保留未编辑字段与技能元数据', () => {
+    const card = cardOf({ attributes: { dex: 55, extra: 3 },
+      skills: ['闪避', { name: '侦查', id: 'spot_hidden', value: 40 }],
+      equipment: [{ name: '手电筒' }], identity: { archetype: '调查员' },
+    })
+    const creation = beginJoinCreation({ rule_attrs: [{ key: 'dex', min: 15, max: 90 }, { key: 'edu', min: 40, max: 90 }] }, card)
+    creation.skills[1] = { ...creation.skills[1], value: 50 }
+    const payload = buildJoinNewPayload({ characterName: 'Mira', background: '', portrait: undefined }, card, creation)
+    expect(payload).toMatchObject({
+      attributes: { dex: 55, edu: expect.any(Number), extra: 3 },
+      skills: ['闪避', { name: '侦查', id: 'spot_hidden', value: 50 }],
+      equipment: card.equipment, identity: card.identity,
+    })
+    expect(card.skills?.[1]).toMatchObject({ value: 40 })
   })
 
   it('选卡后用户改了姓名/背景：以草稿为准（卡上三项不回灌）', () => {
