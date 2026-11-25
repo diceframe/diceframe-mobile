@@ -5,7 +5,7 @@ export interface CharacterResource { current?: number; max?: number; min?: numbe
 export interface CharacterIdentity { [key: string]: string | number | undefined }
 
 /** `effect` is player-authored skill description: display / AI context only, never mechanics. */
-export interface CharacterSkill { name: string; value?: number; effect?: string }
+export interface CharacterSkill { name: string; value?: number; effect?: string; id?: string }
 
 export interface CharacterItem { name?: string; type?: string; damage?: number; damage_dice?: string; slot?: string; quality?: string; qty?: number; effect?: string; category?: string; note?: string; [key: string]: unknown }
 
@@ -224,6 +224,18 @@ export interface CheckResult {
   threshold?: number
   hard_threshold?: number
   extreme_threshold?: number
+  /** 规则要求的成功等级（CoC 难度档位）；缺省为常规。 */
+  difficulty?: 'regular' | 'hard' | 'extreme' | string
+  required_threshold?: number
+  /** 未达到所需档位或输掉对抗时，骰面本身的成功等级。 */
+  achieved_verdict?: string
+  opposed?: {
+    opponent_skill?: string
+    opponent_threshold?: number
+    opponent_roll?: number
+    opponent_verdict?: string
+    outcome?: 'win' | 'lose' | 'tie' | string
+  }
   verdict?: string
   luck_spend_available?: boolean
   luck_cost?: number | null
@@ -284,13 +296,74 @@ export interface RestSessionParticipant {
 
 export interface RestSessionStatus {
   active: boolean
-  status: 'idle' | 'collecting' | 'resolving' | 'completed' | 'error' | string
+  status: 'idle' | 'collecting' | 'awaiting_approval' | 'resolving' | 'completed' | 'rejected' | 'error' | string
   rest: 'short' | 'long' | null | string
   ready_count: number
   active_count: number
   participants: RestSessionParticipant[]
-  resolved_at?: string
+  /** Logical game clock ({day, minute}), never a wall-clock timestamp. */
+  started_clock?: { day: number, minute: number } | null
+  awaiting_since_clock?: { day: number, minute: number } | null
+  resolved_clock?: { day: number, minute: number } | null
+  /** Minutes this rest consumes, as declared by the ruleset. */
+  duration_minutes?: number | null
+  decided?: boolean
   error?: string
+}
+
+/** A GM verdict on a party rest that is waiting for approval. */
+export interface RestDecisionResponse {
+  ok: boolean
+  duplicate?: boolean
+  rejected?: boolean
+  duration_minutes?: number
+  rest_session?: RestSessionStatus
+  error?: string
+  code?: string
+}
+
+/** One spell a free-cast slot may legally hold, as computed by the server. */
+export interface RestSpellOption {
+  ref: string
+  name: string
+  level: number
+}
+
+/** A free-cast slot a long rest may re-choose (Spell Mastery study). */
+export interface RestFreeCastSlot {
+  slot_id: string
+  feature_id: string
+  spell_level: number
+  recharge: string
+  spell_ref: string
+  spell_name: string
+  /** How many slots may be re-chosen in one rest; the server enforces it too. */
+  rest_replace: number
+  valid: boolean
+  options: RestSpellOption[]
+}
+
+/** The terrain a Circle of the Land druid commits on every long rest. */
+export interface RestLandTerrain {
+  owner: string
+  feature_id: string
+  current: string
+  options: string[]
+  required: boolean
+}
+
+/** Long-rest choices this character owns; empty fields mean "nothing to ask". */
+export interface RestOptions {
+  land_terrain: RestLandTerrain | null
+  free_cast: RestFreeCastSlot[]
+}
+
+export interface RulesetRestOptionsResponse extends JsonObject {
+  ok: boolean
+  code?: string
+  error?: string
+  rest_options?: RestOptions
+  rest_session?: RestSessionStatus
 }
 
 export interface LiveAdvancementPlayerStatus {
@@ -380,6 +453,7 @@ export interface GameDetail {
   quick_actions?: string[]
   quick_actions_enabled?: boolean
   economy_proposals?: PendingPayment[]
+  pending_purchase_quotes?: { payer_uid: string; target: string; quantity: number }[]
   run_id?: string
   pending_luck_decisions?: CheckResult[]
   pending_push_decisions?: CheckResult[]
@@ -914,9 +988,14 @@ export interface RuleMeta {
   max_skills?: number
   skill_mode?: string
   skill_point_total?: number
+  /** 按属性计算技能点预算的公式（如 CoC：edu * 4 + int * 2）；缺省用 skill_point_total。 */
+  skill_point_formula?: string
   max_skill_value?: number
   skill_point_spend_mode?: string
   skill_base_values?: Record<string, number>
+  /** 当前语言下每个已知技能名的基础值；formula 表示由属性派生（如闪避 = dex // 2）。 */
+  skill_base_lookup?: Record<string, { base: number; formula?: string }>
+  custom_skill_base?: number
   skill_pools?: Record<string, string[]>
   skill_pool?: SkillSpec[]
   skills?: SkillSpec[]
@@ -937,6 +1016,8 @@ export interface RulesetRuntimeCapabilities {
   session_zero: boolean
   tutorial_coach: boolean
   narrative_turns: boolean
+  sequential_checks?: boolean
+  composite_action?: boolean
   adventure_formats?: string[]
 }
 
@@ -1136,6 +1217,47 @@ export interface RulesetAdvancementApplyResponse {
   duplicate?: boolean
 }
 
+/** The choices a card still owes, in level order. Same shape as a requirement. */
+export interface RulesetPendingChoicesResponse {
+  ok: boolean
+  rule_id: string
+  card_id: string
+  revision: number
+  missing: JsonObject[]
+}
+
+export interface RulesetSpellOption {
+  ref: string
+  name: string
+  level: number
+}
+
+/** The class's own preparation rules, exactly as the class content declares. */
+export interface SpellPreparationPolicy {
+  source: 'class_list' | 'spellbook'
+  level_up_replace: number
+  long_rest_replace: 'any' | number
+  cantrip_swap_on: 'level_up' | 'long_rest' | 'none'
+}
+
+export interface SpellPreparationOptions {
+  class_ref: string
+  level: number
+  policy: SpellPreparationPolicy | null
+  prepared_capacity: number
+  prepared_spell_refs: string[]
+  spellbook_refs: string[]
+  cantrip_capacity: number
+  cantrip_refs: string[]
+  cantrips: RulesetSpellOption[]
+  leveled_spells: RulesetSpellOption[]
+}
+
+export interface SpellPreparationOptionsResponse extends JsonObject {
+  ok: boolean
+  spells: SpellPreparationOptions
+}
+
 export interface RulesetRestResponse extends JsonObject {
   ok: boolean
   rule_id: string
@@ -1187,6 +1309,7 @@ export interface RulesetCombatWeapon extends JsonObject {
   weapon_ref?: string
   attack_id?: string
   damage: string
+  damage_two_handed?: string
   damage_type?: string
   range?: number
   thrown_range?: number
@@ -1208,6 +1331,10 @@ export interface RulesetCombatSpell extends JsonObject {
   repeat_targets?: boolean
   resist_choice?: string[]
   trigger_target_id?: string
+  /** The server exposes this only when the spell attack can still spend a Lucky point. */
+  lucky_advantage_available?: boolean
+  /** The server exposes this only when Overchannel can legally maximize this casting. */
+  overchannel_available?: boolean
 }
 
 export interface RulesetCombatReactionFeature extends JsonObject {
@@ -1231,6 +1358,10 @@ export interface RulesetCombatAction extends JsonObject {
   expected_version: number
   weapons?: RulesetCombatWeapon[]
   spells?: RulesetCombatSpell[]
+  /** Server-projected items this actor may legally activate right now. */
+  items?: RulesetActivatableItem[]
+  /** GM-only random treasure tables; the server rolls, the client only picks a ref. */
+  tables?: RulesetTreasureTable[]
   targets?: RulesetCombatTarget[]
   decisions?: RulesetPendingDecision[]
   movement_remaining?: number
@@ -1242,6 +1373,28 @@ export interface RulesetCombatAction extends JsonObject {
   feature_id?: string
   costs?: RulesetCapabilityCost[]
   requires_target?: boolean
+  /** Declared only for actions whose roll can still spend a Lucky point. */
+  lucky_advantage_available?: boolean
+}
+
+export interface RulesetActivatableItem {
+  item_ref: string
+  name: string
+  cost: string
+  target: string
+}
+
+export interface RulesetTreasureTable {
+  table_ref: string
+  name: string
+}
+
+/** Server-projected treasure roll result; refs stay canonical identities. */
+export interface RulesetTreasureResult extends JsonObject {
+  table_ref?: string
+  items?: Array<{ item_ref: string; qty: number; label?: string }>
+  coins_gp?: number
+  coins?: { amount: number; unit: string }
 }
 
 export interface RulesetEncounterPreset extends JsonObject {
@@ -1496,6 +1649,35 @@ export interface RulesetGameplayView {
   recent_combat_events?: RulesetCombatEvent[]
   director?: { context?: JsonObject; proposal?: RulesetDirectorProposal }
   campaign?: RulesetCampaignView
+  /**
+   * 规则运行时自带的声明式面板。
+   *
+   * 插件不能携带 Vue 组件（`ruleset-runtime` 只贡献 rules），所以规则的
+   * 专属信息（命刻、机会、冲突步骤）只能以这组声明式节点表达，由
+   * `GameplayDeclarativeNode` 渲染。宿主不解释节点语义，只渲染。
+   */
+  panels?: GameplayDeclarativeNode[]
+}
+
+/**
+ * 声明式节点：规则运行时与 gameplay provider 共用的最小渲染词汇。
+ *
+ * 与 `GameplayDeclarativeNode.vue` 的 `component` 分支一一对应；新增控件
+ * 必须同时改渲染器和这里，否则插件发来的节点会被静默丢弃。
+ */
+export interface GameplayDeclarativeNode extends Record<string, unknown> {
+  component: 'group' | 'text' | 'value' | 'progress' | 'button' | 'list'
+  label?: string
+  value?: unknown
+  projected_value?: unknown
+  children?: GameplayDeclarativeNode[]
+  /** `button` 专用：提交为 intent 的 `type`。 */
+  action?: string
+  /** `button` 专用：并入 intent 的其余字段。 */
+  arguments?: JsonObject
+  /** `progress` 专用。 */
+  min?: number
+  max?: number
 }
 
 export interface RulesetDirectorProposal {
@@ -1653,6 +1835,8 @@ export interface WorldSummary {
   world_name?: string
   description?: string
   entry_count?: number
+  /** 这个世界的 world 域资料册本数，与 entry_count 同口径（主册 + 额外书）。 */
+  book_count?: number
   language?: string
   scene_image?: SceneImageRef
   /** Optional pool of content-provided defaults; scene_image remains the legacy primary. */
@@ -1909,6 +2093,18 @@ export interface PluginInfo {
   tools?: PluginToolDescriptor[]
   contributions?: PluginContribution[]
   docs?: string
+  /** 宿主投影的硬依赖（requires.plugins）：装到哪个版本、是否满足。 */
+  dependencies?: PluginDependency[]
+  /** 反向边：装了哪些插件依赖它。 */
+  dependents?: string[]
+}
+
+export interface PluginDependency {
+  id: string
+  minimum_version: string
+  available: boolean
+  satisfied: boolean
+  version?: string
 }
 
 export interface PluginToolDescriptor {
@@ -2011,6 +2207,9 @@ export interface PluginMarketplaceItem {
   branch?: string
   stars?: number
   distribution?: 'repository' | 'bundled' | string
+  listing_status?: 'approved' | 'paused' | 'withdrawn' | string
+  listing_status_reason?: string
+  listing_status_at?: string
   risk_level?: 'declarative' | 'unrestricted-process' | 'bundled' | 'unknown' | string
   update_policy?: 'automatic' | 'notify' | 'application' | 'approval-required' | 'blocked' | string
   author?: unknown
@@ -2029,6 +2228,10 @@ export interface PluginMarketplaceItem {
   installed_update_policy?: string
   trust_level?: 'official' | 'verified' | 'community' | string
   commit_sha?: string
+  approved_release_tag?: string
+  approved_commit?: string
+  approved_archive_url?: string
+  approved_artifact_sha256?: string
   approved_permissions?: string[]
   permission_changes?: string[]
   verified?: boolean
@@ -2072,6 +2275,19 @@ export interface PluginMarketplaceItem {
     rating?: { stars: number; tags: string[] } | null
   }
   generated_at?: string
+}
+
+export interface PluginUiView {
+  plugin_id: string
+  plugin_name: string
+  descriptor: Record<string, unknown>
+}
+
+export interface PluginUiResponse {
+  ok: boolean
+  views: PluginUiView[]
+  diagnostics?: Array<{ plugin_id: string; error: string }>
+  error?: string
 }
 
 export interface PluginMarketplaceResponse {
@@ -2219,8 +2435,20 @@ export interface AppConfig {
   fallback2_enabled?: boolean
   fallback2_model?: string
   embedding_enabled?: boolean
+  embedding_source?: 'external' | 'local' | string
+  embedding_local_model_id?: string
+  embedding_local_models?: Array<{ id: string; display_name?: string; version?: string; dimension?: number; license?: string; status?: string; error?: string }>
+  embedding_model_catalog?: Array<{ id: string; display_name?: string; version?: string; dimension?: number; license?: string; status?: string; size_bytes?: number; error?: string }>
   embedding_model?: string
   embedding_max_input?: number
+  embedding_status?: {
+    profile?: string | null
+    total_active?: number
+    ready_current_profile?: number
+    pending?: number
+    state?: 'ready' | 'rebuilding' | 'disabled' | string
+    rebuild_error?: string
+  }
   narrative_max_tokens?: number
   character_gen_max_tokens?: number
   summary_max_tokens?: number

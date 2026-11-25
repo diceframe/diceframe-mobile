@@ -27,7 +27,7 @@
 
 import { getRandomValues } from 'expo-crypto'
 
-import { getT } from '@/i18n/t'
+import { contentLanguage, getT } from '@/i18n/t'
 import type { TKey } from '@/i18n/keyset'
 import { normalizeBaseUrl } from '@/lib/base-url'
 import {
@@ -335,9 +335,16 @@ function requestModeOf(path: string, options: ApiOptions): RequestMode {
   return 'owner'
 }
 
+function localizedHeaders(init?: HeadersInit): Headers {
+  const headers = new Headers(init)
+  // 服务端按请求语言返回业务提示；每次请求读取，以便切换界面语言后立即生效。
+  if (!headers.has('Accept-Language')) headers.set('Accept-Language', contentLanguage())
+  return headers
+}
+
 function buildHeaders(init: RequestInit, mode: RequestMode, path: string): Headers {
   const anonymous = mode === 'anonymous'
-  const headers = new Headers(init.headers)
+  const headers = localizedHeaders(init.headers)
   const rawBody = isRawBody(init.body)
   if (!rawBody && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
   if (anonymous) {
@@ -546,7 +553,7 @@ export async function apiBlob(
 
 /** POST /api/login 校验 owner 密码 */
 export async function validateAccessToken(value: string): Promise<void> {
-  const headers = new Headers()
+  const headers = localizedHeaders()
   if (value) headers.set('Authorization', `Bearer ${value}`)
   const response = await guardedFetch(buildUrl('/login'), { method: 'POST', headers })
   const data = await readJson(response)
@@ -562,7 +569,7 @@ export type OwnerAccessStatus = 'allowed' | 'login-required' | 'unavailable'
 /** GET /api/me：探测 owner 访问态（不带分享参数，玩家身份不得越权） */
 export async function checkOwnerAccess(): Promise<OwnerAccessStatus> {
   try {
-    const headers = new Headers()
+    const headers = localizedHeaders()
     if (context.token) headers.set('Authorization', `Bearer ${context.token}`)
     const response = await guardedFetch(buildUrl('/me'), { headers })
     if (response.status === 401) return 'login-required'

@@ -4,6 +4,7 @@ import {
   ApiError,
   api,
   apiBlob,
+  apiStream,
   buildPlaySseUrl,
   buildStaticAssetUrl,
   buildUrl,
@@ -15,8 +16,11 @@ import {
   hasSeatToken,
   normalizeBaseUrl,
   retryOnRateLimit,
+  setJoinShare,
   shareQuery,
+  validateAccessToken,
 } from './client'
+import i18n from '@/i18n'
 import { credentialKey, type CredentialSlots } from '@/lib/seat-credentials'
 
 const fetchMock = vi.fn()
@@ -28,6 +32,7 @@ beforeEach(() => {
     baseUrl: '', token: null, share: null, sessionToken: null, credentials: {},
     onUnauthorized: undefined, onShareCredentialRejected: undefined,
   })
+  setJoinShare(null)
 })
 
 afterEach(() => {
@@ -202,6 +207,29 @@ describe.each([
   })
 })
 
+describe('请求语言', () => {
+  it('常规、流式、二进制和连接探测都取即时语言，并保留调用方明确指定的语言', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(jsonResponse({ ok: true })))
+    const originalLanguage = i18n.language
+    try {
+      await i18n.changeLanguage('ja')
+      await api('/games')
+      await apiStream('/assistant/agent/run', { method: 'POST' })
+      await i18n.changeLanguage('de')
+      await apiBlob('/games/abc/export')
+      await fetchAppConfig()
+      await validateAccessToken('password')
+      await checkOwnerAccess()
+      await api('/games', { headers: { 'accept-language': 'en' } })
+
+      const languages = fetchMock.mock.calls.map(([, init]) => new Headers(init.headers).get('Accept-Language'))
+      expect(languages).toEqual(['ja', 'ja', 'de', 'de', 'de', 'de', 'en'])
+    } finally {
+      await i18n.changeLanguage(originalLanguage)
+    }
+  })
+})
+
 describe('api()', () => {
   it('GET 默认 JSON 头 + Bearer；非 GET 追加 X-TRPG-Confirm', async () => {
     configureApiClient({ baseUrl: 'http://h', token: 'secret' })
@@ -282,6 +310,11 @@ describe('api()', () => {
     expect(errorMessage(new ApiError('server detail', 409, 'UNKNOWN_CONFLICT'))).toBe(
       '当前状态已发生变化，请刷新后重试。',
     )
+  })
+
+  it('孤注一掷的拒绝与过期错误采用上游业务文案', () => {
+    expect(errorMessage(new ApiError('fallback', 403, 'PUSH_FORBIDDEN'))).toContain('只能由该检定的行动者本人')
+    expect(errorMessage(new ApiError('fallback', 409, 'PUSH_INVALID_OR_STALE'))).toBe('检定选择已变化，请刷新后重试')
   })
 
   it('结团只读、冒险结局这类刷新也解决不了的 409 给出具体原因', () => {
@@ -461,18 +494,23 @@ describe('席位凭证 / 房间令牌请求头注入', () => {
     expect(sentHeaders().get('X-TRPG-Confirm')).toBe('true')
   })
 
-  it('401 SEAT_TOKEN_INVALID：内存凭证立刻作废并通知路由层，不当成 Owner 掉线', async () => {
+  it('同机房主以邀请席位加入：轮换令牌只清玩家凭证，不会回退为房主或提示重新登录', async () => {
     const onShareCredentialRejected = vi.fn()
     const onUnauthorized = vi.fn()
     configureApiClient({
       baseUrl: 'http://h',
-      share: { game: 'abc', user: 'u1' },
+      token: 'owner',
+      share: { game: 'other', user: 'other-user' },
       credentials: slots({ [credentialKey('http://h', 'abc')]: { seat: 'old', room: 'room' } }),
       onShareCredentialRejected,
       onUnauthorized,
     })
+    setJoinShare({ game: 'abc', user: 'u1' })
     fetchMock.mockResolvedValueOnce(jsonResponse({ error_code: 'SEAT_TOKEN_INVALID', error: 'x' }, 401))
-    const error = (await rejectionOf(api('/games/abc/log'))) as ApiError
+    const error = (await rejectionOf(api('/games/abc/log?user=stale'))) as ApiError
+    expect(sentHeaders(0).get('X-Seat-Token')).toBe('old')
+    expect(sentHeaders(0).get('Authorization')).toBeNull()
+    expect(new URL(fetchMock.mock.calls[0][0]).searchParams.has('user')).toBe(false)
     expect(error.code).toBe('SEAT_TOKEN_INVALID')
     expect(onShareCredentialRejected).toHaveBeenCalledWith({ kind: 'seat', baseUrl: 'http://h', game: 'abc' })
     expect(onUnauthorized).not.toHaveBeenCalled()
@@ -480,8 +518,11 @@ describe('席位凭证 / 房间令牌请求头注入', () => {
 
     await api('/games/abc/log')
     expect(sentHeaders(1).get('X-Seat-Token')).toBeNull()
-    // 房间令牌与席位凭证独立，不连坐
+    expect(sentHeaders(1).get('Authorization')).toBeNull()
+    // 房间令牌与席位凭证独立，不连坐；房主仍能访问全局数据。
     expect(sentHeaders(1).get('X-Room-Token')).toBe('room')
+    await api('/games')
+    expect(sentHeaders(2).get('Authorization')).toBe('Bearer owner')
   })
 
   it('403 needs_room_password：标记 needsRoomPassword、清房间令牌并通知重新输入', async () => {
