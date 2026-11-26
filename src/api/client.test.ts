@@ -347,6 +347,7 @@ describe('api()', () => {
     expect(errorMessage(new ApiError('x', 409, 'RUN_READ_ONLY'))).toBe('本局已结团或正在准备结团，只能查看。')
     expect(errorMessage(new ApiError('x', 409, 'RUN_ENDED'))).toBe('本局已结团或正在准备结团，只能查看。')
     expect(errorMessage(new ApiError('x', 409, 'ADVENTURE_ENDED'))).toBe('故事已经抵达结局，不能再提交行动。')
+    expect(errorMessage(new ApiError('x', 403, 'GM_SEAT_REQUIRES_OWNER'))).toBe('该席位属于 GM，需要房主登录后才能操作。')
   })
 
   it('Owner 模式 401 触发 onUnauthorized，玩家模式不触发', async () => {
@@ -379,6 +380,27 @@ describe('api()', () => {
     expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Cookie')).toBe(
       `trpg_session=${'deadbeef'.repeat(4)}`,
     )
+  })
+
+  it('原生端禁用原生 CookieJar（credentials: omit），Web 端保留浏览器 cookie jar', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }))
+    await api('/games')
+    await fetchAppConfig()
+    expect(fetchMock.mock.calls[0][1].credentials).toBe('omit')
+    expect(fetchMock.mock.calls[1][1].credentials).toBe('omit')
+
+    const prevDocument = (globalThis as { document?: unknown }).document
+    ;(globalThis as { document?: unknown }).document = {}
+    try {
+      await api('/games')
+      expect(fetchMock.mock.calls[2][1].credentials).toBeUndefined()
+    } finally {
+      if (prevDocument === undefined) {
+        Reflect.deleteProperty(globalThis, 'document')
+      } else {
+        ;(globalThis as { document?: unknown }).document = prevDocument
+      }
+    }
   })
 
   it('二进制响应体走 arrayBuffer 而不是 json', async () => {
