@@ -10,9 +10,12 @@ import { Icon } from '@/components/ui/icon'
 import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
+import { CreationAttributesEditor } from '@/features/characters/CreationAttributesEditor'
 import { PortraitPickerSection } from '@/features/characters/PortraitPickerSection'
+import { SkillRowsEditor } from '@/features/characters/SkillRowsEditor'
 import { JoinCardPickerSheet } from '@/features/join/JoinCardPickerSheet'
-import { JOIN_BACKGROUND_LIMIT, JOIN_NAME_LIMIT } from '@/lib/join-form'
+import type { CreationSchema } from '@/lib/character-creation'
+import { beginJoinCreation, JOIN_BACKGROUND_LIMIT, JOIN_NAME_LIMIT, type JoinCreationDraft } from '@/lib/join-form'
 import { useT } from '@/i18n/t'
 
 interface JoinCharacterFormProps {
@@ -28,6 +31,9 @@ interface JoinCharacterFormProps {
   /** 本局规则（标出规则不同的本机卡） */
   gameRuleId?: string
   cardsLoading: boolean
+  creationSchema?: CreationSchema
+  creation: JoinCreationDraft | null
+  onChangeCreation: (value: JoinCreationDraft | null) => void
   onChangeCharacterName: (name: string) => void
   onChangeBackground: (background: string) => void
   onChangePortrait: (portrait: CharacterPortrait | null) => void
@@ -36,9 +42,7 @@ interface JoinCharacterFormProps {
 }
 
 /**
- * 新玩家建卡表单（对局加入页 identity 步骤的 join_as_new 分支）。
- * 范围对齐任务红线：姓名 + 背景 + 头像 + 从共享卡库选卡四项；
- * 属性/技能没有编辑入口，只能随所选库卡整卡带入（对齐 Web JoinView 简化版）。
+ * 新玩家建卡表单：默认轻量加入；规则支持时可手填属性/技能或调整选中的卡。
  */
 export function JoinCharacterForm({
   disabled,
@@ -50,6 +54,9 @@ export function JoinCharacterForm({
   localCards,
   gameRuleId,
   cardsLoading,
+  creationSchema,
+  creation,
+  onChangeCreation,
   onChangeCharacterName,
   onChangeBackground,
   onChangePortrait,
@@ -90,6 +97,7 @@ export function JoinCharacterForm({
                 ) : null}
               </View>
               <Pressable
+                disabled={disabled}
                 onPress={() => onSelectCard(null)}
                 className="rounded-md p-1.5 active:opacity-60"
                 accessibilityRole="button"
@@ -144,6 +152,31 @@ export function JoinCharacterForm({
         onChange={onChangePortrait}
         name={characterName}
       />
+
+      {creationSchema ? (
+        creation ? (
+          <View className="gap-3 rounded-xl border border-border p-3">
+            <CreationAttributesEditor schema={creationSchema} attributes={creation.attributes} disabled={disabled}
+              onChange={(attributes) => onChangeCreation({ ...creation, attributes })} />
+            <Text variant="small" className="font-semibold">{t('skills')}</Text>
+            <SkillRowsEditor
+              skills={creation.skills}
+              attributes={creation.attributes}
+              pool={creationSchema.skill_pool ?? Object.values(creationSchema.rule_meta?.skill_pools ?? {}).flat()}
+              meta={creationSchema.rule_meta}
+              disabled={disabled}
+              onChange={(skills) => onChangeCreation({ ...creation, skills })}
+            />
+            <Button variant="ghost" size="sm" className="self-start" disabled={disabled} onPress={() => onChangeCreation(null)}>
+              <Text>{t('dfCharacterCreationDiscardDetails')}</Text>
+            </Button>
+          </View>
+        ) : (
+          <Button variant="outline" disabled={disabled} onPress={() => onChangeCreation(beginJoinCreation(creationSchema, selectedCard))}>
+            <Text>{t('dfCharacterCreationEditDetails')}</Text>
+          </Button>
+        )
+      ) : null}
 
       <JoinCardPickerSheet
         open={pickerOpen}

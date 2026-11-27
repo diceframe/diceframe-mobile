@@ -12,6 +12,7 @@ import {
   ApiError,
   configureApiClient,
   currentSessionToken,
+  errorCodeOf,
   errorMessage,
   generateSessionToken,
   hasRoomToken,
@@ -19,7 +20,7 @@ import {
   retryOnRateLimit,
   setJoinShare,
 } from '@/api/client'
-import { fetchCharacterCards, fetchGameDetail, fetchGameDetailAsSeat, joinGame, verifyRoomPassword } from '@/api/games'
+import { fetchCharacterCards, fetchCharacters, fetchGameDetail, fetchGameDetailAsSeat, joinGame, verifyRoomPassword } from '@/api/games'
 import type { CharacterCard, CharacterPortrait, GameDetail } from '@/api/types'
 import { JoinCharacterForm } from '@/features/join/JoinCharacterForm'
 import { loadLocalJoinCards } from '@/hooks/useLocalCards'
@@ -27,7 +28,9 @@ import {
   applyCardToDraft,
   buildJoinNewPayload,
   joinFormReady,
+  type JoinCreationDraft,
 } from '@/lib/join-form'
+import { characterCreationIssue, usesCreationAttributes, type CreationSchema } from '@/lib/character-creation'
 import { QrScannerSheet } from '@/features/scan/QrScannerSheet'
 import { seatCharacterNameOf, seatUidOf } from '@/lib/player-identity'
 import { runTakeover, seatHandlingOnParse } from '@/lib/join-takeover'
@@ -88,12 +91,9 @@ export default function JoinScreen() {
   const [background, setBackground] = React.useState('')
   const [portrait, setPortrait] = React.useState<CharacterPortrait | null | undefined>(undefined)
   const [joinCard, setJoinCard] = React.useState<CharacterCard | null>(null)
-  // 本局共享卡库；null = 尚未拉取（进入 identity 步骤后拉一次）
-  const [cards, setCards] = React.useState<CharacterCard[]>([])
-  // 本机角色库里的卡（离线内容库）：玩家不必推送，直接用它建卡加入
-  const [localCards, setLocalCards] = React.useState<CharacterCard[]>([])
-  const [cardsLoading, setCardsLoading] = React.useState(false)
-  const cardsRequestedRef = React.useRef(false)
+  const [joinCreation, setJoinCreation] = React.useState<JoinCreationDraft | null>(null)
+  const [ruleSchema, setRuleSchema] = React.useState<{ link: PublicShareLink; schema: CreationSchema | null } | null>(null)
+  const [cardOptions, setCardOptions] = React.useState<{ link: PublicShareLink; cards: CharacterCard[]; localCards: CharacterCard[] } | null>(null)
   const [step, setStep] = React.useState<Step>('link')
   const [scanning, setScanning] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
@@ -129,39 +129,11 @@ export default function JoinScreen() {
     }
   }, [])
 
-  // 路由层带着邀请链接回来（凭证被拒、席位失效）：直接解析，省得玩家再找一遍链接。
-  // 这个路由也能被任意网页经 diceframe:// 深链拉起，所以只自动解析指向当前服务器、
-  // 且不带席位凭证的链接；其余只预填输入框，等用户明确点击（切服务器还要再确认）。
-  React.useEffect(() => {
-    if (autoParsedRef.current || !incomingLink) return
-    autoParsedRef.current = true
-    if (!joinLinkAutoParseAllowed(incomingLink, useSettingsStore.getState().baseUrl)) return
-    void parse(incomingLink)
-  }, [incomingLink])
-
-  // 进入建卡步骤后拉一次本局共享卡库（对齐 Web JoinView loadGameData 的
-  // /character-cards 预取）；拉取失败按 Web 语义降级为空列表 → 入口整体隐藏。
-  // 非 Owner 在有访问密码的服务器上只拿到插件卡（服务端按身份裁剪）。
-  React.useEffect(() => {
-    if (step !== 'identity' || mode !== 'create' || !parsed || cardsRequestedRef.current) return
-    cardsRequestedRef.current = true
-    setCardsLoading(true)
-    Promise.all([
-      fetchCharacterCards(parsed.game)
-        .then((result) => setCards(result.cards ?? []))
-        .catch((cause: unknown) => {
-          setCards([])
-          // 房间访问失效（改了房间密码 / 令牌过期）不是「没有可选的卡」：回房间密码步骤
-          if (mountedRef.current && cardsFailureNeedsRoomGate(cause, !!detail?.has_room_password, hasRoomToken(parsed.game))) {
-            cardsRequestedRef.current = false
-            showRoomGate()
-          }
-        }),
-      loadLocalJoinCards()
-        .then(setLocalCards)
-        .catch(() => setLocalCards([])),
-    ]).finally(() => setCardsLoading(false))
-  }, [step, mode, parsed])
+  const options = cardOptions?.link === parsed ? cardOptions : null
+  const schema = ruleSchema?.link === parsed ? ruleSchema?.schema : null
+  const creationSchema = usesCreationAttributes(schema) ? schema : undefined
+  const joinPayload = buildJoinNewPayload({ characterName, background, portrait }, joinCard, creationSchema ? joinCreation : null)
+  const creationIssue = characterCreationIssue(creationSchema, joinPayload, !!joinCreation)
 
   function shareOf(p: PublicShareLink, userId?: string) {
     return {
@@ -233,6 +205,8 @@ export default function JoinScreen() {
       if (!mountedRef.current) return
       setParsed(publicLink)
       setDetail(gameDetail)
+      setJoinCreation(null)
+      setJoinCard(null)
       if (targetBaseUrl !== current.baseUrl) {
         setToken(null)
         clearShares()
@@ -317,6 +291,7 @@ export default function JoinScreen() {
   }
 
   function showRoomGate() {
+    setCardOptions(null)
     setRoomPassword('')
     setStep('room')
     setBanner({ kind: 'room', text: t('roomAccessExpired') })
@@ -362,6 +337,8 @@ export default function JoinScreen() {
   /** 选卡 / 清卡：卡值立即拷入草稿（对齐 Web applyCard），之后仍可手改，提交以草稿为准 */
   function selectCard(card: CharacterCard | null) {
     setJoinCard(card)
+    setJoinCreation(null)
+    setError('')
     if (!card) return
     const merged = applyCardToDraft({ characterName, background, portrait }, card)
     setCharacterName(merged.characterName)
@@ -403,6 +380,7 @@ export default function JoinScreen() {
       if (result === 'cancelled') return
       if (!result.user_id) throw new Error(result.error || t('dfJoinFailed'))
       pendingSeatRef.current = ''
+      setTakeover(null)
       enterAs(p, result.user_id, detail)
     } catch (e) {
       if (backToRoomGate(e)) return
@@ -453,14 +431,15 @@ export default function JoinScreen() {
       setError(t('dfJoinNameRequired'))
       return
     }
+    if (creationIssue) return
     setBusy(true)
     setError('')
     try {
-      const result = await joinGame(
-        parsed.game,
-        // 简化版建卡 payload：姓名/背景/头像来自草稿，库卡 sheet 字段整卡透传
-        buildJoinNewPayload({ characterName, background, portrait }, joinCard),
-      )
+      const result = await joinGame(parsed.game, joinPayload)
+      if (errorCodeOf(result) === 'CHARACTER_SHEET_INVALID') {
+        setError(t('dfCharacterCreationServerRejected'))
+        return
+      }
       if (!result.user_id) throw new Error(result.error || t('dfJoinFailed'))
       // 新席位的凭证只在这次响应里出现一次：先落盘再注入身份，进对局的第一批请求就带上它
       storeSeatToken(useSettingsStore.getState().baseUrl, parsed.game, result.seat_token)
@@ -472,6 +451,45 @@ export default function JoinScreen() {
       setBusy(false)
     }
   }
+
+  // 凭证被拒或席位失效后可自动解析同服邀请；改服务器或使用席位凭证仍需用户主动确认。
+  React.useEffect(() => {
+    if (autoParsedRef.current || !incomingLink) return
+    let active = true
+    void Promise.resolve().then(() => {
+      if (!active || autoParsedRef.current) return
+      autoParsedRef.current = true
+      if (joinLinkAutoParseAllowed(incomingLink, useSettingsStore.getState().baseUrl)) void parse(incomingLink)
+    })
+    return () => { active = false }
+  }, [incomingLink])
+
+  // 读取对局实际使用的规则（含语言与快照），而不是规则库里的同名模板。
+  // 卡库与 schema 加载失败不拦轻量加入；但房间凭证被拒要回密码验证。
+  React.useEffect(() => {
+    if (step !== 'identity' || mode !== 'create' || !parsed) return
+    let active = true
+    const game = parsed.game
+    function handleRoomFailure(cause: unknown) {
+      if (!active || !cardsFailureNeedsRoomGate(cause, !!detail?.has_room_password, hasRoomToken(game))) return
+      active = false
+      showRoomGate()
+    }
+    void Promise.all([
+      fetchCharacterCards(game).then((result) => result.cards ?? []).catch((cause: unknown) => {
+        handleRoomFailure(cause)
+        return []
+      }),
+      loadLocalJoinCards().catch(() => []),
+    ]).then(([cards, localCards]) => { if (active) setCardOptions({ link: parsed, cards, localCards }) })
+    fetchCharacters(game)
+      .then((schema) => { if (active) setRuleSchema({ link: parsed, schema }) })
+      .catch((cause: unknown) => {
+        handleRoomFailure(cause)
+        if (active) setRuleSchema((previous) => previous?.link === parsed ? previous : { link: parsed, schema: null })
+      })
+    return () => { active = false }
+  }, [step, mode, parsed])
 
   return (
     <Screen
@@ -556,7 +574,7 @@ export default function JoinScreen() {
                 {busy ? t('restoringViaLink') : t('dfJoinSeatLinkHint')}
               </Text>
               {/* 深链带来的接管：先让用户看清接管的是谁、是否会替换本机现有席位 */}
-              {pendingSeatRef.current && takeover ? (
+              {takeover ? (
                 <View className="gap-1 rounded-xl border border-border p-3">
                   <Text className="font-semibold">{t('dfJoinTakeoverTarget', { name: takeover.target || t('dfCharacterUnnamed') })}</Text>
                   {takeover.current ? (
@@ -584,16 +602,20 @@ export default function JoinScreen() {
                 background={background}
                 portrait={portrait}
                 selectedCard={joinCard}
-                cards={cards}
-                localCards={localCards}
+                cards={options?.cards ?? []}
+                localCards={options?.localCards ?? []}
                 gameRuleId={detail?.rule_id ? String(detail.rule_id) : undefined}
-                cardsLoading={cardsLoading}
+                cardsLoading={!options}
+                creation={joinCreation}
+                creationSchema={creationSchema}
+                onChangeCreation={setJoinCreation}
                 onChangeCharacterName={setCharacterName}
                 onChangeBackground={setBackground}
                 onChangePortrait={setPortrait}
                 onSelectCard={selectCard}
               />
-              <Button onPress={create} disabled={busy || !joinFormReady(characterName)}>
+              {creationIssue ? <Text variant="small" className="text-destructive">{t(creationIssue)}</Text> : null}
+              <Button onPress={create} disabled={busy || !!creationIssue || (!!joinCard && ruleSchema?.link !== parsed) || !joinFormReady(characterName)}>
                 {busy ? (
                   <ActivityIndicator className="text-primary-foreground" />
                 ) : (

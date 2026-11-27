@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useT } from '@/i18n/t'
 import { updateSkillRow } from '@/lib/local-library/card-edit'
 import { SKILL_EFFECT_MAX_CHARS, skillPoolNames } from '@/lib/character-card'
+import { creationSkillValue, skillBaseValue, skillBudget, usesAboveBase } from '@/lib/character-creation'
 import { cn } from '@/lib/utils'
 
 /**
@@ -24,25 +25,21 @@ export function SkillRowsEditor({
   onChange,
   pool,
   meta,
+  attributes,
+  disabled,
 }: {
   skills: CharacterSkill[]
   onChange: (skills: CharacterSkill[]) => void
   pool?: (string | { name?: string; key?: string })[]
   meta?: RuleMeta | null
+  attributes?: Record<string, number>
+  disabled?: boolean
 }) {
   const t = useT()
   const hint = meta?.skill_hint || ''
-  const maxSkills = Number(meta?.max_skills || 0)
-  const pointTotal = Number(meta?.skill_point_total || 0)
-  const maxValue = Number(meta?.max_skill_value || 0)
-  const filled = skills.filter((skill) => skill.name?.trim())
-  const spent = filled.reduce((sum, skill) => sum + (Number(skill.value) || 0), 0)
-  const overLimit = Boolean(
-    (maxSkills && filled.length > maxSkills)
-    || (pointTotal && spent > pointTotal)
-    || (maxValue && skills.some((skill) => (Number(skill.value) || 0) > maxValue)),
-  )
-  const poolNames = skillPoolNames(pool)
+  const { maxSkills, total, maxValue, count, spent, tooMany, overspent, outOfRange } = skillBudget(skills, meta, attributes)
+  const aboveBase = usesAboveBase(meta)
+  const poolNames = [...new Set(skillPoolNames(pool))]
   const [openEffects, setOpenEffects] = React.useState<ReadonlySet<number>>(new Set())
 
   function toggleEffect(index: number) {
@@ -62,17 +59,17 @@ export function SkillRowsEditor({
   }
 
   function addSkill(name = '') {
-    onChange([...skills, { name, value: 20 }])
+    onChange([...skills, { name }])
   }
 
   return (
     <View className="gap-2">
       {hint ? <Text variant="small" className="text-muted-foreground">{hint}</Text> : null}
-      {maxSkills || pointTotal || maxValue ? (
-        <Text variant="small" className={overLimit ? 'font-medium text-destructive' : 'text-muted-foreground'}>
+      {maxSkills || total || maxValue ? (
+        <Text variant="small" className={tooMany || overspent || outOfRange ? 'font-medium text-destructive' : 'text-muted-foreground'}>
           {[
-            maxSkills ? t('dfCharacterCardSkillCount', { filled: filled.length, max: maxSkills }) : '',
-            pointTotal ? t('dfCharacterCardSkillPoints', { spent, total: pointTotal }) : '',
+            maxSkills ? t('dfCharacterCardSkillCount', { filled: count, max: maxSkills }) : '',
+            total ? t('dfCharacterCardSkillPoints', { spent, total }) : '',
             maxValue ? t('dfCharacterCardSkillMaxValue', { max: maxValue }) : '',
           ].filter(Boolean).join(' · ')}
         </Text>
@@ -80,6 +77,7 @@ export function SkillRowsEditor({
       {skills.map((skill, index) => {
         const hasEffect = Boolean(skill.effect?.trim())
         const effectOpen = openEffects.has(index) || hasEffect
+        const base = aboveBase && skill.name?.trim() ? skillBaseValue(skill.name, meta, attributes) : null
         return (
           <View key={index} className="gap-1.5">
             <View className="flex-row items-center gap-2">
@@ -87,11 +85,19 @@ export function SkillRowsEditor({
                 value={skill.name}
                 onChangeText={(name) => update(index, { name })}
                 placeholder={t('dfCharacterCardSkillName')}
+                editable={!disabled}
                 className="flex-1"
               />
               <Input
-                value={String(skill.value ?? 0)}
-                onChangeText={(text) => update(index, { value: Number(text) || 0 })}
+                value={skill.value === undefined ? '' : String(skill.value)}
+                placeholder={String(creationSkillValue({ name: skill.name }, meta, attributes))}
+                accessibilityLabel={t('dfCharacterCreationSkillValue')}
+                onChangeText={(text) => {
+                  if (/^\d*$/.test(text) && Number.isSafeInteger(Number(text))) {
+                    update(index, { value: text ? Number(text) : undefined })
+                  }
+                }}
+                editable={!disabled}
                 inputMode="numeric"
                 className="w-16 text-center"
               />
@@ -108,17 +114,25 @@ export function SkillRowsEditor({
                 />
               </Pressable>
               <Pressable
-                onPress={() => onChange(skills.filter((_, i) => i !== index))}
+                disabled={disabled}
+                onPress={() => {
+                  onChange(skills.filter((_, i) => i !== index))
+                  setOpenEffects((current) => new Set([...current].filter((i) => i !== index).map((i) => i > index ? i - 1 : i)))
+                }}
                 className="rounded-md p-1.5"
                 accessibilityLabel={t('dfCommonDelete')}
               >
                 <Icon as={X} size={16} className="text-muted-foreground" />
               </Pressable>
             </View>
+            {base !== null ? (
+              <Text variant="small" className="text-muted-foreground">{t('dfCharacterCreationSkillBase', { base })}</Text>
+            ) : null}
             {effectOpen ? (
               <Textarea
                 value={skill.effect ?? ''}
                 onChangeText={(effect) => update(index, { effect })}
+                editable={!disabled}
                 placeholder={t('skillEffectPlaceholder')}
                 maxLength={SKILL_EFFECT_MAX_CHARS}
                 accessibilityLabel={t('skillEffect')}
@@ -129,6 +143,7 @@ export function SkillRowsEditor({
         )
       })}
       <Pressable
+        disabled={disabled}
         onPress={() => addSkill()}
         className="self-start rounded-full border border-dashed border-border px-3 py-1.5"
       >
@@ -142,6 +157,7 @@ export function SkillRowsEditor({
           {poolNames.map((name) => (
             <Pressable
               key={name}
+              disabled={disabled}
               onPress={() => addSkill(name)}
               className="rounded-full border border-border px-2.5 py-1"
             >

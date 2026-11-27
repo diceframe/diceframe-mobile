@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils'
 import { useReactionStore } from '@/stores/assistant-reactions'
 import { useGameStore } from '@/stores/game'
 
+import { CocCheckEvidence } from './CocCheckEvidence'
 import { PushDecisionPanel } from './PushDecisionPanel'
 
 /** CoC 奖励/惩罚骰明细（对齐上游 CocDiceFaces）：共享个位 + 每颗十位骰的组合，标出采用的那组 */
@@ -115,6 +116,14 @@ export function CheckCard({
   // 不用 useRef —— React Compiler 的 refs 规则禁止渲染期读 .current
   const [roll] = React.useState(() => new Animated.Value(0))
 
+  // 点击揭示由服务端记录；遮住时连骰灵也不能提前提示成功或失败。
+  const diceRevealMode = useGameStore((state) => state.diceRevealMode)
+  const checkReveals = useGameStore((state) => state.checkReveals)
+  const players = useGameStore((state) => state.players)
+  const [revealBusy, setRevealBusy] = React.useState(false)
+  const [revealError, setRevealError] = React.useState('')
+  const masked = isCheckMasked(diceRevealMode, check, checkReveals)
+
   React.useEffect(() => {
     async function syncReduceMotion() {
       try {
@@ -134,13 +143,14 @@ export function CheckCard({
     return () => subscription?.remove()
   }, [])
 
-  // 只有现场揭示才让骰灵反应（历史卡不重放）：开滚时「掷骰中」，揭晓时按结论
+  // 只有现场揭示才让骰灵反应（历史卡不重放）。
+  const rolling = animate && !masked && !revealed
   React.useEffect(() => {
-    if (animate) useReactionStore.getState().report('diceRoll')
-  }, [animate])
+    if (rolling) useReactionStore.getState().report('diceRoll')
+  }, [rolling])
 
   React.useEffect(() => {
-    if (!animate || revealed) return
+    if (!rolling) return
     // 减少动态效果：0ms 揭示；正常：滚动满 720ms 再亮结果
     const timer = setTimeout(
       () => {
@@ -151,9 +161,8 @@ export function CheckCard({
       reduceMotion ? 0 : REVEAL_DURATION_MS,
     )
     return () => clearTimeout(timer)
-  }, [animate, revealed, reduceMotion])
+  }, [rolling, reduceMotion])
 
-  const rolling = animate && !revealed
   React.useEffect(() => {
     if (!rolling || reduceMotion) return
     // 单段 0→1 循环：旋转 360° 归位视觉上无缝，缩放在中段鼓起再收回（对齐 Web 关键帧）
@@ -169,13 +178,6 @@ export function CheckCard({
     return () => loop.stop()
   }, [rolling, reduceMotion, roll])
 
-  // 点击揭示模式：结果先遮住，GM 或行动者揭开后所有人可见（纯展示，不阻断回合）
-  const diceRevealMode = useGameStore((state) => state.diceRevealMode)
-  const checkReveals = useGameStore((state) => state.checkReveals)
-  const players = useGameStore((state) => state.players)
-  const [revealBusy, setRevealBusy] = React.useState(false)
-  const [revealError, setRevealError] = React.useState('')
-  const masked = isCheckMasked(diceRevealMode, check, checkReveals)
   const revealRecord = check.check_id ? checkReveals[String(check.check_id)] : undefined
   const canReveal = isGm || (!!actorId && actorId === check.actor_uid)
   const revealerName = revealRecord
@@ -188,7 +190,7 @@ export function CheckCard({
     setRevealError('')
     try {
       await useGameStore.getState().revealCheck(String(check.check_id))
-      useReactionStore.getState().report(checkStatusOf(check))
+      if (!animate) useReactionStore.getState().report(checkStatusOf(check))
     } catch (cause) {
       setRevealError(errorMessage(cause))
     } finally {
@@ -327,6 +329,7 @@ export function CheckCard({
       {revealed ? (
         <>
           <Text className="ml-12 font-mono text-base">{detail.math}</Text>
+          <CocCheckEvidence check={check} className="ml-12 gap-0.5" />
 
           {/* 明细区：揭示卡自动展开一次，历史卡点开查看 */}
           <Pressable

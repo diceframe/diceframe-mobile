@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { AppState, Platform, Pressable, ScrollView, useWindowDimensions, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft, ChevronsRight, MoreHorizontal } from 'lucide-react-native'
+import { BookOpen, ChevronLeft, ChevronsRight, MoreHorizontal } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Sheet } from '@/components/patterns/sheet'
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Text } from '@/components/ui/text'
-import { errorMessage } from '@/api/client'
+import { currentBaseUrl, currentShare, errorMessage, ownerAuthActive } from '@/api/client'
 import { UserFacingError } from '@/lib/user-facing-error'
 import {
   regenerateSwipe,
@@ -21,6 +21,7 @@ import {
 import type {
   CharacterPortrait,
   CommandResponse,
+  GameDetail,
   GeneratedImageItem,
   PaymentProposalCreatePayload,
 } from '@/api/types'
@@ -44,10 +45,12 @@ import { GAME_STATE_LABEL_KEYS } from '@/features/play/HealthPanel'
 import { MapWorkspace } from '@/features/play/MapWorkspace'
 import { PaymentComposerSheet } from '@/features/play/PaymentComposerSheet'
 import { PaymentModal } from '@/features/play/PaymentModal'
+import { PurchaseQuotes } from '@/features/play/PurchaseQuotes'
 import { PlotTracker } from '@/features/play/PlotTracker'
 import { PrivateMessagePanel } from '@/features/play/PrivateMessagePanel'
 import { RoomPasswordModal } from '@/features/play/RoomPasswordModal'
 import { RuleHelpModal } from '@/features/play/RuleHelpModal'
+import { RunFinaleSheet } from '@/features/play/RunFinaleSheet'
 import { SceneBackdrop } from '@/features/play/SceneBackdrop'
 import { SceneGalleryModal } from '@/features/play/SceneGalleryModal'
 import { sceneImageSource } from '@/api/assets'
@@ -63,6 +66,7 @@ import { confirmDestructive } from '@/lib/confirm'
 import { toastNotice } from '@/components/patterns/toast'
 import { createGameLifecycle } from '@/lib/game-lifecycle'
 import { runReadOnlyOf } from '@/lib/game-state'
+import { playerFinaleOf } from '@/lib/run-finale'
 import { overlayOpen } from '@/lib/overlay-focus'
 import {
   economyCurrencyLabel,
@@ -70,11 +74,12 @@ import {
   isNonBlockingPersonalPurchase,
   nextEconomyProposal,
 } from '@/lib/economy-prompts'
+import { purchaseQuoteKey, purchaseQuotesOf, purchaseQuoteSourceFor, type PurchaseQuote, type PurchaseQuoteSource } from '@/lib/purchase-quotes'
 import { appLayoutForWidth } from '@/lib/layout'
 import { levelUpAttributes, levelUpPoints } from '@/lib/level-up'
 import { actionRecoveryOf, afterRecoveryRefresh, type ActionRecovery } from '@/lib/action-recovery'
 import { actionSkillNames, reconcileActionSkill } from '@/lib/action-skill'
-import { pendingPostChecks } from '@/lib/push-decision'
+import { continueAsFailureFor, pendingPostChecks } from '@/lib/push-decision'
 import { quickActionsVisible, quickActionVisibilityKey } from '@/lib/quick-action-visibility'
 import { isStoredPlayerMember } from '@/lib/player-identity'
 import { createPlayShareScope } from '@/lib/play-share-scope'
@@ -100,6 +105,16 @@ function stateLabelOf(state: string | undefined, t: T): string {
   if (!state) return t('dfStateUnknownStatus')
   const key = GAME_STATE_LABEL_KEYS[state]
   return key ? t(key) : state
+}
+
+interface PaymentDraft {
+  scope: string
+  quoteDraft?: { quote: PurchaseQuote; source: PurchaseQuoteSource }
+}
+
+// 待报价没有独立 ID，也不跨回合保存。换局、换规则或切席位时丢掉旧表单。
+function paymentDraftScope(detail: GameDetail | null, identityRevision: number): string {
+  return JSON.stringify([identityRevision, detail?.game_key, detail?.run_id, detail?.round_number, detail?.rule_id])
 }
 
 /** 对局屏主体：路由只做薄壳，界面实现在 features/play（与 WorldsScreen 等同一模式） */
@@ -179,10 +194,12 @@ export default function GameScreen() {
   >([])
   const [cardsLoading, setCardsLoading] = React.useState(false)
   const [ruleHelpOpen, setRuleHelpOpen] = React.useState(false)
+  const [openFinaleScope, setOpenFinaleScope] = React.useState<string | null>(null)
   // 对局内换头像抽屉（对齐 Web PlayView 的 showPortraitEditor：面板发事件、屏幕持有弹窗）
   const [portraitOpen, setPortraitOpen] = React.useState(false)
   const [sceneGalleryOpen, setSceneGalleryOpen] = React.useState(false)
-  const [paymentComposerOpen, setPaymentComposerOpen] = React.useState(false)
+  const [paymentDraft, setPaymentDraft] = React.useState<PaymentDraft | null>(null)
+  const [submittedQuotes, setSubmittedQuotes] = React.useState<{ scope: string; keys: string[] }>({ scope: '', keys: [] })
   const [sceneImages, setSceneImages] = React.useState<GeneratedImageItem[]>([])
   const [sceneImagesLoading, setSceneImagesLoading] = React.useState(false)
   // 「稍后」仅是本地收起；按 game/run 隔离，重开一局不会误用旧提案 id。
@@ -223,6 +240,12 @@ export default function GameScreen() {
   const canAllocatePoints = availablePoints > 0
     && detail?.ruleset_runtime?.capabilities?.character_lifecycle !== 'rules_aware'
     && levelUpAttributes(mySheet, allocationRules).length > 0
+  const runReadOnly = runReadOnlyOf(detail)
+  const finale = detail?.game_key === gameKey && !seatCredentialLost ? playerFinaleOf(detail, userId, isGm) : null
+  const finaleScope = finale ? JSON.stringify([baseUrl, gameKey, userId, identityRevision, finale]) : null
+  const draftScope = paymentDraftScope(detail, identityRevision)
+  const activePaymentDraft = !runReadOnly && paymentDraft?.scope === draftScope ? paymentDraft : null
+  const pendingQuotes = purchaseQuotesOf(detail, submittedQuotes.scope === draftScope ? submittedQuotes.keys : [])
   const paymentScope = `${gameKey}:${detail?.run_id || ''}`
   const dismissedPaymentIds = dismissedPayments.scope === paymentScope
     ? dismissedPayments.ids
@@ -240,6 +263,17 @@ export default function GameScreen() {
   )
 
   const busy = actionBusy || gmBusy
+
+  function isCurrentFinale() {
+    const current = useGameStore.getState()
+    const share = currentShare()
+    const latest = playerFinaleOf(current.detail, current.userId, current.isGm)
+    // 此处是玩家导出：GM 身份会拿到私有附注的团录，不允许自动回退到房主。
+    return !!finale && !current.seatCredentialLost && current.gameKey === gameKey && share?.game === gameKey
+      && share.user === userId && !ownerAuthActive(gameKey) && currentBaseUrl() === baseUrl
+      && current.userId === userId && current.tableTalkRevision === identityRevision
+      && latest?.runId === finale.runId && latest.finaleId === finale.finaleId && latest.revision === finale.revision
+  }
 
   React.useEffect(() => {
     if (!gameKey) return () => useGameStore.getState().leave()
@@ -377,17 +411,22 @@ export default function GameScreen() {
     }
   }
 
-  // 对局卡在「正在生成」时的恢复入口：与上游一致复用 advance 指令的
-  // force 语义（中止在飞生成并重新处理本回合），文案复用上游镜像 key。
+  // 同一个 force 指令在等待检定选择时保留原结果，否则用于恢复中断的叙事生成。
   async function handleForceAdvance() {
+    const asFailure = continueAsFailureFor(detail)
     const confirmed = await confirmDestructive({
-      title: t('gmForceAdvanceConfirmTitle'),
-      message: t('gmForceAdvanceConfirm'),
-      confirmText: t('gmForceAdvance'),
+      title: t(asFailure ? 'gmContinueAsFailureConfirmTitle' : 'gmForceAdvanceConfirmTitle'),
+      message: t(asFailure ? 'gmContinueAsFailureConfirm' : 'gmForceAdvanceConfirm'),
+      confirmText: t(asFailure ? 'gmContinueAsFailure' : 'gmForceAdvance'),
       cancelText: t('dfCommonCancel'),
     })
     if (!confirmed) return
-    void runGm(() => useGameStore.getState().advance())
+    // 弹窗期间另一端可能已决议或超时，不把旧确认用于其它回合或另一种推进。
+    const current = useGameStore.getState()
+    if (current.gameKey !== gameKey || !current.isGm || runReadOnlyOf(current.detail)
+      || current.detail?.run_id !== detail?.run_id || current.detail?.round_number !== detail?.round_number
+      || continueAsFailureFor(current.detail) !== asFailure) return
+    void runGm(() => current.advance())
   }
 
   async function openWorldSwitch() {
@@ -477,14 +516,52 @@ export default function GameScreen() {
     await useGameStore.getState().refresh()
   }
 
+  function openPaymentComposer(quote?: PurchaseQuote) {
+    const current = useGameStore.getState()
+    if (current.gameKey !== gameKey || !current.detail || runReadOnlyOf(current.detail)) return
+    const scope = paymentDraftScope(current.detail, current.tableTalkRevision)
+    if (!quote) {
+      if (current.isGm) setPaymentDraft({ scope })
+      return
+    }
+    const source = purchaseQuoteSourceFor(quote, current.userId, current.isGm)
+    if (source) setPaymentDraft({ scope, quoteDraft: { quote, source } })
+  }
+
   async function handleCreatePayment(payload: PaymentProposalCreatePayload) {
-    await useGameStore.getState().createPayment(payload)
-    setPaymentComposerOpen(false)
+    const current = useGameStore.getState()
+    const draft = activePaymentDraft
+    if (!draft || current.gameKey !== gameKey || draft.scope !== paymentDraftScope(current.detail, current.tableTalkRevision)) {
+      throw new UserFacingError('dfErrorsConflict')
+    }
+    if (runReadOnlyOf(current.detail)) throw new UserFacingError('dfErrorsRunReadOnly')
+    if (current.actionBusy || current.gmBusy) throw new UserFacingError('dfPlayPaymentResolving')
+    const quoteDraft = draft.quoteDraft
+    const key = quoteDraft ? purchaseQuoteKey(quoteDraft.quote) : null
+    if (quoteDraft) {
+      const source = purchaseQuoteSourceFor(quoteDraft.quote, current.userId, current.isGm)
+      const stillPending = purchaseQuotesOf(current.detail, submittedQuotes.scope === draft.scope ? submittedQuotes.keys : [])
+      if (source !== quoteDraft.source || !stillPending.some((quote) => purchaseQuoteKey(quote) === key)) {
+        throw new UserFacingError('dfErrorsConflict')
+      }
+    } else if (!current.isGm) {
+      throw new UserFacingError('dfErrorsForbidden')
+    }
+    await current.createPayment(payload)
+    const latest = useGameStore.getState()
+    if (key && draft.scope === paymentDraftScope(latest.detail, latest.tableTalkRevision)) {
+      // 即使本端已开单、确认或暂时没刷新成功，也不重复展示还未从本轮投影撤下的意图。
+      setSubmittedQuotes((previous) => ({
+        scope: draft.scope,
+        keys: [...(previous.scope === draft.scope ? previous.keys : []), key],
+      }))
+    }
+    setPaymentDraft((open) => open === draft ? null : open)
   }
 
   // 运气与孤注一掷都会让叙事停在骰子卡上；只有运气时沿用上游的「运气决定」状态名
   const pendingChecks = pendingPostChecks(detail)
-  const runReadOnly = runReadOnlyOf(detail)
+  const continueAsFailure = continueAsFailureFor(detail)
   // 准备结团优先于其它进行中状态（与上游 PlayView 的 stateLabel 一致）
   const stateLabel = runReadOnly === 'preparing'
     ? t('preparing')
@@ -589,7 +666,7 @@ export default function GameScreen() {
             <Button
               size="sm"
               className="shrink-0"
-              disabled={busy || hasBlockingEconomyProposal || runReadOnly !== null}
+              disabled={busy || continueAsFailure || hasBlockingEconomyProposal || runReadOnly !== null}
               onPress={() => void runGm(() => useGameStore.getState().advance())}
             >
               <Text>{t('dfPlayAdvance')}</Text>
@@ -611,7 +688,7 @@ export default function GameScreen() {
               onPress={() => void handleForceAdvance()}
             >
               <Icon as={ChevronsRight} size={16} />
-              <Text>{t('gmForceAdvance')}</Text>
+              <Text>{t(continueAsFailure ? 'gmContinueAsFailure' : 'gmForceAdvance')}</Text>
             </Button>
             {detail?.story_mode === 'dialogue' ? (
               <Button size="sm" variant="outline" className="shrink-0" onPress={() => setStoryPortraitsOpen(true)}>
@@ -708,6 +785,16 @@ export default function GameScreen() {
           </Pressable>
         ) : null}
 
+        {finaleScope ? (
+          <View className="flex-row flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2">
+            <Text variant="small" className="font-semibold">{t('dfFinaleTitle')}</Text>
+            <Button variant="outline" size="sm" onPress={() => setOpenFinaleScope(finaleScope)}>
+              <Icon as={BookOpen} size={16} />
+              <Text>{t('dfFinaleOpen')}</Text>
+            </Button>
+          </View>
+        ) : null}
+
         <View className="min-h-0 flex-1 flex-row">
           <View className="min-w-0 flex-1">
             {/* 时间线（生图后以最新场景图作低亮度背景） */}
@@ -723,6 +810,17 @@ export default function GameScreen() {
                 logPage={logPage}
                 logTotalPages={logTotalPages}
                 pendingLuck={pendingLuck}
+                purchaseQuotes={pendingQuotes.length ? (
+                  <PurchaseQuotes
+                    quotes={pendingQuotes}
+                    players={players}
+                    actorId={userId}
+                    isGm={isGm}
+                    busy={busy}
+                    readOnly={runReadOnly !== null}
+                    onOpenQuote={openPaymentComposer}
+                  />
+                ) : null}
                 luckBusy={!!luckBusyId}
                 liveNarration={liveNarration}
                 gmThinking={gmThinking}
@@ -842,8 +940,12 @@ export default function GameScreen() {
         onOpenRoomPassword={() => setRoomPasswordOpen(true)}
         onOpenGameSettings={() => setGameSettingsOpen(true)}
         onOpenWorldSwitch={() => void openWorldSwitch()}
-        onOpenPaymentComposer={() => setPaymentComposerOpen(true)}
+        onOpenPaymentComposer={() => openPaymentComposer()}
       />
+
+      {finale && finaleScope && openFinaleScope === finaleScope ? (
+        <RunFinaleSheet key={finaleScope} gameKey={gameKey} identity={finale} isCurrent={isCurrentFinale} onClose={() => setOpenFinaleScope(null)} />
+      ) : null}
 
       {/* 低频页面工具 */}
       <UtilitySheet
@@ -978,19 +1080,23 @@ export default function GameScreen() {
         onClose={() => setSceneGalleryOpen(false)}
       />
 
-      <PaymentComposerSheet
-        open={paymentComposerOpen}
-        players={players}
-        currencySystem={ruleMeta?.currency_system ?? null}
-        busy={gmBusy}
-        onClose={() => setPaymentComposerOpen(false)}
-        onSubmit={handleCreatePayment}
-      />
+      {activePaymentDraft ? (
+        <PaymentComposerSheet
+          players={players}
+          quoteDraft={activePaymentDraft.quoteDraft}
+          currencySystem={ruleMeta?.currency_system ?? null}
+          busy={busy}
+          onClose={() => {
+            if (!useGameStore.getState().gmBusy) setPaymentDraft(null)
+          }}
+          onSubmit={handleCreatePayment}
+        />
+      ) : null}
 
-      {/* 权威经济提案：支持付款人、GM 奖励与多人分摊；稍后收起后顶栏保留入口。 */}
+      {/* 先退出开单表单，再显示权威提案，避免两个支付抽屉同时打开。 */}
       <PaymentModal
         key={String(currentPayment?.id || '')}
-        payment={currentPayment}
+        payment={activePaymentDraft ? null : currentPayment}
         currency={economyCurrency}
         currencySystem={ruleMeta?.currency_system ?? null}
         playerName={(uid) =>

@@ -11,6 +11,7 @@ import { useT } from '@/i18n/t'
 import {
   isSupportedPush,
   pushControlsOf,
+  pushDecisionReasonText,
   pushRequestBody,
   type PushOperation,
   type PushStatus,
@@ -86,6 +87,7 @@ export function PushDecisionPanel({
   }
 
   const draftEmpty = !draft.trim()
+  const decisionReason = pushDecisionReasonText(push.decision_reason, t)
 
   return (
     <View className="gap-1.5 rounded-lg border border-border p-3">
@@ -102,10 +104,8 @@ export function PushDecisionPanel({
           {push.consequence}
         </Text>
       ) : null}
-      {push.decision_reason ? (
-        <Text variant="small" className="text-muted-foreground">
-          {push.decision_reason === 'push_disabled_by_gm' ? t('dfPushRollDisabled') : push.decision_reason}
-        </Text>
+      {decisionReason ? (
+        <Text variant="small" className="text-muted-foreground">{decisionReason}</Text>
       ) : null}
       {push.original ? (
         <Text variant="small" className="font-mono">

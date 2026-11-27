@@ -7,6 +7,7 @@ import { characters } from './messages/mobile/characters'
 import { common } from './messages/mobile/common'
 import { content } from './messages/mobile/content'
 import { create } from './messages/mobile/create'
+import { finale } from './messages/mobile/finale'
 import { lore } from './messages/mobile/lore'
 import { overview } from './messages/mobile/overview'
 import { play } from './messages/mobile/play'
@@ -33,6 +34,7 @@ const MOBILE_CLUSTERS = {
   table,
   assistant,
   reactions,
+  finale,
 } as const
 
 const keysOf = (obj: Record<string, unknown>): string[] => Object.keys(obj).sort()

@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { Text } from '@/components/ui/text'
 import { CharacterCardEditor } from '@/features/characters/CharacterCardEditor'
-import type { CreateCharacter } from '@/features/create/payload'
+import type { CreateCharacter, GameLanguage } from '@/features/create/payload'
 import { useT } from '@/i18n/t'
 import { CARD_CONTROL_LABEL_KEYS, cardControlAt, cycleCardControl } from '@/lib/card-control'
 import type { CharacterCardPatch } from '@/lib/character-card'
@@ -55,12 +55,16 @@ export function StepCharacters({
   setPlayers,
   cards,
   usesProfessionalBuilder,
+  gameRuleId,
+  gameLanguage,
   fallbackName,
 }: {
   players: CreateCharacter[]
   setPlayers: (players: CreateCharacter[]) => void
   cards: CharacterCard[]
   usesProfessionalBuilder: boolean
+  gameRuleId?: string
+  gameLanguage: GameLanguage
   /** 新建角色时为空名称兜底的默认名 */
   fallbackName: string
 }) {
@@ -183,7 +187,10 @@ export function StepCharacters({
       {editorOpen ? (
         <Sheet open onClose={() => { setEditorOpen(false); setEditIndex(null) }} className="h-[85%]">
           <CharacterCardEditor
-            card={editIndex !== null ? (players[editIndex] as unknown as CharacterCard) : null}
+            card={editIndex !== null ? players[editIndex] : null}
+            editing={editIndex !== null}
+            gameRuleId={gameRuleId}
+            gameLanguage={gameLanguage}
             onSubmit={handleEditorSubmit}
             onClose={() => { setEditorOpen(false); setEditIndex(null) }}
           />

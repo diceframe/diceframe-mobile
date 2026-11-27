@@ -19,7 +19,7 @@ import {
   generateRule,
   generateWorld,
 } from '@/api/games'
-import { fetchCharacterCards, fetchWorlds } from '@/api/library'
+import { fetchCharacterCards, fetchCharacterSchema, fetchWorlds } from '@/api/library'
 import type { AdventureSummary, CharacterCard, JsonObject, RuleSummary, WorldSummary, WorldTemplateSummary } from '@/api/types'
 import { StepCharacters } from '@/features/create/StepCharacters'
 import { StepConfirm } from '@/features/create/StepConfirm'
@@ -38,6 +38,7 @@ import {
 import { contentLanguage, useT } from '@/i18n/t'
 import { errorMessage } from '@/api/client'
 import { UserFacingError } from '@/lib/user-facing-error'
+import { characterCreationIssue } from '@/lib/character-creation'
 import { cn } from '@/lib/utils'
 import { useBackNavigation } from '@/hooks/use-back-navigation'
 
@@ -247,6 +248,7 @@ export function CreateWizard({ preselectedWorldId }: { preselectedWorldId?: stri
     activeRuleSummary?.ruleset_runtime?.capabilities.adventure_formats?.length,
   )
   const seedActive = !!state.seed.trim()
+  const gameRuleId = seedActive ? undefined : activeRuleIdOf(state) || undefined
   const showAdventurePackages = state.mode === 'template' && ruleSupportsAdventurePackages && !seedActive
   // 默认场景图：模板世界自带 → 所选规则兜底（对齐 Web defaultSceneImageRef）
   const defaultSceneImage = (state.mode === 'template'
@@ -322,6 +324,16 @@ export function CreateWizard({ preselectedWorldId }: { preselectedWorldId?: stri
           ...prev,
         ])
         patch({ aiGeneratedRuleId: ruleId })
+      }
+      if (step === 3 && gameRuleId && !usesProfessionalBuilder && state.players.some((player) => Object.keys(player.attributes ?? {}).length)) {
+        // 从卡库带入的角色也按本局规则预检；读不到 schema 时仍由提交接口校验。
+        const schema = await fetchCharacterSchema(gameRuleId, state.gameLanguage).catch(() => null)
+        for (const player of state.players) {
+          const issue = characterCreationIssue(schema, player)
+          if (!issue) continue
+          setError(t('dfCharacterCreationReviewPlayer', { name: player.character_name, reason: t(issue) }))
+          return
+        }
       }
       setStep((s) => s + 1)
     } catch (cause) {
@@ -474,6 +486,8 @@ export function CreateWizard({ preselectedWorldId }: { preselectedWorldId?: stri
               setPlayers={(players) => patch({ players })}
               cards={cards}
               usesProfessionalBuilder={usesProfessionalBuilder}
+              gameRuleId={gameRuleId}
+              gameLanguage={state.gameLanguage}
               fallbackName={ADVENTURER_FALLBACK[state.gameLanguage]}
             />
           )}

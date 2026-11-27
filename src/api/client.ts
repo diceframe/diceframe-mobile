@@ -27,7 +27,7 @@
 
 import { getRandomValues } from 'expo-crypto'
 
-import { getT } from '@/i18n/t'
+import { contentLanguage, getT } from '@/i18n/t'
 import type { TKey } from '@/i18n/keyset'
 import { normalizeBaseUrl } from '@/lib/base-url'
 import {
@@ -335,9 +335,16 @@ function requestModeOf(path: string, options: ApiOptions): RequestMode {
   return 'owner'
 }
 
+function localizedHeaders(init?: HeadersInit): Headers {
+  const headers = new Headers(init)
+  // 服务端按请求语言返回业务提示；每次请求读取，以便切换界面语言后立即生效。
+  if (!headers.has('Accept-Language')) headers.set('Accept-Language', contentLanguage())
+  return headers
+}
+
 function buildHeaders(init: RequestInit, mode: RequestMode, path: string): Headers {
   const anonymous = mode === 'anonymous'
-  const headers = new Headers(init.headers)
+  const headers = localizedHeaders(init.headers)
   const rawBody = isRawBody(init.body)
   if (!rawBody && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
   if (anonymous) {
@@ -475,7 +482,16 @@ function originOf(url: string): string {
  *   并提示用户直接填写最终地址（多见于 http→https 的反代跳转）。
  */
 async function guardedFetch(url: string, init: RequestInit): Promise<Response> {
-  const response = await fetch(url, { ...init, redirect: 'manual' })
+  // 原生端会话 token 由客户端自管并手动带 Cookie 头（见 ensureSessionToken）。
+  // expo/fetch 默认 credentials='include'，会让 Android OkHttp / iOS URLSession
+  // 自动读写原生 CookieJar，导致已有会话（如房主登录后的 trpg_session）或匿名探测
+  // 的 Set-Cookie 覆盖手写 Cookie 头，阻塞同机分享链接加入。Web 端留给 cookie jar。
+  const credentials = init.credentials ?? (typeof document === 'undefined' ? 'omit' : undefined)
+  const response = await fetch(url, {
+    ...init,
+    ...(credentials ? { credentials } : {}),
+    redirect: 'manual',
+  })
   const finalUrl = response.url
   const crossOrigin = !!finalUrl && !!originOf(url) && originOf(finalUrl) !== originOf(url)
   const unfollowedRedirect = response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)
@@ -546,7 +562,7 @@ export async function apiBlob(
 
 /** POST /api/login 校验 owner 密码 */
 export async function validateAccessToken(value: string): Promise<void> {
-  const headers = new Headers()
+  const headers = localizedHeaders()
   if (value) headers.set('Authorization', `Bearer ${value}`)
   const response = await guardedFetch(buildUrl('/login'), { method: 'POST', headers })
   const data = await readJson(response)
@@ -562,7 +578,7 @@ export type OwnerAccessStatus = 'allowed' | 'login-required' | 'unavailable'
 /** GET /api/me：探测 owner 访问态（不带分享参数，玩家身份不得越权） */
 export async function checkOwnerAccess(): Promise<OwnerAccessStatus> {
   try {
-    const headers = new Headers()
+    const headers = localizedHeaders()
     if (context.token) headers.set('Authorization', `Bearer ${context.token}`)
     const response = await guardedFetch(buildUrl('/me'), { headers })
     if (response.status === 401) return 'login-required'
@@ -586,6 +602,7 @@ const DF_ERROR_KEYS: Record<string, TKey> = {
   RUN_READ_ONLY: 'dfErrorsRunReadOnly',
   RUN_ENDED: 'dfErrorsRunReadOnly',
   ADVENTURE_ENDED: 'dfErrorsAdventureEnded',
+  GM_SEAT_REQUIRES_OWNER: 'dfErrorsGmSeatRequiresOwner',
   // 冒险面板指令：服务端原文是英文异常串（如 node is not active），不直接展示
   ADVENTURE_NODE_REJECTED: 'dfErrorsAdventureNodeRejected',
   SUGGESTION_NOT_FOUND: 'dfErrorsAdventureSuggestionGone',

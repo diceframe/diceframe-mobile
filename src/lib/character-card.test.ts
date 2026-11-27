@@ -8,10 +8,11 @@ import {
 } from './character-card'
 
 describe('character card patch normalization', () => {
-  it('upgrades legacy string skills with the default value', () => {
-    expect(normalizeSkillList(['攀爬', { name: '侦查', value: 60 }])).toEqual([
-      { name: '攀爬', value: 20 },
+  it('旧式字符串技能保留未填，显式的零不取缺省', () => {
+    expect(normalizeSkillList(['攀爬', { name: '侦查', value: 60 }, { name: '克苏鲁神话', value: 0 }])).toEqual([
+      { name: '攀爬' },
       { name: '侦查', value: 60 },
+      { name: '克苏鲁神话', value: 0 },
     ])
     expect(normalizeSkillList(undefined)).toEqual([])
   })

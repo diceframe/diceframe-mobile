@@ -60,12 +60,23 @@ describe('shareExportBlob', () => {
     expect(mocks.files[0].deleted).toBe(true)
   })
 
+  it('团录和角色以 JSON 文件类型分享，不走 ZIP 类型', async () => {
+    const bytes = new TextEncoder().encode('{"recap":"尾声"}')
+    await shareExportBlob(bytes, 'diceframe-run-recap.json', '导出团录')
+    expect(mocks.files[0].chunks[0]).toEqual(bytes)
+    expect(mocks.shareAsync).toHaveBeenCalledWith(
+      'file:///cache/diceframe-run-recap.json',
+      { mimeType: 'application/json', UTI: 'public.json', dialogTitle: '导出团录' },
+    )
+    expect(mocks.files[0].deleted).toBe(true)
+  })
+
   it('fails clearly when native file sharing is unavailable', async () => {
     mocks.available.mockResolvedValue(false)
 
     await expect(
       shareExportBlob(new TextEncoder().encode('archive'), 'diceframe-game.zip', '分享存档'),
-    ).rejects.toThrow('当前设备不支持分享文件')
+    ).rejects.toThrow('dfShareFileUnavailable')
     expect(mocks.shareAsync).not.toHaveBeenCalled()
     expect(mocks.files[0].deleted).toBe(true)
   })

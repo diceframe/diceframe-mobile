@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api } from './client'
+import { api, apiBlob } from './client'
 import {
   adoptCharacterCard,
   allocateCharacterPoints,
@@ -9,7 +9,9 @@ import {
   joinGame,
   verifyRoomPassword,
   createPaymentProposal,
+  exportPlayerFinale,
   fetchAdventures,
+  fetchPlayerFinale,
   fetchGeneratedImages,
   fetchHealth,
   fetchLog,
@@ -23,9 +25,44 @@ import {
   updateRulesetCharacterProfile,
 } from './games'
 
-vi.mock('./client', () => ({ api: vi.fn() }))
+vi.mock('./client', () => ({ api: vi.fn(), apiBlob: vi.fn() }))
 
 const mockedApi = vi.mocked(api)
+const mockedBlob = vi.mocked(apiBlob)
+
+describe('玩家结团 API', () => {
+  beforeEach(() => {
+    mockedApi.mockReset()
+    mockedBlob.mockReset()
+  })
+
+  it('按当前请求身份读已结算档案，编码对局键并传递取消信号', async () => {
+    const signal = new AbortController().signal
+    const identity = { runId: 'run', finaleId: 'archive', revision: 1 }
+    mockedApi.mockResolvedValueOnce({ ok: true, run_id: 'run', finale: { id: 'archive', status: 'ended', epilogue: 'ending', recap: 'recap' } })
+    await expect(fetchPlayerFinale('game/a', identity, signal)).resolves.toEqual({ epilogue: 'ending', recap: 'recap', hasCharacter: false })
+    expect(mockedApi).toHaveBeenCalledWith('/games/game%2Fa/run-story', { signal })
+    mockedApi.mockResolvedValueOnce({ ok: true, run_id: 'different' })
+    await expect(fetchPlayerFinale('game/a', identity, signal)).rejects.toThrow('dfFinaleUnavailable')
+  })
+
+  it.each(['recap', 'character'] as const)('用 GET 下载 %s，绝不传可指定他人的 uid', async (kind) => {
+    const signal = new AbortController().signal
+    const json = '{"name":"结团"}'
+    mockedBlob.mockResolvedValueOnce(new Response(json, { headers: { 'Content-Type': 'application/json; charset=utf-8' } }))
+    const bytes = await exportPlayerFinale('game/a', kind, signal)
+    expect(new TextDecoder().decode(bytes)).toBe(json)
+    expect(mockedBlob).toHaveBeenCalledWith('/games/game%2Fa/run-story/export', { query: { kind }, signal })
+  })
+
+  it('不把 HTML 错误页或空响应交给文件分享', async () => {
+    const signal = new AbortController().signal
+    mockedBlob.mockResolvedValueOnce(new Response('<html>proxy</html>', { headers: { 'Content-Type': 'text/html' } }))
+      .mockResolvedValueOnce(new Response('', { headers: { 'Content-Type': 'application/json' } }))
+    await expect(exportPlayerFinale('game/a', 'recap', signal)).rejects.toThrow('dfFinaleExportFailed')
+    await expect(exportPlayerFinale('game/a', 'recap', signal)).rejects.toThrow('dfFinaleExportFailed')
+  })
+})
 
 describe('games API query 契约', () => {
   beforeEach(() => {
@@ -141,6 +178,18 @@ describe('games API economy contracts', () => {
     expect(mockedApi).toHaveBeenCalledWith('/games/game%2Fa/payments', {
       method: 'POST',
       body: JSON.stringify(payload),
+    })
+  })
+
+  it('玩家出价只创建本人支付提案，不自动提交确认', async () => {
+    const payload = {
+      payer_uid: 'alice', recipient_uid: 'alice', amount: 25,
+      reason: '', items: ['通行证', '通行证'], source: 'player_self' as const,
+    }
+    await createPaymentProposal('game/a', payload)
+
+    expect(mockedApi).toHaveBeenCalledExactlyOnceWith('/games/game%2Fa/payments', {
+      method: 'POST', body: JSON.stringify(payload),
     })
   })
 })

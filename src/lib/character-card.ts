@@ -2,7 +2,8 @@
  * 角色卡表单 → character-cards 接口补丁的归一化（对齐 Web 端 saveCardEdit 的字段
  * 约束：空名兜底、技能去空、数值解析失败回退默认）。
  */
-import type { CharacterCard, CharacterPortrait, CharacterSkill, SkillSpec } from '@/api/types'
+import type { CharacterCard, CharacterPortrait, CharacterSkill, RuleMeta, SkillSpec } from '@/api/types'
+import { creationSkillValue } from '@/lib/character-creation'
 
 /**
  * 与服务端 `MAX_SKILL_EFFECT_CHARS` 一致：超长说明会被服务端静默截断，
@@ -19,13 +20,17 @@ function normalizeSkillEffect(effect: unknown): { effect?: string } {
   return text ? { effect: text } : {}
 }
 
-/** 服务端技能是 {name,value,effect?}[]；历史数据可能有纯字符串项（缺省 20，同 Web toSkillList） */
+/** 旧式纯字符串技能没有数值；留到规则和属性已知时再取缺省，不能把显式的 0 当成缺省。 */
 export function normalizeSkillList(input?: (string | CharacterSkill)[]): CharacterSkill[] {
-  return (input || []).map((skill) =>
-    typeof skill === 'string'
-      ? { name: skill, value: 20 }
-      : { name: skill.name || '', value: Number(skill.value) || 20, ...normalizeSkillEffect(skill.effect) },
-  )
+  return (input || []).map((skill) => {
+    if (typeof skill === 'string') return { name: skill }
+    const value = skill?.value == null ? undefined : Number(skill.value)
+    return {
+      name: typeof skill?.name === 'string' ? skill.name : '',
+      ...(value !== undefined && Number.isFinite(value) ? { value } : {}),
+      ...normalizeSkillEffect(skill?.effect),
+    }
+  })
 }
 
 export function skillPoolNames(pool?: (string | SkillSpec)[]): string[] {
@@ -42,6 +47,8 @@ export interface CharacterCardForm {
   gold: number
   skills: CharacterSkill[]
   portrait: CharacterPortrait | null
+  /** 只在新建完整角色或显式修改属性时下发 */
+  attributes?: CharacterCard['attributes']
 }
 
 export interface CharacterCardPatch extends Partial<CharacterCard> {
@@ -54,16 +61,17 @@ export interface CharacterCardPatch extends Partial<CharacterCard> {
   portrait: CharacterPortrait | null
 }
 
-export function buildCardPatch(form: CharacterCardForm): CharacterCardPatch {
+export function buildCardPatch(form: CharacterCardForm, meta?: RuleMeta | null, attributes = form.attributes): CharacterCardPatch {
   return {
     character_name: form.character_name.trim() || '未命名',
     race: form.race.trim() || '人类',
     class: form.class.trim() || '冒险者',
+    ...(form.attributes !== undefined ? { attributes: form.attributes } : {}),
     skills: form.skills
       .filter((skill) => skill.name?.trim())
       .map((skill) => ({
         name: skill.name.trim(),
-        value: Number(skill.value) || 0,
+        value: skill.value === undefined ? creationSkillValue(skill, meta, attributes) : Number(skill.value) || 0,
         ...normalizeSkillEffect(skill.effect),
       })),
     background: form.background.trim(),

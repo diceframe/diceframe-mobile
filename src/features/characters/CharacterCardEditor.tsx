@@ -7,10 +7,8 @@ import type {
   CharacterCard,
   CharacterPortrait,
   CharacterSchemaResponse,
-  RuleMeta,
   RulesResponse,
   RuleSummary,
-  SkillSpec,
 } from '@/api/types'
 import { RemoteAvatar } from '@/components/patterns/remote-avatar'
 import { SheetSelect } from '@/components/patterns/sheet-select'
@@ -19,22 +17,18 @@ import { Input } from '@/components/ui/input'
 import { Text } from '@/components/ui/text'
 import { Textarea } from '@/components/ui/textarea'
 import { buildCardPatch, type CharacterCardPatch } from '@/lib/character-card'
+import { characterCreationIssue, suggestedCreationAttributes, usesCreationAttributes } from '@/lib/character-creation'
 import { editorSkillRows, type EditorSkillRow, type EditorSnapshot } from '@/lib/local-library/card-edit'
 import {
   currencyAmountToInputText,
   currencyEditableUnitLabel,
   parseCurrencyInput,
 } from '@/lib/currency'
-import { useT } from '@/i18n/t'
+import { contentLanguage, useT } from '@/i18n/t'
 import { errorMessage } from '@/api/client'
+import { CreationAttributesEditor } from './CreationAttributesEditor'
 import { PortraitPickerSection } from './PortraitPickerSection'
 import { SkillRowsEditor } from './SkillRowsEditor'
-
-interface RuleSchema {
-  ruleId: string
-  meta: RuleMeta | null
-  pool: (string | SkillSpec)[]
-}
 
 /**
  * 角色卡编辑/创建表单（复刻 Web 端共享卡编辑弹窗的字段集：
@@ -46,6 +40,8 @@ export function CharacterCardEditor({
   onSubmit,
   onClose,
   editing,
+  gameRuleId,
+  gameLanguage,
   ruleLibrarySource = fetchRuleLibrary,
   schemaSource = fetchCharacterSchema,
 }: {
@@ -55,9 +51,12 @@ export function CharacterCardEditor({
   onClose: () => void
   /** 是否编辑已有卡；缺省按服务器卡的 id 判断（本机卡没有服务器 id，由调用方显式给出） */
   editing?: boolean
+  /** 开局快速建卡用本局规则及内容语言，不可改绑；种子恢复时规则由种子决定。 */
+  gameRuleId?: string
+  gameLanguage?: ReturnType<typeof contentLanguage>
   /** 规则库 / 角色模板来源；本机库传带离线缓存的版本 */
   ruleLibrarySource?: () => Promise<RulesResponse>
-  schemaSource?: (ruleId: string) => Promise<CharacterSchemaResponse>
+  schemaSource?: (ruleId: string, language?: ReturnType<typeof contentLanguage>) => Promise<CharacterSchemaResponse>
 }) {
   const t = useT()
   const isEditing = editing ?? Boolean(card?.card_id || card?.id)
@@ -70,18 +69,20 @@ export function CharacterCardEditor({
   // null = 用户还没动过输入框：规则 schema 是异步到的，此时初值跟着 currency_system 重算。
   const [goldInput, setGoldInput] = React.useState<string | null>(null)
   const [skills, setSkills] = React.useState<EditorSkillRow[]>(() => editorSkillRows(card?.skills))
+  const [attributeDraft, setAttributeDraft] = React.useState<{ ruleId: string; values: Record<string, number> } | null>(null)
   const [portrait, setPortrait] = React.useState<CharacterPortrait | null>(card?.portrait ?? null)
 
   const [rules, setRules] = React.useState<RuleSummary[]>([])
-  const [ruleId, setRuleId] = React.useState(String(card?.rule_id || ''))
-  const [schema, setSchema] = React.useState<RuleSchema | null>(null)
-  const [schemaError, setSchemaError] = React.useState('')
+  const [selectedRuleId, setRuleId] = React.useState(String(card?.rule_id || ''))
+  const ruleId = gameRuleId ?? selectedRuleId
+  const language = gameLanguage ?? contentLanguage()
+  const [schema, setSchema] = React.useState<{ ruleId: string; language: string; data?: CharacterSchemaResponse; error?: string } | null>(null)
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState('')
 
   // 新建时拉规则库供规则绑定选择（Web 新建卡需先选规则）；已有卡沿用其规则
   React.useEffect(() => {
-    if (isEditing) return
+    if (isEditing || gameRuleId) return
     let cancelled = false
     async function loadRules() {
       try {
@@ -96,7 +97,7 @@ export function CharacterCardEditor({
     }
     void loadRules()
     return () => { cancelled = true }
-  }, [isEditing])
+  }, [isEditing, gameRuleId])
 
   // 规则变化时拉角色模式（技能池/上限提示），同 Web watch([ruleId])；
   // schema 带规则标记，展示侧按当前规则过滤，避免在 effect 里同步重置 state
@@ -105,32 +106,36 @@ export function CharacterCardEditor({
     let cancelled = false
     async function loadSchema() {
       try {
-        const result = await schemaSource(ruleId)
-        if (cancelled) return
-        setSchemaError('')
-        setSchema({
-          ruleId,
-          meta: result.rule_meta ?? null,
-          pool: result.skill_pool ?? [],
-        })
+        const data = await schemaSource(ruleId, language)
+        if (!cancelled) setSchema({ ruleId, language, data })
       } catch (cause) {
-        if (cancelled) return
-        setSchema(null)
-        setSchemaError(errorMessage(cause))
+        if (!cancelled) setSchema({ ruleId, language, error: errorMessage(cause) })
       }
     }
     void loadSchema()
     return () => { cancelled = true }
-  }, [ruleId])
+  }, [ruleId, language])
 
-  const activeSchema = schema?.ruleId === ruleId ? schema : null
-  const currencySystem = activeSchema?.meta?.currency_system ?? null
+  const currentSchema = schema?.ruleId === ruleId && schema.language === language ? schema : null
+  const activeSchema = currentSchema?.data
+  const meta = activeSchema?.rule_meta
+  const supportsAttributes = usesCreationAttributes(activeSchema)
+  const attributesChanged = supportsAttributes && attributeDraft?.ruleId === ruleId
+  const attributes = attributesChanged ? attributeDraft.values
+    : card ? card.attributes : supportsAttributes ? suggestedCreationAttributes(activeSchema) : undefined
+  const writeAttributes = supportsAttributes && (!card || attributesChanged)
+  // 已成长的库卡允许继续编辑，不用建卡限额覆盖成长；开局编辑与新建卡才校验技能预算。
+  const issue = !isEditing || gameRuleId
+    ? characterCreationIssue(activeSchema, { attributes, skills }, writeAttributes)
+    : attributesChanged ? characterCreationIssue(activeSchema, { attributes }, true) : null
+  const currencySystem = meta?.currency_system ?? null
   const goldText = goldInput
     ?? (card?.gold === undefined ? '' : currencyAmountToInputText(Number(card.gold), currencySystem))
   // 输入框的解析单位可能不是规则的顶层货币名（rate=3 会回退基础单位），标签必须跟着走。
   const goldUnit = currencyEditableUnitLabel(currencySystem)
 
   async function save() {
+    if (issue) return
     // 空输入沿用旧行为记 0；其余交给 parser，换不出整数基础单位就报错，不静默改额。
     const gold = goldText.trim() ? parseCurrencyInput(goldText, currencySystem, { allowZero: true }) : 0
     if (gold === null) {
@@ -140,15 +145,17 @@ export function CharacterCardEditor({
     setSaving(true)
     setError('')
     try {
-      const patch = buildCardPatch({ character_name: name, race, class: klass, background, gold, skills, portrait })
-      if (!isEditing) {
+      const patch = buildCardPatch({ character_name: name, race, class: klass, background, gold, skills, portrait,
+        ...(writeAttributes ? { attributes } : {}),
+      }, meta, attributes)
+      if (!isEditing && !gameRuleId) {
         const rule = rules.find((item) => item.rule_id === ruleId)
         Object.assign(patch, {
           rule_id: ruleId,
-          rule_name: String(activeSchema?.meta?.rule_name || rule?.rule_name || ruleId),
-          rule_version: String(activeSchema?.meta?.rule_version || ''),
-          mechanics: String(activeSchema?.meta?.mechanics || ''),
-          language: 'zh-CN',
+          rule_name: String(meta?.rule_name || rule?.rule_name || ruleId),
+          rule_version: String(meta?.rule_version || ''),
+          mechanics: String(meta?.mechanics || ''),
+          language,
         })
       }
       await onSubmit(patch, {
@@ -178,9 +185,9 @@ export function CharacterCardEditor({
         />
         <View className="flex-1">
           <Text variant="h3">{isEditing ? t('dfCharacterCardEditTitle') : t('dfCharacterCardCreateTitle')}</Text>
-          {isEditing ? (
+          {isEditing || gameRuleId ? (
             <Text variant="small" className="text-muted-foreground">
-              {String(activeSchema?.meta?.rule_name || card?.rule_name || card?.rule_id || '')}
+              {String(meta?.rule_name || gameRuleId || card?.rule_name || card?.rule_id || '')}
             </Text>
           ) : (
             <Text variant="small" className="text-muted-foreground">{t('dfCharacterCardRuleHint')}</Text>
@@ -188,7 +195,7 @@ export function CharacterCardEditor({
         </View>
       </View>
 
-      {!isEditing && rules.length > 1 ? (
+      {!isEditing && !gameRuleId && rules.length > 1 ? (
         <View className="gap-1.5">
           <Text variant="small" className="font-semibold">{t('dfCharacterCardRule')}</Text>
           {/* 芯片排布在规则多时占满纵向空间，改用底部弹窗单选；ruleId 默认已指向第一条 */}
@@ -222,15 +229,22 @@ export function CharacterCardEditor({
         </View>
       </View>
 
+      {supportsAttributes ? (
+        <CreationAttributesEditor schema={activeSchema} attributes={attributes ?? {}} disabled={saving}
+          onChange={(values) => setAttributeDraft({ ruleId, values })} />
+      ) : null}
+
       <View className="gap-1.5">
         <Text variant="small" className="font-semibold">{t('dfCharacterCardSkills')}</Text>
         <SkillRowsEditor
           skills={skills}
           onChange={setSkills}
-          pool={activeSchema?.pool ?? []}
-          meta={activeSchema?.meta ?? null}
+          pool={activeSchema?.skill_pool}
+          meta={meta}
+          attributes={attributes}
+          disabled={saving}
         />
-        {schemaError ? <Text variant="small" className="text-muted-foreground">{schemaError}</Text> : null}
+        {currentSchema?.error ? <Text variant="small" className="text-muted-foreground">{currentSchema.error}</Text> : null}
       </View>
 
       <View className="gap-1.5">
@@ -250,11 +264,11 @@ export function CharacterCardEditor({
         />
       </View>
 
-      {error ? <Text variant="small" className="text-destructive">{error}</Text> : null}
+      {issue || error ? <Text variant="small" className="text-destructive">{issue ? t(issue) : error}</Text> : null}
 
       <View className="flex-row gap-2">
         <Button variant="outline" className="flex-1" onPress={onClose}><Text>{t('dfCommonCancel')}</Text></Button>
-        <Button className="flex-1" disabled={saving} onPress={() => void save()}>
+        <Button className="flex-1" disabled={saving || !!issue || (!!ruleId && !currentSchema)} onPress={() => void save()}>
           <Text>{saving ? t('dfCommonSaving') : t('dfCommonSave')}</Text>
         </Button>
       </View>

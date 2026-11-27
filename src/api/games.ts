@@ -32,12 +32,14 @@ import type {
   PrivateLogResponse,
   PushDecisionResponse,
   RulesResponse,
+  RunFinaleResponse,
   SceneImageRef,
   WorldCandidate,
   WorldTemplatesResponse,
 } from './types'
 import { contentLanguage, getT } from '@/i18n/t'
 import type { PushOperation, PushRequestBody } from '@/lib/push-decision'
+import { playerFinaleProjection, type PlayerFinaleIdentity, type RunFinaleExportKind } from '@/lib/run-finale'
 import { UserFacingError } from '@/lib/user-facing-error'
 import { worldContentLocale } from '@/lib/world-language'
 import { SEAT_TOKEN_HEADER } from '@/lib/seat-credentials'
@@ -333,6 +335,23 @@ export async function batchDeleteGames(gameKeys: string[]): Promise<{ deleted: s
     { method: 'POST', body: JSON.stringify({ game_keys: gameKeys }) },
   )
   return { deleted: result.deleted ?? [], failed: result.failed ?? [] }
+}
+
+export async function fetchPlayerFinale(gameKey: string, identity: PlayerFinaleIdentity, signal: AbortSignal) {
+  const result = await api<RunFinaleResponse>(gamePath(gameKey, '/run-story'), { signal })
+  const finale = playerFinaleProjection(result, identity)
+  if (!finale) throw new UserFacingError('dfFinaleUnavailable')
+  return finale
+}
+
+/** 玩家不指定 uid，服务端只导出本次请求身份对应的结算角色。 */
+export async function exportPlayerFinale(gameKey: string, kind: RunFinaleExportKind, signal: AbortSignal): Promise<Uint8Array> {
+  const response = await apiBlob(gamePath(gameKey, '/run-story/export'), { query: { kind }, signal })
+  const type = response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase()
+  if (type !== 'application/json') throw new UserFacingError('dfFinaleExportFailed')
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  if (!bytes.length) throw new UserFacingError('dfFinaleExportFailed')
+  return bytes
 }
 
 /** 导出存档 zip（arrayBuffer 原生直读字节，避免 response.blob() 的 native blob store 往返） */

@@ -3,10 +3,12 @@
  *
  * Web 端「从共享卡库选卡」= applyCard 把整卡 JSON 拷进表单（{...form, ...copied}，
  * 卡值覆盖同名手填字段），之后仍可手改；提交 = 表单全量展开 + join_as_new: true。
- * 移动端简化版只手填姓名/背景/头像三项，卡库整卡字段在提交时透传（含属性/技能，
- * 让库卡以完整角色入局），属性/技能编辑本身不在移动端范围。
+ * 默认走轻量加入；规则提供建卡预算时可另填属性和技能。卡库字段默认透传，
+ * 显式调整属性/技能时才覆盖这两项，不改动人物身份、装备或规则蓝图。
  */
-import type { CharacterCard, CharacterPortrait } from '@/api/types'
+import type { CharacterCard, CharacterPortrait, CharacterSheet } from '@/api/types'
+import { suggestedCreationAttributes, type CreationSchema } from '@/lib/character-creation'
+import { editorSkillRows, mergeEditedSkills, type EditorSkillRow } from '@/lib/local-library/card-edit'
 
 /** Web 背景输入框 maxlength（JoinView 的 backgroundLimit） */
 export const JOIN_BACKGROUND_LIMIT = 8000
@@ -54,7 +56,19 @@ export function applyCardToDraft(draft: JoinCharacterDraft, card: CharacterCard)
   }
 }
 
-export interface JoinNewPayload {
+export interface JoinCreationDraft {
+  attributes: Record<string, number>
+  skills: EditorSkillRow[]
+}
+
+export function beginJoinCreation(schema: CreationSchema, card: CharacterCard | null): JoinCreationDraft {
+  return {
+    attributes: { ...suggestedCreationAttributes(schema), ...card?.attributes },
+    skills: editorSkillRows(card?.skills),
+  }
+}
+
+export interface JoinNewPayload extends Pick<CharacterSheet, 'attributes' | 'skills'> {
   join_as_new: true
   character_name: string
   /** Web 表单恒有 background 键（空串也下发），此处保持一致 */
@@ -65,13 +79,13 @@ export interface JoinNewPayload {
 
 /**
  * 组装 POST /games/{key}/players 的建卡 payload（join_as_new 分支）。
- * 字段对照 Web create()：表单全量 + join_as_new；属性/技能等 sheet 字段只可能
- * 来自所选库卡透传（移动端不提供编辑入口）。portrait 为 undefined 时不下发
- * （Web 端 JSON.stringify 对 undefined 同样丢弃），显式 null 保留 = 恢复默认头像。
+ * 字段对照 Web create()：表单全量 + join_as_new。未打开详细建卡时保留原卡或轻量请求。
+ * portrait 为 undefined 时不下发，显式 null 保留 = 恢复默认头像。
  */
 export function buildJoinNewPayload(
   draft: JoinCharacterDraft,
   card: CharacterCard | null,
+  creation?: JoinCreationDraft | null,
 ): JoinNewPayload {
   const cardSheetFields: Record<string, unknown> = {}
   if (card) {
@@ -84,6 +98,11 @@ export function buildJoinNewPayload(
     ...cardSheetFields,
     character_name: draft.characterName.trim(),
     background: draft.background,
+  }
+  if (creation) {
+    payload.attributes = creation.attributes
+    const skills = mergeEditedSkills(card?.skills, creation.skills)
+    payload.skills = (skills as CharacterSheet['skills']) ?? card?.skills ?? []
   }
   if (draft.portrait !== undefined) payload.portrait = draft.portrait
   return payload

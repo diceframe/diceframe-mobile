@@ -1,11 +1,12 @@
 /**
  * 角色卡编辑器（CharacterCardEditor）→ 本机卡文档的补丁。
  *
- * 编辑器是按服务端 CRUD 设计的：技能经 normalizeSkillList 归一（值 0 变 20、effect 截断并
+ * 编辑器是按服务端 CRUD 设计的：技能经 normalizeSkillList 归一（effect 截断并
  * 字符串化、纯字符串技能变对象），buildCardPatch 再做兜底（空出身/职业填默认值、去掉空名
  * 技能、总是写 gold）。这些对本机文档都是「用户没改却被改写」，推送 update 时还会改到服务端。
  * 所以本机编辑只把**用户真正改过的字段**放进补丁：
  * - 标量字段（名字、出身、职业、背景、金钱、头像）与编辑器打开时显示的值比较，没变就不写；
+ * - 属性由编辑器在显式修改时附上，合并时保留未修改的属性键；
  * - 技能行带着打开表单时记下的来源下标（SKILL_SOURCE），按它对回存着的那一项：
  *   行与「该项的归一形态」相同 → 原样保留存着的那一项（一个字节都不动）；
  *   改过 → 以存着的那一项为基底（保留编辑器不认识的字段），只改 name / value / effect；
@@ -51,7 +52,7 @@ export interface LocalCardEdit {
 }
 
 function editorView(row: CharacterSkill): JsonObject {
-  return { name: row.name ?? '', value: row.value, ...(row.effect ? { effect: row.effect } : {}) }
+  return { name: row.name ?? '', ...(row.value !== undefined ? { value: row.value } : {}), ...(row.effect ? { effect: row.effect } : {}) }
 }
 
 /**
@@ -87,7 +88,8 @@ function editedEffect(row: CharacterSkill): string {
 
 /** 编辑器里新增的行：按编辑器的值新建 */
 function newSkill(row: CharacterSkill): JsonObject {
-  const next: JsonObject = { name: editedName(row), value: Number(row.value) || 0 }
+  const next: JsonObject = { name: editedName(row) }
+  if (row.value !== undefined) next.value = row.value
   const effect = editedEffect(row)
   if (effect) next.effect = effect
   return next
@@ -95,13 +97,16 @@ function newSkill(row: CharacterSkill): JsonObject {
 
 /**
  * 改过的、有来源的行：以存着的那一项为基底，name / value / effect 逐个与来源项的归一形态
- * 比较，只写用户改了的那几个，没改的保留存着的原值（值 0 不会变 20，对象 effect 不会被
- * 字符串化）。纯字符串的技能被改时只能变成对象，它没有存着的 value，用编辑器显示的值。
+ * 比较，只写用户改了的那几个，没改的保留存着的原值（对象 effect 不会被字符串化）。
+ * 留空的技能值保留为缺省，由规则与角色当前属性决定。
  */
 function editedSkill(stored: unknown, shown: CharacterSkill, row: CharacterSkill): JsonObject {
-  const next: JsonObject = isJsonObject(stored) ? cloneJson(stored) : { name: String(stored ?? ''), value: shown.value }
+  const next: JsonObject = isJsonObject(stored) ? cloneJson(stored) : { name: String(stored ?? '') }
   if ((row.name ?? '') !== (shown.name ?? '')) next.name = editedName(row)
-  if (Number(row.value) !== Number(shown.value)) next.value = Number(row.value) || 0
+  if (row.value !== shown.value) {
+    if (row.value === undefined) delete next.value
+    else next.value = row.value
+  }
   if ((row.effect ?? '') !== (shown.effect ?? '')) {
     const effect = editedEffect(row)
     if (effect) next.effect = effect
@@ -135,6 +140,9 @@ export function localCardEdit(original: CharacterCard, editor: CharacterCardPatc
   if (snapshot.class !== initialText(original.class)) patch.class = editor.class
   if (snapshot.background !== initialText(original.background)) patch.background = editor.background
   if (snapshot.gold !== undefined && snapshot.gold !== original.gold) patch.gold = snapshot.gold
+  if (editor.attributes && canonicalJson(editor.attributes) !== canonicalJson(original.attributes ?? {})) {
+    patch.attributes = editor.attributes
+  }
   const skills = mergeEditedSkills(original.skills, snapshot.skills)
   if (skills) patch.skills = skills as CharacterSkill[]
   const before = original.portrait ?? null

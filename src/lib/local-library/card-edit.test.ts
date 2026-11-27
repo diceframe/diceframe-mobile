@@ -160,6 +160,25 @@ describe('本机卡编辑：只写用户改过的字段', () => {
     expect(editor.save().patch).toEqual({ gold: 40 })
   })
 
+  it('只有编辑器显式提交修改过的属性时才写属性，不碰其余字段', () => {
+    const snapshot: EditorSnapshot = {
+      character_name: original.character_name, race: '', class: '', background: original.background ?? '',
+      portrait: original.portrait ?? null, skills: editorSkillRows(original.skills),
+    }
+    const patch = buildCardPatch({ ...snapshot, gold: 25, attributes: { ...original.attributes, str: 60 } })
+    expect(localCardEdit(original, patch, snapshot).patch).toEqual({ attributes: { str: 60, custom_luck: 7 } })
+    expect(localCardEdit(original, { ...patch, attributes: original.attributes }, snapshot).patch).toEqual({})
+  })
+
+  it('清空技能数值后回到规则缺省，不混同显式零', () => {
+    const stored = [{ name: '闪避', value: 0, custom: true }]
+    const rows = editorSkillRows(stored)
+    expect(mergeEditedSkills(stored, rows)).toBeNull()
+    expect(mergeEditedSkills(stored, updateSkillRow(rows, 0, { value: undefined }))).toEqual([
+      { name: '闪避', custom: true },
+    ])
+  })
+
   it('清空头像走删除路径（不写 null）', () => {
     const editor = openEditor(original)
     editor.state.portrait = null

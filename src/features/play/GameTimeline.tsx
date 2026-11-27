@@ -13,10 +13,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Text } from '@/components/ui/text'
 import type { CheckResult, LogEntry, Player, PublicAction } from '@/api/types'
 import { useT } from '@/i18n/t'
-import { canDecideLuckOf, checkKeyOf, mergePendingLuck } from '@/lib/check-details'
+import { canDecideLuckOf, checkKeyOf, isCheckMasked, mergePendingLuck } from '@/lib/check-details'
+import { cocVerdictText } from '@/lib/coc-check-evidence'
 import { useGameStore, selectPendingLuck } from '@/stores/game'
 
 import { CheckCard } from './CheckCard'
+import { CocCheckEvidence } from './CocCheckEvidence'
 import { PushDecisionPanel } from './PushDecisionPanel'
 import { GmNarration } from './GmNarration'
 import { StorySequenceView } from './StorySequenceView'
@@ -49,6 +51,10 @@ function LuckCard({
   isGm: boolean
 }) {
   const t = useT()
+  const masked = useGameStore((state) => isCheckMasked(state.diceRevealMode, check, state.checkReveals))
+  // 紧凑的运气卡也不能提前暴露骰面或待决选项；先复用检定卡的揭示入口。
+  if (masked) return <CheckCard check={check} actorId={actorId} isGm={isGm} />
+
   return (
     <NativeOnlyAnimatedView entering={FadeInDown.duration(250)}>
       <Card className="gap-2 border-warning p-4">
@@ -58,10 +64,11 @@ function LuckCard({
         <Text variant="muted">
           {t('dfPlayLuckDecisionBody', {
             roll: check.roll ?? '?',
-            verdict: check.original_verdict || check.verdict || '',
+            verdict: cocVerdictText(check.original_verdict || check.verdict || '', t),
             cost: check.luck_cost ?? '?',
           })}
         </Text>
+        <CocCheckEvidence check={check} className="gap-0.5" />
         {canDecide ? (
           <View className="flex-row gap-2">
             <Button
@@ -104,6 +111,7 @@ export function GameTimeline({
   logPage,
   logTotalPages,
   pendingLuck,
+  purchaseQuotes,
   luckBusy,
   liveNarration,
   gmThinking,
@@ -128,6 +136,7 @@ export function GameTimeline({
   logPage: number
   logTotalPages: number
   pendingLuck: CheckResult[]
+  purchaseQuotes?: React.ReactNode
   luckBusy: boolean
   liveNarration: string
   gmThinking: boolean
@@ -168,7 +177,7 @@ export function GameTimeline({
     if (!pendingKeys.has(key) && !revealKeys.has(key)) revealChecks.push(check)
   }
   const hasOlder = logPage < logTotalPages
-  const liveIdle = !gmThinking && submittedActions.length === 0 && pendingChecks.length === 0
+  const liveIdle = !gmThinking && !purchaseQuotes && submittedActions.length === 0 && pendingChecks.length === 0
 
   // 倒置列表 offset 0 = 最新消息处；向上翻旧记录时 y 单调增大。
   // setState 收到相同布尔值时 React 自动跳过重渲染，滚动高频回调无需手动节流
@@ -241,6 +250,8 @@ export function GameTimeline({
           isGm={!!isGm}
         />
       ))}
+
+      {purchaseQuotes}
 
       {submittedActions.map((action) => {
         const mine = !!currentUserId && action.user_id === currentUserId

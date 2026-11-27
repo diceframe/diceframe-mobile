@@ -4,6 +4,7 @@ import {
   ApiError,
   api,
   apiBlob,
+  apiStream,
   buildPlaySseUrl,
   buildStaticAssetUrl,
   buildUrl,
@@ -15,8 +16,12 @@ import {
   hasSeatToken,
   normalizeBaseUrl,
   retryOnRateLimit,
+  setJoinShare,
   shareQuery,
+  validateAccessToken,
 } from './client'
+import { exportPlayerFinale, fetchPlayerFinale } from './games'
+import i18n from '@/i18n'
 import { credentialKey, type CredentialSlots } from '@/lib/seat-credentials'
 
 const fetchMock = vi.fn()
@@ -28,6 +33,7 @@ beforeEach(() => {
     baseUrl: '', token: null, share: null, sessionToken: null, credentials: {},
     onUnauthorized: undefined, onShareCredentialRejected: undefined,
   })
+  setJoinShare(null)
 })
 
 afterEach(() => {
@@ -42,6 +48,31 @@ describe('normalizeBaseUrl', () => {
     expect(normalizeBaseUrl('HTTP://HOST:80/')).toBe('http://host')
     expect(normalizeBaseUrl('https://user:secret@HOST:443/')).toBe('https://host')
     expect(normalizeBaseUrl('')).toBe('')
+  })
+})
+
+describe('玩家结团鉴权', () => {
+  it('同机保留房主密码时，读档和导出仍只发当前席位与房间凭证', async () => {
+    const baseUrl = 'http://host'
+    const game = 'web|story|bot'
+    configureApiClient({ baseUrl, token: 'owner', share: { game, user: 'alice' },
+      credentials: { [credentialKey(baseUrl, game)]: { seat: 'seat-a', room: 'room-a' } },
+    })
+    fetchMock.mockResolvedValueOnce(Response.json({ ok: true, run_id: 'run', finale: { id: 'archive', status: 'ended', epilogue: 'end', recap: 'recap' } }))
+      .mockResolvedValueOnce(Response.json({ format: 'diceframe-character-carry' }))
+    const { signal } = new AbortController()
+    await fetchPlayerFinale(game, { runId: 'run', finaleId: 'archive', revision: 1 }, signal)
+    await exportPlayerFinale(game, 'character', signal)
+    const queries = fetchMock.mock.calls.map(([request, init]) => {
+      const headers = new Headers(init.headers)
+      expect(headers.get('X-Seat-Token')).toBe('seat-a')
+      expect(headers.get('X-Room-Token')).toBe('room-a')
+      expect(headers.has('Authorization')).toBe(false)
+      expect(headers.has('X-TRPG-Confirm')).toBe(false)
+      return new URL(request).searchParams
+    })
+    expect(queries.map((query) => [query.get('share'), query.get('user'), query.get('uid'), query.get('kind')]))
+      .toEqual([['1', null, null, null], ['1', null, null, 'character']])
   })
 })
 
@@ -202,6 +233,29 @@ describe.each([
   })
 })
 
+describe('请求语言', () => {
+  it('常规、流式、二进制和连接探测都取即时语言，并保留调用方明确指定的语言', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(jsonResponse({ ok: true })))
+    const originalLanguage = i18n.language
+    try {
+      await i18n.changeLanguage('ja')
+      await api('/games')
+      await apiStream('/assistant/agent/run', { method: 'POST' })
+      await i18n.changeLanguage('de')
+      await apiBlob('/games/abc/export')
+      await fetchAppConfig()
+      await validateAccessToken('password')
+      await checkOwnerAccess()
+      await api('/games', { headers: { 'accept-language': 'en' } })
+
+      const languages = fetchMock.mock.calls.map(([, init]) => new Headers(init.headers).get('Accept-Language'))
+      expect(languages).toEqual(['ja', 'ja', 'de', 'de', 'de', 'de', 'en'])
+    } finally {
+      await i18n.changeLanguage(originalLanguage)
+    }
+  })
+})
+
 describe('api()', () => {
   it('GET 默认 JSON 头 + Bearer；非 GET 追加 X-TRPG-Confirm', async () => {
     configureApiClient({ baseUrl: 'http://h', token: 'secret' })
@@ -284,10 +338,16 @@ describe('api()', () => {
     )
   })
 
+  it('孤注一掷的拒绝与过期错误采用上游业务文案', () => {
+    expect(errorMessage(new ApiError('fallback', 403, 'PUSH_FORBIDDEN'))).toContain('只能由该检定的行动者本人')
+    expect(errorMessage(new ApiError('fallback', 409, 'PUSH_INVALID_OR_STALE'))).toBe('检定选择已变化，请刷新后重试')
+  })
+
   it('结团只读、冒险结局这类刷新也解决不了的 409 给出具体原因', () => {
     expect(errorMessage(new ApiError('x', 409, 'RUN_READ_ONLY'))).toBe('本局已结团或正在准备结团，只能查看。')
     expect(errorMessage(new ApiError('x', 409, 'RUN_ENDED'))).toBe('本局已结团或正在准备结团，只能查看。')
     expect(errorMessage(new ApiError('x', 409, 'ADVENTURE_ENDED'))).toBe('故事已经抵达结局，不能再提交行动。')
+    expect(errorMessage(new ApiError('x', 403, 'GM_SEAT_REQUIRES_OWNER'))).toBe('该席位属于 GM，需要房主登录后才能操作。')
   })
 
   it('Owner 模式 401 触发 onUnauthorized，玩家模式不触发', async () => {
@@ -320,6 +380,27 @@ describe('api()', () => {
     expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Cookie')).toBe(
       `trpg_session=${'deadbeef'.repeat(4)}`,
     )
+  })
+
+  it('原生端禁用原生 CookieJar（credentials: omit），Web 端保留浏览器 cookie jar', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }))
+    await api('/games')
+    await fetchAppConfig()
+    expect(fetchMock.mock.calls[0][1].credentials).toBe('omit')
+    expect(fetchMock.mock.calls[1][1].credentials).toBe('omit')
+
+    const prevDocument = (globalThis as { document?: unknown }).document
+    ;(globalThis as { document?: unknown }).document = {}
+    try {
+      await api('/games')
+      expect(fetchMock.mock.calls[2][1].credentials).toBeUndefined()
+    } finally {
+      if (prevDocument === undefined) {
+        Reflect.deleteProperty(globalThis, 'document')
+      } else {
+        ;(globalThis as { document?: unknown }).document = prevDocument
+      }
+    }
   })
 
   it('二进制响应体走 arrayBuffer 而不是 json', async () => {
@@ -461,18 +542,23 @@ describe('席位凭证 / 房间令牌请求头注入', () => {
     expect(sentHeaders().get('X-TRPG-Confirm')).toBe('true')
   })
 
-  it('401 SEAT_TOKEN_INVALID：内存凭证立刻作废并通知路由层，不当成 Owner 掉线', async () => {
+  it('同机房主以邀请席位加入：轮换令牌只清玩家凭证，不会回退为房主或提示重新登录', async () => {
     const onShareCredentialRejected = vi.fn()
     const onUnauthorized = vi.fn()
     configureApiClient({
       baseUrl: 'http://h',
-      share: { game: 'abc', user: 'u1' },
+      token: 'owner',
+      share: { game: 'other', user: 'other-user' },
       credentials: slots({ [credentialKey('http://h', 'abc')]: { seat: 'old', room: 'room' } }),
       onShareCredentialRejected,
       onUnauthorized,
     })
+    setJoinShare({ game: 'abc', user: 'u1' })
     fetchMock.mockResolvedValueOnce(jsonResponse({ error_code: 'SEAT_TOKEN_INVALID', error: 'x' }, 401))
-    const error = (await rejectionOf(api('/games/abc/log'))) as ApiError
+    const error = (await rejectionOf(api('/games/abc/log?user=stale'))) as ApiError
+    expect(sentHeaders(0).get('X-Seat-Token')).toBe('old')
+    expect(sentHeaders(0).get('Authorization')).toBeNull()
+    expect(new URL(fetchMock.mock.calls[0][0]).searchParams.has('user')).toBe(false)
     expect(error.code).toBe('SEAT_TOKEN_INVALID')
     expect(onShareCredentialRejected).toHaveBeenCalledWith({ kind: 'seat', baseUrl: 'http://h', game: 'abc' })
     expect(onUnauthorized).not.toHaveBeenCalled()
@@ -480,8 +566,11 @@ describe('席位凭证 / 房间令牌请求头注入', () => {
 
     await api('/games/abc/log')
     expect(sentHeaders(1).get('X-Seat-Token')).toBeNull()
-    // 房间令牌与席位凭证独立，不连坐
+    expect(sentHeaders(1).get('Authorization')).toBeNull()
+    // 房间令牌与席位凭证独立，不连坐；房主仍能访问全局数据。
     expect(sentHeaders(1).get('X-Room-Token')).toBe('room')
+    await api('/games')
+    expect(sentHeaders(2).get('Authorization')).toBe('Bearer owner')
   })
 
   it('403 needs_room_password：标记 needsRoomPassword、清房间令牌并通知重新输入', async () => {

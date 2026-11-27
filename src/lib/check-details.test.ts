@@ -76,6 +76,14 @@ describe('checkMathOf', () => {
     )
   })
 
+  it('CoC 困难／极难优先用本次要求的阈值，不拿基础技能值解释结果', () => {
+    const hard = { dice: 'd100', roll: 33, difficulty: 'hard', threshold: 50, required_threshold: 25 }
+    expect(checkMathOf(hard, '对手')).toBe('d100=33 / 25%')
+    expect(checkMathOf({ ...hard, difficulty: 'extreme', required_threshold: 1, threshold: 4 }, '对手')).toBe('d100=33 / 1%')
+    expect(checkMathOf({ ...hard, required_threshold: undefined }, '对手')).toBe('d100=33 / 50%')
+    expect(checkMathOf({ ...hard, opposed: { outcome: 'tie' } }, '对手')).toBe('d100=33 / 50%')
+  })
+
   it('d20 检定：出目+加值=总计 / DC', () => {
     expect(
       checkMathOf(check({ dice: 'd20', roll: 8, modifier: 3, total: 11, dc: 12 }), '对手'),
@@ -122,8 +130,11 @@ describe('checkDetailOf', () => {
     expect(detail.math).toBe('d100=33 / 50%')
   })
 
-  it('hard_threshold 缺失时不硬造成功线', () => {
+  it('缺字段时不硬造成功线，服务端明确返回 0 时正常显示', () => {
     expect(checkDetailOf(check({ roll: 9, dc: 12 }), '对手').successLevels).toBeNull()
+    expect(checkDetailOf(check({ threshold: 4, hard_threshold: 2 }), '对手').successLevels).toBeNull()
+    expect(checkDetailOf(check({ threshold: 4, hard_threshold: 2, extreme_threshold: 0 }), '对手').successLevels)
+      .toEqual({ normal: 4, hard: 2, extreme: 0 })
   })
 
   it('修正明细/优势说明/协助按原样透传，缺失为空串', () => {

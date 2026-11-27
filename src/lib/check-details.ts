@@ -7,6 +7,8 @@
 import type { CheckResult } from '@/api/types'
 import type { CheckStatus } from '@/lib/check-status'
 
+import { cocRequiredThresholdOf } from './coc-check-evidence'
+
 /** 稳定标识一条检定：check_id 缺失时回退到参与者+检定名+出目（旧存档兜底） */
 export function checkKeyOf(check: CheckResult): string {
   if (check.check_id) return String(check.check_id)
@@ -58,13 +60,14 @@ export function diceFacesOf(check: CheckResult): number[] {
 
 /**
  * 检定算式（对齐 Web CheckRevealCard.math）：
- * - d100 阈值检定（CoC）：d100=roll / threshold%
+ * - d100 阈值检定（CoC）：优先展示本次实际要求的阈值，不拿常规技能值解释困难失败
  * - 对抗检定：附对手出目与加值
  * - 其余 d20：d20=roll ± modifier = total / DC n
  */
 export function checkMathOf(check: CheckResult, opponentFallback: string): string {
-  if (typeof check.threshold === 'number') {
-    return `${check.dice || 'd100'}=${check.roll} / ${check.threshold}%`
+  const threshold = cocRequiredThresholdOf(check) ?? check.threshold
+  if (typeof threshold === 'number' && Number.isFinite(threshold)) {
+    return `${check.dice || 'd100'}=${check.roll ?? '?'} / ${threshold}%`
   }
   const modifier = Number(check.modifier || 0)
   const modifierText = modifier ? ` ${modifier > 0 ? '+' : '-'} ${Math.abs(modifier)}` : ''
@@ -86,7 +89,7 @@ export interface CheckDetail {
   math: string
   /** 骰面列表（可能多颗，优势/劣势时 rolls 有两项） */
   diceFaces: number[]
-  /** 困难/极难成功线：仅服务端给出 hard_threshold 才展示（threshold 缺失按 0 兜底） */
+  /** 常规／困难／极难成功线：由服务端完整提供时才展示。 */
   successLevels: { normal: number; hard: number; extreme: number } | null
   /** 加值分解（服务端自由文本） */
   modifierBreakdown: string
@@ -106,12 +109,8 @@ export function checkDetailOf(check: CheckResult, opponentFallback: string): Che
     math: checkMathOf(check, opponentFallback),
     diceFaces: diceFacesOf(check),
     successLevels:
-      typeof check.hard_threshold === 'number'
-        ? {
-            normal: check.threshold ?? 0,
-            hard: check.hard_threshold ?? 0,
-            extreme: check.extreme_threshold ?? 0,
-          }
+      typeof check.threshold === 'number' && typeof check.hard_threshold === 'number' && typeof check.extreme_threshold === 'number'
+        ? { normal: check.threshold, hard: check.hard_threshold, extreme: check.extreme_threshold }
         : null,
     modifierBreakdown: check.modifier_breakdown || '',
     advantageNote: check.advantage_note || '',

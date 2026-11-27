@@ -8,7 +8,8 @@
  * 拿旧 revision 提交会得到 PUSH_INVALID_OR_STALE。
  * 权限：offer / reject 只给 GM；request / decline / confirm 只给检定归属者（actor_uid）。
  */
-import type { CheckResult } from '@/api/types'
+import type { CheckResult, GameDetail } from '@/api/types'
+import type { T } from '@/i18n/t'
 
 import { checkKeyOf } from './check-details'
 
@@ -32,6 +33,17 @@ export function isSupportedPush(push: CheckResult['push']): push is CheckPush {
 /** 仍待决议（会阻断叙事推进）的状态。 */
 export function isOpenPushStatus(status: PushStatus): boolean {
   return status === 'pending' || status === 'requested' || status === 'offered'
+}
+
+/** 服务端用稳定码说明系统关闭；GM 手写拒绝理由原样展示。 */
+export function pushDecisionReasonText(reason: string | undefined, t: T): string {
+  switch (reason) {
+    case 'push_disabled_by_gm': return t('dfPushRollDisabled')
+    case 'gm_forced_advance': return t('dfPushRollForcedAdvance')
+    case 'push_timeout':
+    case 'luck_timeout': return t('dfPushRollTimedOut')
+    default: return reason ?? ''
+  }
 }
 
 export function pushRequestBody(push: CheckPush, operation: PushOperation, draft: string): PushRequestBody {
@@ -76,18 +88,23 @@ export function pushControlsOf(
   }
 }
 
+type PostCheckDetail = Pick<GameDetail, 'state' | 'pending_luck_decisions' | 'pending_push_decisions'>
+
 /**
  * 检定后待决议的统一来源（对齐上游 pendingPostChecks）：运气 + 孤注一掷并集，
  * 同一检定只留一份。任一非空都意味着叙事要等骰子卡上的选择处理完。
  */
-export function pendingPostChecks(detail: {
-  pending_luck_decisions?: CheckResult[]
-  pending_push_decisions?: CheckResult[]
-} | null | undefined): CheckResult[] {
+export function pendingPostChecks(detail: PostCheckDetail | null | undefined): CheckResult[] {
   const merged = new Map<string, CheckResult>()
   for (const check of [...(detail?.pending_luck_decisions ?? []), ...(detail?.pending_push_decisions ?? [])]) {
     const key = checkKeyOf(check)
     if (!merged.has(key)) merged.set(key, check)
   }
   return [...merged.values()]
+}
+
+/** 结算中还有待决项时，强制推进会关闭这些选择、保留原结果。 */
+export function continueAsFailureFor(detail: PostCheckDetail | null | undefined): boolean {
+  return detail?.state === 'active_judgment'
+    && !!(detail.pending_luck_decisions?.length || detail.pending_push_decisions?.length)
 }
